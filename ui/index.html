@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BOM Agent – prototyp interfejsu</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* Tokeny – kolory spójne z diagramem architektury: fiolet = decyzja LLM, zieleń soldermaski = reguła deterministyczna */
+:root{
+  --paper:#f3f5f4; --surface:#ffffff; --ink:#15212b; --muted:#5b6670; --line:#d9dfdc; --line-strong:#b9c2be;
+  --det:#12503f; --det-bg:#e3f0eb; --llm:#5b3fd0; --llm-bg:#eeeafd;
+  --warn:#9a6a00; --warn-bg:#fdf3d6; --err:#b42f25; --err-bg:#fbe7e5; --ok:#1f7a4d;
+  --r-sm:4px; --r-md:8px; --r-lg:12px;
+  --sans:"IBM Plex Sans", Inter, system-ui, sans-serif; --mono:"IBM Plex Mono", ui-monospace, monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{font-family:var(--sans);font-size:14px;line-height:1.5;color:var(--ink);background:var(--paper);-webkit-font-smoothing:antialiased}
+button,input,select{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--llm);outline-offset:2px}
+.mono{font-family:var(--mono);font-size:12.5px}
+.muted{color:var(--muted)}
+
+/* Shell */
+.app{display:grid;grid-template-columns:264px minmax(0,1fr);min-height:100vh;background:linear-gradient(to right,var(--surface) 264px,var(--paper) 264px)}
+.rail{border-right:1px solid var(--line);background:var(--surface);padding:20px 16px;display:flex;flex-direction:column;gap:24px;position:sticky;top:0;height:100vh}
+.brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:15px}
+.brand svg{flex:none}
+.brand small{display:block;font-weight:400;font-size:12px;color:var(--muted)}
+.steps{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px}
+.steps button{width:100%;display:grid;grid-template-columns:26px 1fr;align-items:center;gap:10px;text-align:left;border:0;background:none;padding:8px 10px;border-radius:var(--r-md);cursor:pointer}
+.steps button:hover:not(:disabled){background:var(--paper)}
+.steps button:disabled{cursor:not-allowed;opacity:.45}
+.steps .n{width:24px;height:24px;border-radius:50%;border:1.5px solid var(--line-strong);display:grid;place-items:center;font-size:12px;font-weight:600;color:var(--muted)}
+.steps .t{font-weight:500}
+.steps .s{display:block;font-size:12px;color:var(--muted)}
+.steps [aria-current="step"]{background:var(--paper)}
+.steps [aria-current="step"] .n{border-color:var(--ink);background:var(--ink);color:#fff}
+.steps .done .n{border-color:var(--det);background:var(--det-bg);color:var(--det)}
+.legend{margin-top:auto;border-top:1px solid var(--line);padding-top:16px;display:flex;flex-direction:column;gap:8px;font-size:12.5px}
+.legend b{font-weight:600;font-size:13px}
+.prov{display:inline-flex;align-items:center;gap:6px}
+.prov i{width:4px;height:16px;border-radius:2px;display:inline-block}
+.prov.llm i{background:var(--llm)} .prov.det i{background:var(--det)}
+
+main{padding:28px 40px 64px;max-width:1440px;width:100%;min-width:0}
+h1{overflow-wrap:anywhere}
+.topbar{display:flex;align-items:flex-start;justify-content:space-between;gap:24px;margin-bottom:24px}
+h1{font-size:26px;line-height:1.2;font-weight:600;margin:0 0 4px;letter-spacing:-.01em}
+h2{font-size:17px;font-weight:600;margin:0 0 12px}
+h3{font-size:14px;font-weight:600;margin:0 0 6px}
+p{margin:0 0 12px;max-width:72ch}
+.note{font-size:12px;color:var(--warn);background:var(--warn-bg);border:1px solid #efd894;padding:4px 10px;border-radius:999px;white-space:nowrap}
+
+/* shadcn-like primitives */
+.btn{display:inline-flex;align-items:center;gap:8px;height:36px;padding:0 14px;border-radius:var(--r-md);border:1px solid var(--line-strong);background:var(--surface);font-weight:500;cursor:pointer}
+.btn:hover{background:var(--paper)}
+.btn.primary{background:var(--ink);border-color:var(--ink);color:#fff}
+.btn.primary:hover{background:#26343f}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);padding:20px}
+.row{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.actions{display:flex;justify-content:flex-end;gap:10px;margin-top:24px}
+.badge{display:inline-flex;align-items:center;gap:4px;font-size:11.5px;font-weight:600;padding:1px 8px;border-radius:999px;border:1px solid transparent;white-space:nowrap}
+.badge.llm{color:var(--llm);background:var(--llm-bg)} .badge.det{color:var(--det);background:var(--det-bg)}
+.badge.ok{color:var(--ok);background:#e4f3ea} .badge.warn{color:var(--warn);background:var(--warn-bg)} .badge.err{color:var(--err);background:var(--err-bg)}
+label.field{display:flex;flex-direction:column;gap:6px;font-weight:500;font-size:13px}
+label.field span.h{font-weight:400;color:var(--muted);font-size:12px}
+select,input[type=number],input[type=text]{height:36px;border:1px solid var(--line-strong);border-radius:var(--r-md);padding:0 10px;background:var(--surface)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.view{display:none} .view.active{display:block}
+
+/* Krok 1 */
+.drop{border:1.5px dashed var(--line-strong);border-radius:var(--r-lg);padding:28px;display:flex;gap:20px;align-items:center;background:var(--surface)}
+.drop.over{border-color:var(--llm);background:var(--llm-bg)}
+.projects{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:var(--r-lg);overflow:hidden;background:var(--surface);margin-top:16px}
+.proj{display:grid;grid-template-columns:1fr auto auto;gap:20px;align-items:center;padding:14px 18px;border:0;border-top:1px solid var(--line);background:none;text-align:left;cursor:pointer}
+.proj:first-child{border-top:0}
+.proj:hover{background:var(--paper)}
+.proj[aria-pressed="true"]{background:var(--det-bg);box-shadow:inset 3px 0 0 var(--det)}
+.proj b{font-weight:600;display:block}
+.summary{display:grid;grid-template-columns:repeat(4,1fr);gap:0;margin-top:16px;border:1px solid var(--line);border-radius:var(--r-lg);background:var(--surface)}
+.summary div{padding:14px 18px;border-left:1px solid var(--line)}
+.summary div:first-child{border-left:0}
+.summary strong{display:block;font-size:22px;font-weight:600}
+.summary span{font-size:12.5px;color:var(--muted)}
+
+/* Krok 2 – wybór wariantu */
+.variants{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.variant{position:relative;border:1.5px solid var(--line);border-radius:var(--r-lg);padding:16px;background:var(--surface);cursor:pointer;display:flex;flex-direction:column;gap:10px}
+.variant input{position:absolute;opacity:0}
+.variant:has(input:checked){border-color:var(--ink);box-shadow:0 0 0 1px var(--ink)}
+.variant:has(input:focus-visible){outline:2px solid var(--llm);outline-offset:2px}
+.pipe{display:flex;gap:3px}
+.pipe span{flex:1;height:8px;border-radius:2px}
+.pipe .l{background:var(--llm)} .pipe .d{background:var(--det)}
+.pipe-labels{display:flex;gap:3px;font-size:10.5px;color:var(--muted)}
+.pipe-labels span{flex:1}
+
+/* Krok 3 – przebieg */
+.runs{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.runs.single{grid-template-columns:1fr}
+.run-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:12px}
+.meter{display:flex;gap:16px;font-size:12.5px;color:var(--muted)}
+.meter b{color:var(--ink);font-weight:600;font-variant-numeric:tabular-nums}
+.trace{list-style:none;margin:0;padding:0;position:relative}
+.trace li{display:grid;grid-template-columns:18px 1fr auto;gap:10px;padding:8px 0;border-top:1px solid var(--line)}
+.trace li:first-child{border-top:0}
+.trace .dot{width:10px;height:10px;border-radius:50%;margin-top:5px;background:var(--line-strong)}
+.trace li.llm .dot{background:var(--llm)} .trace li.det .dot{background:var(--det)}
+.trace li.pending{opacity:.4}
+.trace li.active .dot{box-shadow:0 0 0 4px var(--llm-bg)}
+.trace li.active.det .dot{box-shadow:0 0 0 4px var(--det-bg)}
+.trace .what{font-weight:500}
+.trace .det-txt{display:block;font-size:12.5px;color:var(--muted)}
+.trace .time{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+.progress{height:4px;background:var(--line);border-radius:2px;overflow:hidden;margin-bottom:14px}
+.progress span{display:block;height:100%;width:0;background:var(--ink);transition:width .3s}
+
+/* Krok 4 – BOM */
+.tabs{display:inline-flex;background:var(--paper);border:1px solid var(--line);border-radius:var(--r-md);padding:3px;gap:2px}
+.tabs button{border:0;background:none;padding:5px 12px;border-radius:6px;cursor:pointer;font-weight:500;color:var(--muted)}
+.tabs button[aria-selected="true"]{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgba(21,33,43,.12)}
+.filters{display:flex;gap:8px;align-items:center}
+.bomwrap{display:grid;grid-template-columns:1fr;gap:16px;margin-top:16px}
+.bomwrap.detail{grid-template-columns:minmax(0,1fr) 320px}
+.bomwrap>div{overflow-x:auto}
+.bomwrap.detail .tbl :is(th,td):is(:nth-child(5),:nth-child(6)){display:none}
+.tbl td{white-space:nowrap}
+.tbl td:nth-child(4){white-space:normal;min-width:120px}
+.tbl{width:100%;border-collapse:collapse;background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);overflow:hidden}
+.tbl th{font-size:12px;font-weight:600;color:var(--muted);text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);background:#fafbfa}
+.tbl td{padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+.tbl tr:last-child td{border-bottom:0}
+.tbl tbody tr{cursor:pointer}
+.tbl tbody tr:hover{background:#f8faf9}
+.tbl tbody tr[aria-selected="true"]{background:#f1f4f3}
+.tbl td.src{border-left:4px solid var(--det);padding-left:10px}
+.tbl tr.llm td.src{border-left-color:var(--llm)}
+.tbl .num{text-align:right;font-variant-numeric:tabular-nums}
+.side{position:sticky;top:20px;align-self:start}
+.side dl{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;margin:0 0 14px;font-size:13px}
+.side dt{color:var(--muted)}
+.side dd{margin:0}
+.check{display:flex;gap:8px;align-items:flex-start;font-size:13px;padding:6px 0;border-top:1px solid var(--line)}
+.check:first-of-type{border-top:0}
+.check .ic{flex:none;width:16px;text-align:center;font-weight:700}
+.check.ok .ic{color:var(--ok)} .check.warn .ic{color:var(--warn)} .check.err .ic{color:var(--err)}
+blockquote{margin:8px 0 0;padding:10px 12px;background:var(--paper);border-radius:var(--r-md);font-size:12.5px;color:var(--muted)}
+blockquote cite{display:block;font-style:normal;margin-top:6px;color:var(--ink);font-size:12px}
+
+/* Krok 5 – porównanie */
+.cmp{width:100%;border-collapse:collapse}
+.cmp th,.cmp td{padding:10px 12px;border-bottom:1px solid var(--line);text-align:left}
+.cmp th{font-size:12px;color:var(--muted);font-weight:600}
+.cmp td.v{font-variant-numeric:tabular-nums;width:22%}
+.bar{height:6px;border-radius:3px;background:var(--line);margin-top:6px;overflow:hidden}
+.bar span{display:block;height:100%}
+.bar.a span{background:var(--llm)} .bar.b span{background:var(--det)}
+.better{font-weight:600}
+.diff li{margin-bottom:6px}
+.toast{position:fixed;bottom:20px;right:20px;background:var(--ink);color:#fff;padding:10px 16px;border-radius:var(--r-md);font-size:13px;opacity:0;transform:translateY(8px);transition:.2s;pointer-events:none}
+.toast.show{opacity:1;transform:none}
+
+@media (max-width: 960px){
+  .app{grid-template-columns:minmax(0,1fr);background:var(--paper)}
+  .rail{position:static;height:auto;flex-direction:column}
+  .steps{flex-direction:row;overflow-x:auto}
+  .steps .s{display:none}
+  .legend{display:none}
+  main{padding:20px 16px 48px}
+  .variants,.grid2,.grid3,.runs,.summary{grid-template-columns:1fr}
+  .summary div{border-left:0;border-top:1px solid var(--line)}
+  .bomwrap.detail{grid-template-columns:1fr}
+  .tbl{display:block;overflow-x:auto}
+  .topbar{flex-direction:column}
+}
+@media (prefers-reduced-motion: reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="rail">
+    <div class="brand">
+      <svg width="30" height="30" viewBox="0 0 30 30" aria-hidden="true"><rect x="1" y="1" width="28" height="28" rx="7" fill="#15212b"/><path d="M8 10h6M8 15h10M8 20h7" stroke="#fff" stroke-width="2" stroke-linecap="round"/><circle cx="21" cy="10" r="2.4" fill="#8f7bf0"/><circle cx="21" cy="20" r="2.4" fill="#4fae8f"/></svg>
+      <div>BOM Agent<small>generowanie BOM dla urządzeń medycznych</small></div>
+    </div>
+    <nav aria-label="Kroki">
+      <ol class="steps" id="steps"></ol>
+    </nav>
+    <div class="legend">
+      <b>Kto podjął decyzję</b>
+      <span class="prov llm"><i></i>agent LLM</span>
+      <span class="prov det"><i></i>reguła deterministyczna</span>
+      <span class="muted">Ten sam kolor oznacza to samo na każdym ekranie i na diagramie architektury.</span>
+    </div>
+  </aside>
+
+  <main>
+    <!-- 1. Projekt -->
+    <section class="view" id="v-project" aria-labelledby="h-project">
+      <div class="topbar">
+        <div><h1 id="h-project">Wczytaj projekt urządzenia</h1><p class="muted">Schemat i PCB w formacie KiCad. System odczyta komponenty, footprinty i pola symboli.</p></div>
+        <span class="note">Prototyp z danymi przykładowymi</span>
+      </div>
+      <div class="drop" id="drop">
+        <svg width="40" height="40" viewBox="0 0 40 40" aria-hidden="true"><rect x="6" y="4" width="28" height="32" rx="4" fill="none" stroke="#5b6670" stroke-width="1.6"/><path d="M13 14h14M13 20h14M13 26h8" stroke="#5b6670" stroke-width="1.6" stroke-linecap="round"/></svg>
+        <div style="flex:1"><h3>Przeciągnij folder projektu albo pliki .kicad_sch i .kicad_pcb</h3><span class="muted">Możesz też wybrać jeden z projektów ze zbioru ewaluacyjnego poniżej.</span></div>
+        <label class="btn">Wybierz pliki<input type="file" multiple accept=".kicad_sch,.kicad_pcb,.kicad_pro,.net" hidden id="file"></label>
+      </div>
+      <div class="projects" id="projects" role="group" aria-label="Projekty ze zbioru ewaluacyjnego"></div>
+      <div class="summary" id="summary" hidden></div>
+      <div class="actions"><button class="btn primary" id="to-config" disabled>Przejdź do konfiguracji</button></div>
+    </section>
+
+    <!-- 2. Konfiguracja -->
+    <section class="view" id="v-config" aria-labelledby="h-config">
+      <div class="topbar"><div><h1 id="h-config">Skonfiguruj przebieg</h1><p class="muted">Wybierz architekturę. Do eksperymentu porównawczego uruchom oba warianty na tym samym projekcie i tym samym modelu.</p></div></div>
+      <div class="variants" role="radiogroup" aria-label="Wariant systemu">
+        <label class="variant"><input type="radio" name="variant" value="A">
+          <h3>Wariant A: 100% LLM</h3>
+          <div class="pipe"><span class="l"></span><span class="l"></span><span class="l"></span><span class="l"></span><span class="l"></span></div>
+          <div class="pipe-labels"><span>odczyt</span><span>normal.</span><span>dobór</span><span>walid.</span><span>BOM</span></div>
+          <span class="muted">Każdy krok wykonuje agent. Narzędzia CAD wywołuje agent ekstrakcji.</span>
+        </label>
+        <label class="variant"><input type="radio" name="variant" value="B">
+          <h3>Wariant B: hybrydowy</h3>
+          <div class="pipe"><span class="d"></span><span class="d"></span><span class="l"></span><span class="d"></span><span class="d"></span></div>
+          <div class="pipe-labels"><span>odczyt</span><span>normal.</span><span>dobór</span><span>walid.</span><span>BOM</span></div>
+          <span class="muted">Reguły robią parsowanie, walidację i eksport. LLM dobiera tylko pozycje niejednoznaczne.</span>
+        </label>
+        <label class="variant"><input type="radio" name="variant" value="AB" checked>
+          <h3>Oba warianty i porównanie</h3>
+          <div class="pipe"><span class="l"></span><span class="d"></span><span class="l"></span><span class="d"></span><span class="l"></span></div>
+          <div class="pipe-labels"><span></span><span></span><span></span><span></span><span></span></div>
+          <span class="muted">Uruchamia A i B, a wynik porównuje z BOM referencyjnym projektu.</span>
+        </label>
+      </div>
+      <div class="grid2" style="margin-top:20px">
+        <div class="panel">
+          <h2>Model i eksperyment</h2>
+          <div class="grid2">
+            <label class="field">Model LLM<select id="model"><option>Claude Sonnet</option><option>GPT</option><option>Llama (lokalnie)</option></select></label>
+            <label class="field">Liczba powtórzeń<input type="number" id="reps" value="5" min="1" max="20"><span class="h">Do oceny powtarzalności wyników</span></label>
+            <label class="field">Temperatura<input type="number" value="0" step="0.1" min="0" max="1"></label>
+            <label class="field">Fragmenty z bazy wiedzy (top-k)<input type="number" value="6" min="1" max="20"></label>
+          </div>
+        </div>
+        <div class="panel">
+          <h2>Wymagania urządzenia</h2>
+          <div class="grid2">
+            <label class="field">Część aplikacyjna<select><option>BF (kontakt z ciałem)</option><option>CF (kontakt z sercem)</option><option>B</option></select></label>
+            <label class="field">Zasilanie<select><option>bateryjne, Li-Po 3,7 V</option><option>sieciowe przez zasilacz medyczny</option></select></label>
+            <label class="field">Zakres temperatur pracy<input type="text" value="0…40 °C"></label>
+            <label class="field">Preferowani producenci<input type="text" value="TI, ADI, Murata, Yageo"></label>
+          </div>
+        </div>
+      </div>
+      <div class="actions"><button class="btn" data-go="project">Wstecz</button><button class="btn primary" id="start">Uruchom generowanie</button></div>
+    </section>
+
+    <!-- 3. Przebieg -->
+    <section class="view" id="v-run" aria-labelledby="h-run">
+      <div class="topbar"><div><h1 id="h-run">Przebieg generowania</h1><p class="muted" id="run-sub">Kroki pojawiają się na bieżąco. Kolor kropki pokazuje, czy krok wykonał agent, czy reguła.</p></div>
+        <button class="btn" id="skip">Pokaż wynik od razu</button></div>
+      <div class="runs" id="runs"></div>
+      <div class="actions"><button class="btn primary" id="to-bom" disabled>Przejrzyj BOM</button></div>
+    </section>
+
+    <!-- 4. BOM -->
+    <section class="view" id="v-bom" aria-labelledby="h-bom">
+      <div class="topbar"><div><h1 id="h-bom">Zestawienie materiałowe</h1><p class="muted">Kliknij pozycję, żeby zobaczyć uzasadnienie doboru, źródło w dokumentacji i wynik walidacji.</p></div>
+        <div class="row"><button class="btn" id="export">Eksportuj CSV</button></div></div>
+      <div class="row" style="justify-content:space-between">
+        <div class="tabs" role="tablist" id="bomtabs"></div>
+        <div class="filters"><label class="field" style="flex-direction:row;align-items:center;gap:8px;font-weight:400"><input type="checkbox" id="only-issues"> Tylko pozycje z uwagami</label></div>
+      </div>
+      <div class="bomwrap" id="bomwrap">
+        <div><table class="tbl" id="bom"><thead><tr><th>Źródło</th><th>Oznaczenia</th><th class="num">Ilość</th><th>Wartość</th><th>Footprint</th><th>Producent</th><th>MPN</th><th>Walidacja</th></tr></thead><tbody></tbody></table></div>
+        <aside class="panel side" id="side" hidden></aside>
+      </div>
+      <div class="actions"><button class="btn" data-go="run">Wstecz</button><button class="btn primary" id="to-cmp">Porównaj warianty</button></div>
+    </section>
+
+    <!-- 5. Porównanie -->
+    <section class="view" id="v-cmp" aria-labelledby="h-cmp">
+      <div class="topbar"><div><h1 id="h-cmp">Porównanie z BOM referencyjnym</h1><p class="muted">Średnia z <span id="cmp-reps">5</span> powtórzeń. Pogrubiona wartość to lepszy wynik w danym wierszu.</p></div><span class="note">Wartości ilustracyjne, nie są wynikami badań</span></div>
+      <div class="panel" style="overflow-x:auto"><table class="cmp" id="cmp"></table></div>
+      <div class="grid2" style="margin-top:16px">
+        <div class="panel"><h2>Gdzie warianty się różnią</h2><ul class="diff" id="diff"></ul></div>
+        <div class="panel"><h2>Błędy według kroku</h2><table class="cmp" id="errs"></table></div>
+      </div>
+      <div class="actions"><button class="btn" data-go="bom">Wstecz</button><button class="btn primary" id="save-exp">Zapisz wyniki eksperymentu</button></div>
+    </section>
+  </main>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+// ---------- dane przykładowe ----------
+const PROJECTS = [
+  {id:"ecg", name:"Monitor EKG, 1 odprowadzenie", meta:"KiCad 8, front-end AD8232, STM32L4", parts:31, lines:15, nets:58, sheets:2},
+  {id:"spo2", name:"Pulsoksymetr na nadgarstek", meta:"KiCad 7, czujnik MAX30102, nRF52832", parts:44, lines:22, nets:71, sheets:3},
+  {id:"eeg", name:"Wzmacniacz EEG, 8 kanałów", meta:"KiCad 8, ADS1299, izolacja USB", parts:96, lines:38, nets:164, sheets:5},
+];
+// pozycje BOM – wspólna baza + różnice między wariantami
+const BASE = [
+  {ref:"U1", qty:1, val:"AD8232", fp:"LFCSP-20 4x4", mfr:"Analog Devices", mpn:"AD8232ACPZ-R7"},
+  {ref:"U2", qty:1, val:"STM32L432KC", fp:"UFQFPN-32", mfr:"STMicroelectronics", mpn:"STM32L432KCU6"},
+  {ref:"U3", qty:1, val:"LDO 3,3 V", fp:"SOT-23-5", mfr:"Texas Instruments", mpn:"TPS7A0533PDBVR"},
+  {ref:"U4", qty:1, val:"ładowarka Li-Po", fp:"SOT-23-5", mfr:"Microchip", mpn:"MCP73831T-2ACI/OT"},
+  {ref:"C1–C8", qty:8, val:"100 nF X7R 16 V", fp:"0402", mfr:"Murata", mpn:"GRM155R71C104KA88D"},
+  {ref:"C9, C10", qty:2, val:"10 µF X5R 10 V", fp:"0805", mfr:"Murata", mpn:"GRM21BR61A106KE19L"},
+  {ref:"R1–R4", qty:4, val:"10 MΩ 1%", fp:"0402", mfr:"Yageo", mpn:"RC0402FR-0710ML"},
+  {ref:"R5, R6", qty:2, val:"180 kΩ 1%", fp:"0402", mfr:"Yageo", mpn:"RC0402FR-07180KL"},
+  {ref:"R7, R8", qty:2, val:"1 MΩ 1%", fp:"0402", mfr:"Yageo", mpn:"RC0402FR-071ML"},
+  {ref:"D1, D2", qty:2, val:"ESD 5 V", fp:"SOD-882", mfr:"Nexperia", mpn:"PESD5V0S1BL"},
+  {ref:"L1", qty:1, val:"ferryt 600 Ω", fp:"0402", mfr:"Murata", mpn:"BLM15AX601SN1D"},
+  {ref:"Y1", qty:1, val:"32,768 kHz", fp:"2012", mfr:"Abracon", mpn:"ABS07-32.768KHZ-T"},
+  {ref:"J1", qty:1, val:"gniazdo elektrod 3,5 mm", fp:"SJ-43514", mfr:"CUI Devices", mpn:"SJ-43514"},
+  {ref:"J2", qty:1, val:"USB-C", fp:"USB4105", mfr:"GCT", mpn:"USB4105-GF-A"},
+  {ref:"BT1", qty:1, val:"złącze baterii", fp:"JST PH 2-pin", mfr:"JST", mpn:"S2B-PH-K-S"},
+];
+function variantRows(v){
+  return BASE.map((r,i)=>{
+    const row = {...r, id:i};
+    if(v==="A"){
+      row.src="llm"; row.status="ok"; row.checks=[["ok","Schemat danych poprawny"],["ok","MPN znaleziony w bazie wiedzy"]];
+      if(r.ref==="R1–R4"){row.mpn="RC0402FR-0710MLX"; row.status="err"; row.checks=[["err","MPN nie występuje w bazie wiedzy ani w katalogu producenta (możliwa halucynacja)"],["ok","Wartość zgodna ze schematem"]];}
+      if(r.ref==="C9, C10"){row.qty=3; row.ref="C9, C10, C11"; row.status="err"; row.checks=[["err","Oznaczenie C11 nie istnieje w projekcie; ilość różni się od schematu (2)"]];}
+      if(r.ref==="U3"){row.status="warn"; row.checks=[["warn","Agent walidacji nie sprawdził napięcia wejściowego względem baterii 4,2 V"],["ok","Footprint zgodny z obudową"]];}
+      if(r.ref==="J1"){row.status="warn"; row.checks=[["warn","Brak oceny wymagań części aplikacyjnej BF dla złącza pacjenta"]];}
+    } else {
+      row.src = (r.ref==="J1"||r.ref==="D1, D2"||r.ref==="Y1") ? "llm" : "det";
+      row.status="ok"; row.checks=[["ok","Schemat JSON poprawny"],["ok","Footprint zgodny z obudową z dokumentacji"],["ok","Parametry w zakresie wymagań"]];
+      if(r.ref==="U3"){row.checks.push(["ok","Napięcie wejściowe maks. 6 V ≥ 4,2 V baterii"]);}
+      if(r.ref==="J1"){row.status="warn"; row.checks=[["ok","Footprint zgodny"],["warn","Złącze pacjenta: wymaga ręcznej oceny izolacji BF (IEC 60601-1)"]];}
+      if(r.ref==="Y1"){row.checks=[["err","Pierwszy dobór: obudowa 3215 niezgodna z footprintem 2012"],["ok","Po naprawie: ABS07, obudowa 2012"]];}
+    }
+    row.why = row.src==="llm"
+      ? "Pole MPN w symbolu było puste. Agent dobrał komponent na podstawie wartości, footprintu i wymagań, wybierając pozycję z bazy wiedzy o najlepszym dopasowaniu parametrów."
+      : "MPN odczytany bezpośrednio z pola symbolu w schemacie i potwierdzony w bazie wiedzy. Ilość policzona z liczby oznaczeń.";
+    row.cite = {text:"„Supply voltage range 2.0 V to 6.0 V; low IQ; available in SOT-23-5 (DBV) package.”", src:"Przykładowy fragment z bazy wiedzy (podobieństwo 0,86)"};
+    return row;
+  });
+}
+const TRACE = {
+  A:[
+    ["llm","Orkiestrator","Plan: ekstrakcja, dobór, walidacja, kompozycja",1.4,2100],
+    ["llm","Agent ekstrakcji","9 wywołań narzędzi CAD, 31 komponentów",3.8,9400],
+    ["llm","Agent doboru","15 pozycji, 22 zapytania do bazy wiedzy",6.2,18800],
+    ["llm","Agent walidacji","Odrzucono 1 pozycję: Y1",2.9,7200],
+    ["llm","Agent doboru","Ponowny dobór Y1",1.6,4300],
+    ["llm","Agent kompozycji","Zgrupowano pozycje, wyeksportowano BOM",2.2,5600],
+  ],
+  B:[
+    ["det","Parser CAD","31 komponentów, 15 pozycji po grupowaniu",0.2,0],
+    ["det","Normalizacja","12 pozycji rozstrzygniętych regułami",0.1,0],
+    ["llm","Agent doboru","3 pozycje niejednoznaczne: D1, D2 · J1 · Y1",3.1,8900],
+    ["det","Walidator regułowy","1 błąd: obudowa Y1 niezgodna z footprintem",0.1,0],
+    ["llm","Agent naprawy","Poprawiono Y1, iteracja 1 z 3",1.2,2600],
+    ["det","Walidator regułowy","Wszystkie reguły spełnione; 1 uwaga do oceny ręcznej",0.1,0],
+    ["det","Generator BOM","Wyeksportowano CSV i raport walidacji",0.1,0],
+  ]
+};
+const pl=(v,d)=>v.toFixed(d).replace(".",",");
+const METRICS = [
+  ["F1 pozycji BOM", .862, .953, "up", v=>pl(v,3)],
+  ["Poprawne MPN", .80, .967, "up", v=>Math.round(v*100)+"%"],
+  ["Poprawne ilości", .867, 1, "up", v=>Math.round(v*100)+"%"],
+  ["Odsetek halucynacji MPN", .067, 0, "down", v=>pl(v*100,1)+"%"],
+  ["Tokeny na projekt", 47400, 11500, "down", v=>v.toLocaleString("pl-PL")],
+  ["Czas na projekt", 18.1, 4.9, "down", v=>v.toFixed(1).replace(".",",")+" s"],
+  ["Odchylenie F1 między powtórzeniami", .041, .006, "down", v=>pl(v,3)],
+];
+
+// ---------- stan i nawigacja ----------
+const S = {step:"project", project:null, variant:"AB", done:new Set(), runDone:false, tab:"B", sel:null};
+const STEPS = [["project","Projekt","plik KiCad"],["config","Konfiguracja","wariant i model"],["run","Przebieg","kroki agentów"],["bom","BOM","przegląd pozycji"],["cmp","Porównanie","metryki A i B"]];
+const $ = s=>document.querySelector(s);
+function canOpen(id){
+  if(id==="project") return true;
+  if(id==="config") return !!S.project;
+  if(id==="run") return S.done.has("config");
+  if(id==="bom") return S.runDone;
+  if(id==="cmp") return S.runDone && S.variant==="AB";
+}
+function renderSteps(){
+  $("#steps").innerHTML = STEPS.map(([id,t,s],i)=>`<li><button data-step="${id}" ${canOpen(id)?"":"disabled"} ${S.step===id?'aria-current="step"':''} class="${S.done.has(id)&&S.step!==id?"done":""}"><span class="n">${S.done.has(id)&&S.step!==id?"✓":i+1}</span><span><span class="t">${t}</span><span class="s">${s}</span></span></button></li>`).join("");
+}
+function go(id){
+  if(!canOpen(id)) return;
+  S.step=id;
+  document.querySelectorAll(".view").forEach(v=>v.classList.toggle("active", v.id==="v-"+id));
+  renderSteps();
+  if(id==="bom") renderBom();
+  if(id==="cmp") renderCmp();
+  window.scrollTo({top:0});
+  document.querySelector("#v-"+id+" h1").focus?.();
+}
+document.addEventListener("click",e=>{
+  const s=e.target.closest("[data-step]"); if(s) go(s.dataset.step);
+  const g=e.target.closest("[data-go]"); if(g) go(g.dataset.go);
+});
+function toast(t){const el=$("#toast");el.textContent=t;el.classList.add("show");clearTimeout(el._t);el._t=setTimeout(()=>el.classList.remove("show"),2400);}
+
+// ---------- 1. projekt ----------
+$("#projects").innerHTML = PROJECTS.map(p=>`<button class="proj" aria-pressed="false" data-p="${p.id}"><span><b>${p.name}</b><span class="muted">${p.meta}</span></span><span class="muted">${p.parts} komponentów</span><span class="badge ok">BOM referencyjny</span></button>`).join("");
+$("#projects").addEventListener("click",e=>{const b=e.target.closest(".proj"); if(b) pick(b.dataset.p);});
+function pick(id){
+  S.project = PROJECTS.find(p=>p.id===id);
+  document.querySelectorAll(".proj").forEach(b=>b.setAttribute("aria-pressed", b.dataset.p===id));
+  const p=S.project, sm=$("#summary"); sm.hidden=false;
+  sm.innerHTML=`<div><strong>${p.parts}</strong><span>komponentów na schemacie</span></div><div><strong>${p.lines}</strong><span>unikalnych pozycji</span></div><div><strong>${p.nets}</strong><span>sieci w netliście</span></div><div><strong>${p.sheets}</strong><span>arkusze schematu</span></div>`;
+  $("#to-config").disabled=false; renderSteps();
+}
+const drop=$("#drop");
+["dragenter","dragover"].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add("over");}));
+["dragleave","drop"].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove("over");}));
+drop.addEventListener("drop",()=>{pick("ecg");toast("Wczytano projekt (w prototypie: projekt przykładowy)");});
+$("#file").addEventListener("change",()=>{pick("ecg");toast("Wczytano projekt (w prototypie: projekt przykładowy)");});
+$("#to-config").onclick=()=>{S.done.add("project");go("config");};
+
+// ---------- 2-3. konfiguracja i przebieg ----------
+let timers=[];
+$("#start").onclick=()=>{
+  S.variant=document.querySelector("input[name=variant]:checked").value;
+  S.tab = S.variant==="A"?"A":"B";
+  S.done.add("config"); S.runDone=false; S.done.delete("run"); S.done.delete("bom");
+  $("#cmp-reps").textContent=$("#reps").value;
+  startRun(); go("run");
+};
+function startRun(){
+  timers.forEach(clearTimeout); timers=[];
+  const vs = S.variant==="AB"?["A","B"]:[S.variant];
+  const runs=$("#runs"); runs.className="runs"+(vs.length===1?" single":"");
+  runs.innerHTML = vs.map(v=>`<div class="panel" id="run-${v}"><div class="run-head"><h2>${v==="A"?"Wariant A: 100% LLM":"Wariant B: hybrydowy"}</h2><div class="meter"><span>czas <b data-t>0,0 s</b></span><span>tokeny <b data-k>0</b></span></div></div><div class="progress"><span></span></div><ol class="trace">${TRACE[v].map(([k,w,d])=>`<li class="${k} pending"><span class="dot"></span><span><span class="what">${w}</span><span class="det-txt">${d}</span></span><span class="time"></span></li>`).join("")}</ol></div>`).join("");
+  $("#to-bom").disabled=true;
+  const fast = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  let left=vs.length;
+  vs.forEach(v=>{
+    let t=0,k=0,delay=0; const items=[...document.querySelectorAll(`#run-${v} .trace li`)];
+    TRACE[v].forEach(([kind,,,sec,tok],i)=>{
+      delay += fast?50:Math.max(350, sec*260);
+      timers.push(setTimeout(()=>{
+        items.forEach(li=>li.classList.remove("active"));
+        items[i].classList.remove("pending"); items[i].classList.add("active");
+        t+=sec; k+=tok;
+        items[i].querySelector(".time").textContent=sec.toFixed(1).replace(".",",")+" s";
+        const box=$("#run-"+v); box.querySelector("[data-t]").textContent=t.toFixed(1).replace(".",",")+" s";
+        box.querySelector("[data-k]").textContent=k.toLocaleString("pl-PL");
+        box.querySelector(".progress span").style.width=((i+1)/TRACE[v].length*100)+"%";
+        if(i===TRACE[v].length-1){ items[i].classList.remove("active"); if(--left===0) finishRun(); }
+      },delay));
+    });
+  });
+}
+function finishRun(){S.runDone=true; S.done.add("run"); $("#to-bom").disabled=false; renderSteps(); toast("Generowanie zakończone");}
+$("#skip").onclick=()=>{
+  timers.forEach(clearTimeout); timers=[];
+  document.querySelectorAll("#runs .panel").forEach(p=>{
+    const v=p.id.slice(4); let t=0,k=0;
+    p.querySelectorAll(".trace li").forEach((li,i)=>{const [, , ,sec,tok]=TRACE[v][i]; t+=sec;k+=tok; li.classList.remove("pending","active"); li.querySelector(".time").textContent=sec.toFixed(1).replace(".",",")+" s";});
+    p.querySelector("[data-t]").textContent=t.toFixed(1).replace(".",",")+" s"; p.querySelector("[data-k]").textContent=k.toLocaleString("pl-PL"); p.querySelector(".progress span").style.width="100%";
+  });
+  finishRun();
+};
+$("#to-bom").onclick=()=>go("bom");
+
+// ---------- 4. BOM ----------
+const STAT = {ok:["ok","Zgodna"],warn:["warn","Do sprawdzenia"],err:["err","Błąd"]};
+function renderBom(){
+  const vs = S.variant==="AB"?["A","B"]:[S.variant];
+  $("#bomtabs").innerHTML = vs.map(v=>`<button role="tab" aria-selected="${S.tab===v}" data-tab="${v}">${v==="A"?"Wariant A":"Wariant B"}</button>`).join("");
+  const rows = variantRows(S.tab).filter(r=>!$("#only-issues").checked || r.status!=="ok");
+  $("#bom tbody").innerHTML = rows.map(r=>`<tr class="${r.src}" data-id="${r.id}" tabindex="0" aria-selected="${S.sel===r.id}"><td class="src"><span class="badge ${r.src}">${r.src==="llm"?"LLM":"reguła"}</span></td><td class="mono">${r.ref}</td><td class="num">${r.qty}</td><td>${r.val}</td><td>${r.fp}</td><td>${r.mfr}</td><td class="mono">${r.mpn}</td><td><span class="badge ${STAT[r.status][0]}">${STAT[r.status][1]}</span></td></tr>`).join("");
+  S.done.add("bom");
+  renderSide();
+}
+function renderSide(){
+  const side=$("#side"), wrap=$("#bomwrap");
+  const r = S.sel==null?null:variantRows(S.tab).find(x=>x.id===S.sel);
+  if(!r){side.hidden=true; wrap.classList.remove("detail"); return;}
+  side.hidden=false; wrap.classList.add("detail");
+  side.innerHTML=`<div class="row" style="justify-content:space-between;margin-bottom:10px"><h2 style="margin:0" class="mono">${r.ref}</h2><button class="btn" id="close-side" aria-label="Zamknij szczegóły">Zamknij</button></div>
+  <dl><dt>MPN</dt><dd class="mono">${r.mpn}</dd><dt>Producent</dt><dd>${r.mfr}</dd><dt>Wartość</dt><dd>${r.val}</dd><dt>Footprint</dt><dd>${r.fp}</dd><dt>Decyzja</dt><dd><span class="badge ${r.src}">${r.src==="llm"?"agent LLM":"reguła deterministyczna"}</span></dd></dl>
+  <h3>Uzasadnienie</h3><p class="muted" style="font-size:13px">${r.why}</p>
+  <h3>Walidacja</h3>${r.checks.map(([k,t])=>`<div class="check ${k}"><span class="ic">${k==="ok"?"✓":k==="warn"?"!":"×"}</span><span>${t}</span></div>`).join("")}
+  ${r.src==="llm"?`<h3 style="margin-top:14px">Źródło w bazie wiedzy</h3><blockquote>${r.cite.text}<cite>${r.cite.src}</cite></blockquote>`:""}`;
+  $("#close-side").onclick=()=>{S.sel=null;renderBom();};
+}
+$("#bomtabs").addEventListener("click",e=>{const b=e.target.closest("[data-tab]"); if(b){S.tab=b.dataset.tab;S.sel=null;renderBom();}});
+$("#bom tbody").addEventListener("click",e=>{const tr=e.target.closest("tr"); if(tr){S.sel=+tr.dataset.id;renderBom();}});
+$("#bom tbody").addEventListener("keydown",e=>{if(e.key==="Enter"){const tr=e.target.closest("tr"); if(tr){S.sel=+tr.dataset.id;renderBom();}}});
+$("#only-issues").onchange=renderBom;
+$("#export").onclick=()=>{
+  const rows=variantRows(S.tab);
+  const csv=["Oznaczenia;Ilość;Wartość;Footprint;Producent;MPN;Źródło decyzji;Walidacja",...rows.map(r=>[r.ref,r.qty,r.val,r.fp,r.mfr,r.mpn,r.src==="llm"?"LLM":"reguła",STAT[r.status][1]].join(";"))].join("\n");
+  const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob(["﻿"+csv],{type:"text/csv"})); a.download=`BOM_${S.project.id}_wariant_${S.tab}.csv`; a.click();
+  toast("Wyeksportowano CSV");
+};
+$("#to-cmp").onclick=()=>{ if(S.variant!=="AB"){toast("Porównanie wymaga uruchomienia obu wariantów");return;} go("cmp"); };
+
+// ---------- 5. porównanie ----------
+function renderCmp(){
+  const max = (a,b)=>Math.max(a,b)||1;
+  $("#cmp").innerHTML = `<thead><tr><th>Metryka</th><th>Wariant A: 100% LLM</th><th>Wariant B: hybrydowy</th></tr></thead><tbody>`+
+    METRICS.map(([n,a,b,dir,f])=>{const bw = dir==="up"?(b>=a?"b":"a"):(b<=a?"b":"a"); const m=max(a,b);
+      return `<tr><td>${n}</td><td class="v ${bw==="a"?"better":""}">${f(a)}<div class="bar a"><span style="width:${a/m*100}%"></span></div></td><td class="v ${bw==="b"?"better":""}">${f(b)}<div class="bar b"><span style="width:${b/m*100}%"></span></div></td></tr>`}).join("")+`</tbody>`;
+  $("#diff").innerHTML = [
+    ["R1–R4","A podał MPN, który nie istnieje (sufiks „X”); B odczytał MPN ze schematu."],
+    ["C9, C10","A dopisał nieistniejące oznaczenie C11 i zawyżył ilość."],
+    ["U3","B sprawdził regułą napięcie wejściowe LDO względem baterii; A pominął ten warunek."],
+    ["Y1","Oba warianty najpierw wybrały złą obudowę; oba poprawiły dobór w drugiej iteracji."],
+    ["J1","Oba oznaczyły złącze pacjenta do ręcznej oceny izolacji."],
+  ].map(([r,t])=>`<li><span class="mono">${r}</span>: ${t}</li>`).join("");
+  $("#errs").innerHTML=`<thead><tr><th>Krok</th><th>A</th><th>B</th></tr></thead><tbody>${[["Ekstrakcja z CAD",1,0],["Dobór MPN",2,1],["Walidacja (przepuszczone błędy)",2,0],["Kompozycja i format",1,0]].map(([k,a,b])=>`<tr><td>${k}</td><td class="v">${a}</td><td class="v">${b}</td></tr>`).join("")}</tbody>`;
+  S.done.add("cmp"); renderSteps();
+}
+$("#save-exp").onclick=()=>toast("Zapisano wyniki eksperymentu");
+
+go("project");
+</script>
+</body>
+</html>

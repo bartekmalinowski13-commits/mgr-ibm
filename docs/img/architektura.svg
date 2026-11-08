@@ -1,0 +1,159 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1500 900" width="1500" height="900" font-family="Inter, Arial, sans-serif">
+<defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#334155"/></marker>
+<style>.bt{font-size:14px;font-weight:700}.bs{font-size:11.5px;fill:#334155}.tag{font-size:10px;font-weight:700;fill:#fff;letter-spacing:.04em}
+.lt{font-size:15px;font-weight:700;fill:#0f172a;paint-order:stroke;stroke:#f7fbfa;stroke-width:6px}.ls{font-size:12px;fill:#475569;paint-order:stroke;stroke:#f7fbfa;stroke-width:6px}.al{font-size:11px;fill:#475569;font-style:italic}
+.h1{font-size:20px;font-weight:800;fill:#0f172a}.h2{font-size:12.5px;fill:#475569}</style></defs>
+<rect width="1500" height="900" fill="#ffffff"/>
+<text x="30" y="42" class="h1">Architektura systemu generowania BOM — porównanie wariantów</text>
+<text x="30" y="64" class="h2">Wspólne wejście, wspólna baza wiedzy i wspólna ewaluacja; warianty różnią się wyłącznie sposobem realizacji kroków przetwarzania.</text>
+<rect x="30" y="330" width="220" height="180" rx="10" fill="#fff6e0" stroke="#b45309" stroke-width="1.6"/>
+<rect x="206" y="338" width="36" height="17" rx="8.5" fill="#b45309"/>
+<text x="224.0" y="350.5" class="tag" text-anchor="middle">DANE</text>
+<text x="42" y="372" class="bt" fill="#b45309">Projekt urządzenia</text>
+<text x="42" y="392" class="bs">schemat i PCB KiCad</text>
+<text x="42" y="408" class="bs">(.kicad_sch, .kicad_pcb,</text>
+<text x="42" y="424" class="bs"> netlista)</text>
+<text x="42" y="440" class="bs">+ wymagania urządzenia</text>
+<text x="42" y="456" class="bs">  (klasa, zasilanie, sensory)</text>
+<path d="M250,380 L272,380 L272,215 L308,215" fill="none" stroke="#334155" stroke-width="1.6" marker-end="url(#ah)"/>
+<path d="M250,460 L272,460 L272,605 L308,605" fill="none" stroke="#334155" stroke-width="1.6" marker-end="url(#ah)"/>
+<rect x="290" y="88" width="880" height="272" rx="14" fill="#faf8ff" stroke="#c4b5fd" stroke-dasharray="6 5"/>
+<text x="308" y="114" class="lt">Wariant A — system wieloagentowy 100% LLM</text>
+<text x="308" y="134" class="ls">Każdy krok wykonuje agent LLM; deterministyczne są tylko narzędzia odczytu plików, wywoływane przez agenta.</text>
+<rect x="290" y="480" width="880" height="320" rx="14" fill="#f7fbfa" stroke="#99d5c9" stroke-dasharray="6 5"/>
+<text x="308" y="506" class="lt">Wariant B — system hybrydowy (LLM + komponenty deterministyczne)</text>
+<text x="308" y="526" class="ls">Parsowanie, normalizacja, walidacja i składanie BOM są regułowe; LLM tylko tam, gdzie potrzebna jest interpretacja.</text>
+<rect x="308" y="160" width="152" height="112" rx="10" fill="#f3efff" stroke="#6d28d9" stroke-width="1.6"/>
+<rect x="423" y="168" width="29" height="17" rx="8.5" fill="#6d28d9"/>
+<text x="437.5" y="180.5" class="tag" text-anchor="middle">LLM</text>
+<text x="320" y="202" class="bt" fill="#6d28d9">Orkiestrator</text>
+<text x="320" y="222" class="bs">planuje zadanie,</text>
+<text x="320" y="238" class="bs">deleguje do agentów,</text>
+<text x="320" y="254" class="bs">scala wyniki</text>
+<rect x="482" y="160" width="152" height="112" rx="10" fill="#f3efff" stroke="#6d28d9" stroke-width="1.6"/>
+<rect x="597" y="168" width="29" height="17" rx="8.5" fill="#6d28d9"/>
+<text x="611.5" y="180.5" class="tag" text-anchor="middle">LLM</text>
+<text x="494" y="202" class="bt" fill="#6d28d9">Agent ekstrakcji</text>
+<text x="494" y="222" class="bs">czyta CAD przez</text>
+<text x="494" y="238" class="bs">narzędzia (tool calls),</text>
+<text x="494" y="254" class="bs">wypisuje komponenty</text>
+<rect x="656" y="160" width="152" height="112" rx="10" fill="#f3efff" stroke="#6d28d9" stroke-width="1.6"/>
+<rect x="771" y="168" width="29" height="17" rx="8.5" fill="#6d28d9"/>
+<text x="785.5" y="180.5" class="tag" text-anchor="middle">LLM</text>
+<text x="668" y="202" class="bt" fill="#6d28d9">Agent doboru</text>
+<text x="668" y="222" class="bs">mapuje wartości na</text>
+<text x="668" y="238" class="bs">MPN / producenta</text>
+<text x="668" y="254" class="bs">z użyciem RAG</text>
+<rect x="830" y="160" width="152" height="112" rx="10" fill="#f3efff" stroke="#6d28d9" stroke-width="1.6"/>
+<rect x="945" y="168" width="29" height="17" rx="8.5" fill="#6d28d9"/>
+<text x="959.5" y="180.5" class="tag" text-anchor="middle">LLM</text>
+<text x="842" y="202" class="bt" fill="#6d28d9">Agent walidacji</text>
+<text x="842" y="222" class="bs">sprawdza spójność</text>
+<text x="842" y="238" class="bs">parametrów i obudów</text>
+<text x="842" y="254" class="bs">(ocena LLM)</text>
+<rect x="1004" y="160" width="152" height="112" rx="10" fill="#f3efff" stroke="#6d28d9" stroke-width="1.6"/>
+<rect x="1119" y="168" width="29" height="17" rx="8.5" fill="#6d28d9"/>
+<text x="1133.5" y="180.5" class="tag" text-anchor="middle">LLM</text>
+<text x="1016" y="202" class="bt" fill="#6d28d9">Agent kompozycji</text>
+<text x="1016" y="222" class="bs">grupuje pozycje,</text>
+<text x="1016" y="238" class="bs">liczy ilości,</text>
+<text x="1016" y="254" class="bs">formatuje BOM</text>
+<path d="M460,216 L480,216" fill="none" stroke="#334155" stroke-width="1.6" marker-end="url(#ah)"/>
+<path d="M634,216 L654,216" fill="none" stroke="#334155" stroke-width="1.6" marker-end="url(#ah)"/>
+<path d="M808,216 L828,216" fill="none" stroke="#334155" stroke-width="1.6" marker-end="url(#ah)"/>
+<path d="M982,216 L1002,216" fill="none" stroke="#334155" stroke-width="1.6" marker-end="url(#ah)"/>
+<path d="M906.0,272 L906.0,330 L772.0,330 L772.0,274" fill="none" stroke="#334155" stroke-width="1.6" stroke-dasharray="5 4" marker-end="url(#ah)"/>
+<text x="839.0" y="348" class="al" text-anchor="middle">odrzucenie → ponowny dobór</text>
+<rect x="308" y="550" width="152" height="112" rx="10" fill="#e8f5f2" stroke="#0f766e" stroke-width="1.6"/>
+<rect x="423" y="558" width="29" height="17" rx="8.5" fill="#0f766e"/>
+<text x="437.5" y="570.5" class="tag" text-anchor="middle">DET</text>
+<text x="320" y="592" class="bt" fill="#0f766e">Parser CAD</text>
+<text x="320" y="612" class="bs">odczyt netlisty i</text>
+<text x="320" y="628" class="bs">pól symboli (ref,</text>
+<text x="320" y="644" class="bs">wartość, footprint)</text>
+<rect x="482" y="550" width="152" height="112" rx="10" fill="#e8f5f2" stroke="#0f766e" stroke-width="1.6"/>
+<rect x="597" y="558" width="29" height="17" rx="8.5" fill="#0f766e"/>
+<text x="611.5" y="570.5" class="tag" text-anchor="middle">DET</text>
+<text x="494" y="592" class="bt" fill="#0f766e">Normalizacja</text>
+<text x="494" y="612" class="bs">jednostki, wartości,</text>
+<text x="494" y="628" class="bs">grupowanie i</text>
+<text x="494" y="644" class="bs">liczenie ilości</text>
+<rect x="656" y="550" width="152" height="112" rx="10" fill="#f3efff" stroke="#6d28d9" stroke-width="1.6"/>
+<rect x="771" y="558" width="29" height="17" rx="8.5" fill="#6d28d9"/>
+<text x="785.5" y="570.5" class="tag" text-anchor="middle">LLM</text>
+<text x="668" y="592" class="bt" fill="#6d28d9">Agent doboru</text>
+<text x="668" y="612" class="bs">tylko pozycje</text>
+<text x="668" y="628" class="bs">nierozstrzygnięte</text>
+<text x="668" y="644" class="bs">regułami; RAG</text>
+<rect x="830" y="550" width="152" height="112" rx="10" fill="#e8f5f2" stroke="#0f766e" stroke-width="1.6"/>
+<rect x="945" y="558" width="29" height="17" rx="8.5" fill="#0f766e"/>
+<text x="959.5" y="570.5" class="tag" text-anchor="middle">DET</text>
+<text x="842" y="592" class="bt" fill="#0f766e">Walidator regułowy</text>
+<text x="842" y="612" class="bs">schemat JSON, zakresy,</text>
+<text x="842" y="628" class="bs">footprint ↔ obudowa,</text>
+<text x="842" y="644" class="bs">checklista IEC 60601</text>
+<rect x="1004" y="550" width="152" height="112" rx="10" fill="#e8f5f2" stroke="#0f766e" stroke-width="1.6"/>
+<rect x="1119" y="558" width="29" height="17" rx="8.5" fill="#0f766e"/>
+<text x="1133.5" y="570.5" class="tag" text-anchor="middle">DET</text>
+<text x="1016" y="592" class="bt" fill="#0f766e">Generator BOM</text>
+<text x="1016" y="612" class="bs">składanie pozycji,</text>
+<text x="1016" y="628" class="bs">eksport CSV / JSON,</text>
+<text x="1016" y="644" class="bs">raport walidacji</text>
+<path d="M460,606 L480,606" fill="none" stroke="#334155" stroke-width="1.6" marker-end="url(#ah)"/>
+<path d="M634,606 L654,606" fill="none" stroke="#334155" stroke-width="1.6" marker-end="url(#ah)"/>
+<path d="M808,606 L828,606" fill="none" stroke="#334155" stroke-width="1.6" marker-end="url(#ah)"/>
+<path d="M982,606 L1002,606" fill="none" stroke="#334155" stroke-width="1.6" marker-end="url(#ah)"/>
+<text x="993.0" y="598" class="al" text-anchor="middle">OK</text>
+<rect x="828" y="697" width="156" height="88" rx="10" fill="#f3efff" stroke="#6d28d9" stroke-width="1.6"/>
+<rect x="947" y="705" width="29" height="17" rx="8.5" fill="#6d28d9"/>
+<text x="961.5" y="717.5" class="tag" text-anchor="middle">LLM</text>
+<text x="840" y="739" class="bt" fill="#6d28d9">Agent naprawy</text>
+<text x="840" y="759" class="bs">koryguje pozycje</text>
+<text x="840" y="775" class="bs">odrzucone przez reguły</text>
+<text x="772" y="740" class="al" text-anchor="middle">maks. N iteracji</text>
+<path d="M880,662 L880,695" fill="none" stroke="#334155" stroke-width="1.6" marker-end="url(#ah)"/>
+<text x="860" y="685" class="al" text-anchor="middle">błąd</text>
+<path d="M932,697 L932,664" fill="none" stroke="#334155" stroke-width="1.6" marker-end="url(#ah)"/>
+<text x="960" y="685" class="al" text-anchor="middle">poprawka</text>
+<rect x="290" y="378" width="880" height="84" rx="12" fill="#fff6e0" stroke="#b45309" stroke-width="1.6"/>
+<text x="308" y="406" class="bt" fill="#b45309">Wspólna baza wiedzy (RAG)</text>
+<text x="308" y="426" class="bs">datasheety komponentów elektronicznych i sensorów biomedycznych · chunking · embeddingi + metadane (MPN, parametry)</text>
+<text x="308" y="444" class="bs">wyszukiwanie hybrydowe (wektorowe + słowa kluczowe) · ten sam indeks i ten sam model embeddingów dla obu wariantów</text>
+<path d="M702.0,378 L702.0,274" fill="none" stroke="#b45309" stroke-width="1.6" stroke-dasharray="5 4" marker-end="url(#ah)"/>
+<path d="M702.0,462 L702.0,486" stroke="#b45309" stroke-width="1.6" stroke-dasharray="5 4"/>
+<path d="M702.0,534 L702.0,548" fill="none" stroke="#b45309" stroke-width="1.6" stroke-dasharray="5 4" marker-end="url(#ah)"/>
+<rect x="1210" y="180" width="260" height="76" rx="10" fill="#fff6e0" stroke="#b45309" stroke-width="1.6"/>
+<text x="1222" y="222" class="bt" fill="#b45309">BOM — wariant A</text>
+<text x="1222" y="242" class="bs">CSV / JSON + log rozumowania</text>
+<rect x="1210" y="572" width="260" height="76" rx="10" fill="#fff6e0" stroke="#b45309" stroke-width="1.6"/>
+<text x="1222" y="614" class="bt" fill="#b45309">BOM — wariant B</text>
+<text x="1222" y="634" class="bs">CSV / JSON + raport walidacji</text>
+<path d="M1156,216 L1208,218" fill="none" stroke="#334155" stroke-width="1.6" marker-end="url(#ah)"/>
+<path d="M1156,606 L1208,610" fill="none" stroke="#334155" stroke-width="1.6" marker-end="url(#ah)"/>
+<rect x="1210" y="315" width="260" height="210" rx="10" fill="#eef2ff" stroke="#1e3a8a" stroke-width="1.6"/>
+<rect x="1426" y="323" width="36" height="17" rx="8.5" fill="#1e3a8a"/>
+<text x="1444.0" y="335.5" class="tag" text-anchor="middle">EVAL</text>
+<text x="1222" y="357" class="bt" fill="#1e3a8a">Moduł ewaluacji</text>
+<text x="1222" y="377" class="bs">porównanie z BOM referencyjnym:</text>
+<text x="1222" y="393" class="bs">• precision / recall pozycji</text>
+<text x="1222" y="409" class="bs">• poprawność pól (MPN, ilość,</text>
+<text x="1222" y="425" class="bs">   wartość, footprint)</text>
+<text x="1222" y="441" class="bs">• odsetek halucynacji MPN</text>
+<text x="1222" y="457" class="bs">• koszt: tokeny, czas, wywołania</text>
+<text x="1222" y="473" class="bs">• powtarzalność (N uruchomień)</text>
+<path d="M1340,256 L1340,313" fill="none" stroke="#334155" stroke-width="1.6" marker-end="url(#ah)"/>
+<path d="M1340,572 L1340,527" fill="none" stroke="#334155" stroke-width="1.6" marker-end="url(#ah)"/>
+<text x="30" y="852" class="lt">Legenda</text>
+<rect x="130" y="838" width="22" height="18" rx="4" fill="#f3efff" stroke="#6d28d9" stroke-width="1.6"/>
+<text x="160" y="852" class="bs">krok realizowany przez agenta LLM</text>
+<rect x="460" y="838" width="22" height="18" rx="4" fill="#e8f5f2" stroke="#0f766e" stroke-width="1.6"/>
+<text x="490" y="852" class="bs">komponent deterministyczny (kod, reguły)</text>
+<rect x="790" y="838" width="22" height="18" rx="4" fill="#fff6e0" stroke="#b45309" stroke-width="1.6"/>
+<text x="820" y="852" class="bs">dane wejściowe / wyjściowe / baza wiedzy</text>
+<rect x="1120" y="838" width="22" height="18" rx="4" fill="#eef2ff" stroke="#1e3a8a" stroke-width="1.6"/>
+<text x="1150" y="852" class="bs">ewaluacja eksperymentu</text>
+<path d="M1235,878 L1275,878" stroke="#334155" stroke-width="1.6" stroke-dasharray="5 4" marker-end="url(#ah)"/>
+<text x="1285" y="882" class="bs">zapytanie do RAG / pętla zwrotna</text>
+<text x="308" y="506" class="lt">Wariant B — system hybrydowy (LLM + komponenty deterministyczne)</text>
+<text x="308" y="526" class="ls">Parsowanie, normalizacja, walidacja i składanie BOM są regułowe; LLM tylko tam, gdzie potrzebna jest interpretacja.</text>
+</svg>
