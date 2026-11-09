@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "enabledPlugins": {
+    "superpowers@claude-plugins-official": true,
+    "frontend-design@claude-plugins-official": true
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "git fetch --quiet origin main 2>/dev/null && git merge --ff-only --quiet origin/main 2>/dev/null; echo \"[mgr-ibm] Specyfikacja: docs/ (zrodlo prawdy). Ostatnie zmiany w docs: $(git log -3 --format='%h %s' -- docs CLAUDE.md | tr '\\n' ';')\""
+          }
+        ]
+      }
+    ]
+  }
+}

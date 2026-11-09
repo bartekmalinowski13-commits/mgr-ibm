@@ -26,6 +26,10 @@ Potem `/reload-plugins` (albo `/exit` i ponownie `claude`) i sprawdź w `/plugin
 
 ## Część 2 – prompt do wklejenia
 
+Najkrócej: w Claude Code otwartym w tym repo wystarczy napisać
+`Przeczytaj docs/prompts/CLAUDE_CODE_MASTER_PROMPT.md i wykonaj blok z części 2.`
+Pełna treść poniżej (to samo, do wklejenia wprost):
+
 ```text
 Jesteś zespołem developerskim (tech lead + backend + frontend + QA + DevOps + security) budującym produkcyjną platformę SaaS „BOM Agent” w tym repozytorium. Pracujesz autonomicznie przez wiele godzin. Człowiek śpi i NIE odpowie na pytania.
 
@@ -59,6 +63,8 @@ Szczegóły techniczne obowiązkowe:
 - Infra: AWS CDK (TypeScript) + cdk-nag; NIE wdrażaj; tylko synth i testy.
 - CI: GitHub Actions wg docs/platform/ARCHITECTURE.md §13 i docs/platform/TESTING.md; akcje przypięte do SHA; joby deploy z warunkiem vars.AWS_DEPLOY_ENABLED == 'true'.
 - Lokalnie: `just up` stawia cały stos (Postgres+pgvector, emulator S3/SQS – sprawdź aktualną licencję wybranego emulatora i zapisz wybór w DECISIONS_LOG, LiteLLM, Langfuse, grafana/otel-lgtm, Ollama jako profil opcjonalny).
+- Jeśli Docker nie działa w Twoim środowisku (`docker ps` zwraca błąd): nie blokuj się. Uruchom Postgres z pgvector natywnie (np. przez menedżer pakietów) do testów integracyjnych, pliki compose i testy Testcontainers pisz normalnie, a w docs/STATUS.md zaznacz, że ścieżka dockerowa nie została uruchomiona lokalnie (sprawdzi ją CI).
+- Jeśli skille superpowers lub frontend-design nie są dostępne (plugin niezainstalowany): stosuj ten sam proces ręcznie (brainstorm → plan w docs/plans → TDD → review subagentem → weryfikacja → PR) i zapisz to w STATUS.md.
 - Multi-tenancy: RLS na każdej tabeli tenanta od pierwszej migracji; zestaw testów izolacji (marker `isolation`) blokujący merge.
 - Każda mutacja → zdarzenie audytowe (hash chain). Każda pozycja BOM → pochodzenie (reguła+wersja / model+wersja promptu+cytaty KB).
 - Katalog modeli w konfiguracji z atrybutami license_class (closed/open-weight) i residency; konkretne ID modeli jako konfiguracja, z komentarzem, że dostępność w regionie trzeba zweryfikować przed włączeniem. Żadnych prawdziwych kluczy w repo ani w CI.

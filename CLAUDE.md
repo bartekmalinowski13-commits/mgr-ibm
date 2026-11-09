@@ -18,6 +18,23 @@ Oba cele muszą być spełnione jednocześnie: kod jakości produkcyjnej **i** k
 - `docs/thesis/ARCHITEKTURA_WARIANTOW.md`, `docs/thesis/STRUKTURA_PRACY.md` – kontekst pracy magisterskiej
 - `docs/design/prototype/v0-flow.html` – wcześniejszy prototyp przepływu (inspiracja, nie kod do kopiowania)
 
+## Źródło prawdy i przepływ wiedzy
+Repozytorium jest **jedynym źródłem prawdy** o produkcie. Specyfikacja jest dyskutowana w projekcie claude.ai „MGR - IBM”, ale obowiązuje dopiero to, co jest zapisane tutaj.
+
+| Co | Gdzie | Kto aktualizuje |
+|---|---|---|
+| Zasady pracy, kontekst | `CLAUDE.md` | człowiek / Claude z projektu |
+| Specyfikacja i architektura | `docs/platform/`, `docs/design/`, `docs/ROADMAP.md` | Claude z projektu (commity `docs(spec): …` na `main`) |
+| Decyzje | `docs/adr/` (trwałe), `docs/DECISIONS_LOG.md` (założenia do akceptacji) | obie strony; Claude Code dopisuje założenia |
+| Stan implementacji | `docs/STATUS.md` | Claude Code po każdym kamieniu milowym |
+| Plany zadań | `docs/plans/` | Claude Code (superpowers `writing-plans`) |
+
+Zasady:
+1. Na starcie sesji hook pobiera najnowszy `main` (`.claude/settings.json`). Jeśli pracujesz na gałęzi, zrób rebase na `origin/main` przed rozpoczęciem nowego zadania.
+2. Kod niezgodny z dokumentacją = błąd w kodzie, chyba że nowy ADR zmienia decyzję.
+3. Gdy specyfikacja jest niejasna lub sprzeczna: wybierz rozwiązanie najbliższe ADR-om, dopisz założenie do `docs/DECISIONS_LOG.md` i kontynuuj; nie zmieniaj po cichu `docs/platform/` ani ADR-ów.
+4. Zmiany specyfikacji idą osobnymi commitami `docs(spec): …`, kod przez PR-y z gałęzi `feat/…`.
+
 ## Zasady nienaruszalne
 1. **Izolacja tenantów.** Każdy odczyt/zapis danych klienta przechodzi przez kontekst tenanta; Postgres RLS włączone na każdej tabeli z danymi tenanta; rola aplikacyjna bez `BYPASSRLS`. Test izolacji międzytenantowej musi przechodzić w CI.
 2. **Tylko UE.** Infrastruktura i dostawcy LLM wyłącznie z przetwarzaniem w UE (patrz ADR-0002, ADR-0006). Żadnych endpointów spoza listy dozwolonych.
