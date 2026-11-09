@@ -1,8 +1,8 @@
 # Architektura systemu
 
-![Architektura](img/architektura.png)
+![Architektura](../img/architektura.png)
 
-Źródło diagramu: `img/architektura.svg` (generowany skryptem `tools/arch.py`). Wersja do podglądu w przeglądarce: [`architektura.html`](architektura.html).
+Źródło diagramu: `docs/img/architektura.svg` (generowany skryptem `tools/arch.py`). Wersja do podglądu w przeglądarce: [`architektura.html`](architektura.html).
 
 ## Zasada porównania
 Oba warianty mają **to samo wejście** (projekt KiCad + wymagania urządzenia), **tę samą bazę wiedzy RAG**, **ten sam model LLM** i **ten sam moduł ewaluacji**. Zmienia się tylko to, kto wykonuje poszczególne kroki – dzięki temu różnice w wynikach można przypisać architekturze.

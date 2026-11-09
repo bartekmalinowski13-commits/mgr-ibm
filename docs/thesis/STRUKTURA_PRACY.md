@@ -4,7 +4,7 @@
 
 **Opiekun:** dr inż. Magdalena Mazur-Milecka, Katedra Inżynierii Biomedycznej, WETI PG
 
-Szablon w Wordzie: [`thesis/Praca_magisterska_Bartosz_Malinowski_szablon.docx`](../thesis/Praca_magisterska_Bartosz_Malinowski_szablon.docx). Format jak w pracy inżynierskiej: Arial 10 pt, interlinia 1,5, wyjustowanie, wcięcie akapitu, rozdziały wielkimi literami od nowej strony, numeracja `1.` / `1.1.` / `1.1.1.`, cytowania `[n]`, numer strony w prawym dolnym rogu.
+Szablon w Wordzie: [`thesis/Praca_magisterska_Bartosz_Malinowski_szablon.docx`](../../thesis/Praca_magisterska_Bartosz_Malinowski_szablon.docx). Format jak w pracy inżynierskiej: Arial 10 pt, interlinia 1,5, wyjustowanie, wcięcie akapitu, rozdziały wielkimi literami od nowej strony, numeracja `1.` / `1.1.` / `1.1.1.`, cytowania `[n]`, numer strony w prawym dolnym rogu.
 
 ## Część wstępna
 - Strona tytułowa (logo PG/ETI, dane studenta, tytuł PL/EN, opiekun)

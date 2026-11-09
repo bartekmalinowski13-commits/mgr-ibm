@@ -1,0 +1,17 @@
+# Roadmapa i kamienie milowe
+
+Kolejność jest celowa: najpierw fundament i rdzeń potrzebny do pracy magisterskiej (efekt na koniec semestru: przegląd literatury, baza wiedzy + zbiór ewaluacyjny, prototyp analizy CAD), potem platforma SaaS dookoła. Każdy kamień milowy = osobne gałęzie `feat/<moduł>-…` i PR-y do `main`.
+
+| KM | Nazwa | Zakres | Kryteria akceptacji |
+|---|---|---|---|
+| **M0** | Fundament | monorepo (`uv` + `pnpm`), `justfile`, pre-commit, lint/typy/import-linter, szkielety 4 serwisów z `/healthz`, `deploy/compose` (Postgres+pgvector, emulator S3/SQS, LiteLLM z fałszywym dostawcą, Langfuse, `grafana/otel-lgtm`, Ollama opcjonalnie), OTel w szkieletach, GitHub Actions (PR pipeline), Renovate/Dependabot, szablony PR/issue | `just up && just smoke` przechodzi lokalnie (healthz + trace w Tempo); CI zielone na PR |
+| **M1** | Rdzeń domeny | `bom-core` (model, JSON Schema, normalizacja wartości i jednostek, grupowanie), `cad-parsers` z wtyczką **KiCad** (+ CSV BOM), `rules` (pakiet reguł v1: schemat, zakresy, footprint↔obudowa, checklista IEC 60601 jako flagi do przeglądu), `eval` (precision/recall/F1 pozycji, dokładność pól, halucynacje, koszt) | testy jednostkowe ≥ 85% pokrycia; parser KiCad przechodzi fixture’y; CLI `bomagent parse` i `bomagent eval` działają |
+| **M2** | Baza wiedzy | `kb` + `kb-indexer`: ingest PDF (Docling), chunking, embeddingi przez gateway, hybryda wektor + FTS, reranker, zakresy global/tenant z RLS, snapshot KB | testy retrieval (recall@k na małym zbiorze), testy izolacji KB |
+| **M3** | Agenci – warianty A i B | `llm` (klient gateway, katalog modeli closed/open-weight), `agents` (prompty wersjonowane), runtime’y `langgraph_a`, `langgraph_b`, `claude_agent_sdk_a` za `VariantRuntime`, `agent-worker` (SQS), budżety, fan-out, structured output, checkpointy | przebieg A i B na fixture KiCad z fałszywym LLM daje BOM; ślad kroków w Langfuse/OTel; CLI `bomagent run --variant A|B` |
+| **M4** | Platforma SaaS – backend | `api`: tenancy, identity (OIDC; lokalnie mock IdP), RBAC, projects (upload do S3, presigned URL), runs (+SSE), bom (edycja → wiedza tenanta), audit (hash chain), metering/limity, OpenAPI 3.1 + klient TS; `ingest-worker` w sandboxie | testy kontraktowe, integracyjne i **izolacji tenantów** zielone; zdarzenia audytu dla każdej mutacji |
+| **M5** | Frontend | `apps/web` wg `docs/design/UX_GUIDELINES.md`: shell z przełącznikiem organizacji, Start, Projekty, modal Nowy przebieg, Przebieg na żywo, BOM z panelem pochodzenia, Porównanie, Baza wiedzy, Log audytu, Ustawienia (członkowie, SSO, klucze API), onboarding; i18n PL/EN | E2E Playwright dla scenariuszy z `TESTING.md`, axe bez naruszeń, zrzuty ekranów w PR |
+| **M6** | Infrastruktura | `infra/cdk`: stacki network, data, identity, compute, observability, edge, security-baseline; cdk-nag; pipeline deploy (wyłączony flagą); runbooki | `just synth` bez błędów cdk-nag (lub z udokumentowanymi wyjątkami); testy asercji CDK |
+| **M7** | Kolejne formaty | wtyczki: IPC-2581, ODB++, EDIF, PDF (schemat/BOM), DXF, DWG (po ADR licencyjnym), spike’i Altium i OrCAD | fixture’y i testy odporności dla każdej wtyczki; komunikaty o ograniczeniach w UI |
+| **M8** | Eksperyment do pracy | zbiór ewaluacyjny (otwarte projekty biomedyczne + BOM referencyjne), macierz {A,B} × {zamknięty, open-weight} × N powtórzeń, raport (tabele/wykresy do rozdziału 7) | `bomagent experiment run` generuje raport w `evals/reports/` |
+
+Każdy kamień milowy kończy się aktualizacją `docs/STATUS.md` (co działa, jak uruchomić, co dalej, znane problemy).

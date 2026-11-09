@@ -1,0 +1,188 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1730 970" width="1730" height="970" font-family="Inter, Arial, sans-serif">
+<defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#334155"/></marker>
+<style>.t{font-size:13.5px;font-weight:700}.s{font-size:11.2px;fill:#334155}.tag{font-size:9.5px;font-weight:700;fill:#fff}
+.al{font-size:10.5px;fill:#475569;font-style:italic}.fl{font-size:12px;font-weight:700}.h1{font-size:20px;font-weight:800;fill:#0f172a}.h2{font-size:12.5px;fill:#475569}</style></defs>
+<rect width="1730" height="970" fill="#fff"/>
+<text x="30" y="36" class="h1">BOM Agent – architektura produkcyjna (SaaS, multi-tenant, UE)</text>
+<text x="30" y="58" class="h2">Modułowe serwisy na ECS Fargate, izolacja tenantów na każdej warstwie, wszystkie wywołania LLM przez gateway z politykami UE. Szczegóły: docs/platform/ARCHITECTURE.md, docs/adr/.</text>
+<rect x="300" y="78" width="200" height="60" rx="9" fill="#f4f4f5" stroke="#52525b" stroke-width="1.5"/>
+<text x="312" y="102" class="t" fill="#52525b">IdP klienta (SAML / OIDC)</text>
+<text x="312" y="121" class="s">Entra ID, Okta, Google</text>
+<rect x="520" y="78" width="200" height="60" rx="9" fill="#f4f4f5" stroke="#52525b" stroke-width="1.5"/>
+<text x="532" y="102" class="t" fill="#52525b">Użytkownicy organizacji</text>
+<text x="532" y="121" class="s">przeglądarka, API (klucze API)</text>
+<rect x="970" y="78" width="250" height="60" rx="9" fill="#f4f4f5" stroke="#52525b" stroke-width="1.5"/>
+<text x="982" y="102" class="t" fill="#52525b">GitHub Actions</text>
+<text x="982" y="121" class="s">CI/CD, OIDC do AWS, bez kluczy</text>
+<rect x="280" y="160" width="1200" height="745" rx="14" fill="none" stroke="#475569" stroke-dasharray="6 5" stroke-width="1.3"/>
+<text x="294" y="895" class="fl" fill="#475569">AWS eu-central-1 · konto prod (AWS Organizations: dev / staging / prod · SCP: tylko regiony UE)</text>
+<rect x="300" y="200" width="200" height="62" rx="9" fill="#eef2ff" stroke="#3730a3" stroke-width="1.5"/>
+<text x="312" y="224" class="t" fill="#3730a3">Amazon Cognito</text>
+<text x="312" y="243" class="s">SSO per organizacja, MFA</text>
+<rect x="520" y="200" width="200" height="62" rx="9" fill="#eef2ff" stroke="#3730a3" stroke-width="1.5"/>
+<text x="532" y="224" class="t" fill="#3730a3">CloudFront + AWS WAF</text>
+<text x="532" y="243" class="s">TLS, rate limiting</text>
+<rect x="740" y="200" width="200" height="62" rx="9" fill="#eef2ff" stroke="#3730a3" stroke-width="1.5"/>
+<text x="752" y="224" class="t" fill="#3730a3">S3 – SPA (apps/web)</text>
+<text x="752" y="243" class="s">React, Vite, shadcn/ui</text>
+<rect x="970" y="200" width="250" height="62" rx="9" fill="#eef2ff" stroke="#3730a3" stroke-width="1.5"/>
+<text x="982" y="224" class="t" fill="#3730a3">ECR</text>
+<text x="982" y="243" class="s">obrazy podpisane (cosign) + SBOM</text>
+<path d="M400,138 L400,198" fill="none" stroke="#334155" stroke-width="1.5" marker-end="url(#ah)"/>
+<path d="M620,138 L620,198" fill="none" stroke="#334155" stroke-width="1.5" marker-end="url(#ah)"/>
+<path d="M1095,138 L1095,198" fill="none" stroke="#334155" stroke-width="1.5" marker-end="url(#ah)"/>
+<path d="M720,231 L738,231" fill="none" stroke="#334155" stroke-width="1.5" marker-end="url(#ah)"/>
+<rect x="290" y="285" width="1180" height="478" rx="14" fill="none" stroke="#15212b" stroke-dasharray="6 5" stroke-width="1.3"/>
+<text x="304" y="753" class="fl" fill="#15212b">VPC – podsieci prywatne, VPC endpoints, egress przez allowlistę</text>
+<path d="M560,262 L560,300 L470,300 L470,328" fill="none" stroke="#334155" stroke-width="1.5" marker-end="url(#ah)"/>
+<path d="M360,262 L360,328" fill="none" stroke="#334155" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#ah)"/>
+<text x="330" y="300" class="al">JWT</text>
+<rect x="310" y="330" width="200" height="112" rx="9" fill="#ffffff" stroke="#15212b" stroke-width="1.5"/>
+<text x="322" y="354" class="t" fill="#15212b">services/api</text>
+<text x="322" y="373" class="s">FastAPI · OpenAPI 3.1 · SSE</text>
+<text x="322" y="388" class="s">moduły: tenancy, identity,</text>
+<text x="322" y="403" class="s">projects, runs, bom, kb-admin,</text>
+<text x="322" y="418" class="s">audit, metering</text>
+<rect x="472.2" y="339" width="29.799999999999997" height="16" rx="8" fill="#15212b"/>
+<text x="487.1" y="351" class="tag" text-anchor="middle">ECS</text>
+<rect x="530" y="330" width="200" height="112" rx="9" fill="#e8f5f2" stroke="#0f766e" stroke-width="1.5"/>
+<text x="542" y="354" class="t" fill="#0f766e">ingest-worker</text>
+<text x="542" y="373" class="s">parsery: KiCad, Altium, Cadence,</text>
+<text x="542" y="388" class="s">IPC-2581, ODB++, PDF, DXF/DWG</text>
+<text x="542" y="403" class="s">sandbox: bez sieci, read-only,</text>
+<text x="542" y="418" class="s">skan malware przed parsowaniem</text>
+<rect x="692.2" y="339" width="29.799999999999997" height="16" rx="8" fill="#0f766e"/>
+<text x="707.1" y="351" class="tag" text-anchor="middle">ECS</text>
+<rect x="750" y="330" width="200" height="112" rx="9" fill="#e8f5f2" stroke="#0f766e" stroke-width="1.5"/>
+<text x="762" y="354" class="t" fill="#0f766e">kb-indexer</text>
+<text x="762" y="373" class="s">Docling, chunking,</text>
+<text x="762" y="388" class="s">embeddingi, zakres</text>
+<text x="762" y="403" class="s">global / tenant</text>
+<rect x="912.2" y="339" width="29.799999999999997" height="16" rx="8" fill="#0f766e"/>
+<text x="927.1" y="351" class="tag" text-anchor="middle">ECS</text>
+<rect x="970" y="330" width="250" height="112" rx="9" fill="#f3efff" stroke="#6d28d9" stroke-width="1.5"/>
+<text x="982" y="354" class="t" fill="#6d28d9">agent-worker</text>
+<text x="982" y="373" class="s">wariant A: 100% LLM</text>
+<text x="982" y="388" class="s">wariant B: hybryda (reguły + LLM)</text>
+<text x="982" y="403" class="s">LangGraph + Claude Agent SDK</text>
+<text x="982" y="418" class="s">fan-out, budżety, checkpointy</text>
+<rect x="1182.2" y="339" width="29.799999999999997" height="16" rx="8" fill="#6d28d9"/>
+<text x="1197.1" y="351" class="tag" text-anchor="middle">ECS</text>
+<rect x="1250" y="330" width="200" height="112" rx="9" fill="#f3efff" stroke="#6d28d9" stroke-width="1.5"/>
+<text x="1262" y="354" class="t" fill="#6d28d9">llm-gateway (LiteLLM)</text>
+<text x="1262" y="373" class="s">katalog: closed / open-weight</text>
+<text x="1262" y="388" class="s">polityka rezydencji UE</text>
+<text x="1262" y="403" class="s">budżety i limity per tenant</text>
+<rect x="1412.2" y="339" width="29.799999999999997" height="16" rx="8" fill="#6d28d9"/>
+<text x="1427.1" y="351" class="tag" text-anchor="middle">ECS</text>
+<path d="M1220,386 L1248,386" fill="none" stroke="#334155" stroke-width="1.5" marker-end="url(#ah)"/>
+<path d="M850,330 L850,314 L1350,314 L1350,328" fill="none" stroke="#334155" stroke-width="1.5" marker-end="url(#ah)"/>
+<text x="1000" y="309" class="al">embeddingi</text>
+<rect x="310" y="460" width="910" height="30" rx="6" fill="#f8fafc" stroke="#94a3b8"/>
+<text x="765" y="480" class="s" text-anchor="middle">kontekst tenanta: JWT → TenantContext → SET LOCAL app.tenant_id (Postgres RLS) · prefiks S3 per tenant (ABAC) · tenant_id w każdej wiadomości</text>
+<path d="M410,442 L410,458" fill="none" stroke="#334155" stroke-width="1.5" marker-end="url(#ah)" marker-start="url(#ah)"/>
+<path d="M630,442 L630,458" fill="none" stroke="#334155" stroke-width="1.5" marker-end="url(#ah)" marker-start="url(#ah)"/>
+<path d="M850,442 L850,458" fill="none" stroke="#334155" stroke-width="1.5" marker-end="url(#ah)" marker-start="url(#ah)"/>
+<path d="M1095,442 L1095,458" fill="none" stroke="#334155" stroke-width="1.5" marker-end="url(#ah)" marker-start="url(#ah)"/>
+<path d="M410,490 L410,508" fill="none" stroke="#334155" stroke-width="1.5" marker-end="url(#ah)" marker-start="url(#ah)"/>
+<path d="M630,490 L630,508" fill="none" stroke="#334155" stroke-width="1.5" marker-end="url(#ah)" marker-start="url(#ah)"/>
+<path d="M850,490 L850,508" fill="none" stroke="#334155" stroke-width="1.5" marker-end="url(#ah)" marker-start="url(#ah)"/>
+<path d="M1095,490 L1095,508" fill="none" stroke="#334155" stroke-width="1.5" marker-end="url(#ah)" marker-start="url(#ah)"/>
+<rect x="310" y="510" width="200" height="92" rx="9" fill="#fff6e0" stroke="#b45309" stroke-width="1.5"/>
+<text x="322" y="534" class="t" fill="#b45309">Amazon SQS</text>
+<text x="322" y="553" class="s">kolejki: ingest, kb, runs</text>
+<text x="322" y="568" class="s">+ DLQ, autoskalowanie</text>
+<text x="322" y="583" class="s">workerów po głębokości</text>
+<rect x="530" y="510" width="200" height="92" rx="9" fill="#fff6e0" stroke="#b45309" stroke-width="1.5"/>
+<text x="542" y="534" class="t" fill="#b45309">Aurora PostgreSQL 16</text>
+<text x="542" y="553" class="s">Serverless v2, pgvector</text>
+<text x="542" y="568" class="s">RLS na tabelach tenanta</text>
+<text x="542" y="583" class="s">silo dla planu Enterprise</text>
+<rect x="750" y="510" width="200" height="92" rx="9" fill="#fff6e0" stroke="#b45309" stroke-width="1.5"/>
+<text x="762" y="534" class="t" fill="#b45309">Amazon S3</text>
+<text x="762" y="553" class="s">pliki klientów, artefakty,</text>
+<text x="762" y="568" class="s">eksporty · SSE-KMS</text>
+<text x="762" y="583" class="s">CMK per tenant (Enterprise)</text>
+<rect x="970" y="510" width="118" height="92" rx="9" fill="#fff6e0" stroke="#b45309" stroke-width="1.5"/>
+<text x="982" y="534" class="t" fill="#b45309">EventBridge</text>
+<text x="982" y="553" class="s">zdarzenia</text>
+<text x="982" y="568" class="s">domenowe</text>
+<rect x="1102" y="510" width="118" height="92" rx="9" fill="#fff6e0" stroke="#b45309" stroke-width="1.5"/>
+<text x="1114" y="534" class="t" fill="#b45309">Audyt</text>
+<text x="1114" y="553" class="s">S3 Object Lock,</text>
+<text x="1114" y="568" class="s">hash chain</text>
+<path d="M1088,556 L1100,556" fill="none" stroke="#334155" stroke-width="1.5" marker-end="url(#ah)"/>
+<rect x="1250" y="510" width="200" height="92" rx="9" fill="#f3efff" stroke="#6d28d9" stroke-width="1.5"/>
+<text x="1262" y="534" class="t" fill="#6d28d9">model-serving (vLLM)</text>
+<text x="1262" y="553" class="s">open-weight na GPU</text>
+<text x="1262" y="568" class="s">ECS na EC2, opcjonalnie</text>
+<path d="M1350,442 L1350,508" fill="none" stroke="#334155" stroke-width="1.5" marker-end="url(#ah)"/>
+<rect x="310" y="630" width="200" height="100" rx="9" fill="#ecfeff" stroke="#0e7490" stroke-width="1.5"/>
+<text x="322" y="654" class="t" fill="#0e7490">OTel Collector (ADOT)</text>
+<text x="322" y="673" class="s">OTLP z każdego serwisu</text>
+<text x="322" y="688" class="s">→ Prometheus, CloudWatch</text>
+<text x="322" y="703" class="s">tenant_id w atrybutach</text>
+<rect x="530" y="630" width="200" height="100" rx="9" fill="#ecfeff" stroke="#0e7490" stroke-width="1.5"/>
+<text x="542" y="654" class="t" fill="#0e7490">Prometheus + Grafana</text>
+<text x="542" y="673" class="s">Amazon Managed Service</text>
+<text x="542" y="688" class="s">for Prometheus / Grafana</text>
+<text x="542" y="703" class="s">SLO, alarmy → SNS</text>
+<rect x="750" y="630" width="200" height="100" rx="9" fill="#ecfeff" stroke="#0e7490" stroke-width="1.5"/>
+<text x="762" y="654" class="t" fill="#0e7490">CloudWatch / X-Ray</text>
+<text x="762" y="673" class="s">logi JSON (structlog)</text>
+<text x="762" y="688" class="s">bez treści plików klienta</text>
+<rect x="970" y="630" width="250" height="100" rx="9" fill="#ecfeff" stroke="#0e7490" stroke-width="1.5"/>
+<text x="982" y="654" class="t" fill="#0e7490">Langfuse (self-hosted)</text>
+<text x="982" y="673" class="s">ślady LLM: prompty, koszty,</text>
+<text x="982" y="688" class="s">opóźnienia – metryki do pracy</text>
+<path d="M510,680 L528,680" fill="none" stroke="#334155" stroke-width="1.5" marker-end="url(#ah)"/>
+<rect x="300" y="780" width="200" height="90" rx="9" fill="#fef2f2" stroke="#b91c1c" stroke-width="1.5"/>
+<text x="312" y="804" class="t" fill="#b91c1c">AWS KMS + Secrets Mgr</text>
+<text x="312" y="823" class="s">szyfrowanie w spoczynku</text>
+<text x="312" y="838" class="s">rotacja sekretów</text>
+<rect x="520" y="780" width="200" height="90" rx="9" fill="#fef2f2" stroke="#b91c1c" stroke-width="1.5"/>
+<text x="532" y="804" class="t" fill="#b91c1c">GuardDuty</text>
+<text x="532" y="823" class="s">+ Malware Protection S3</text>
+<text x="532" y="838" class="s">+ Runtime Monitoring ECS</text>
+<rect x="740" y="780" width="200" height="90" rx="9" fill="#fef2f2" stroke="#b91c1c" stroke-width="1.5"/>
+<text x="752" y="804" class="t" fill="#b91c1c">Security Hub + Config</text>
+<text x="752" y="823" class="s">AWS FSBP, CIS</text>
+<text x="752" y="838" class="s">conformance packs</text>
+<rect x="960" y="780" width="260" height="90" rx="9" fill="#fef2f2" stroke="#b91c1c" stroke-width="1.5"/>
+<text x="972" y="804" class="t" fill="#b91c1c">CloudTrail organizacji</text>
+<text x="972" y="823" class="s">→ konto log-archive</text>
+<text x="972" y="838" class="s">(Object Lock)</text>
+<rect x="1240" y="780" width="220" height="90" rx="9" fill="#fef2f2" stroke="#b91c1c" stroke-width="1.5"/>
+<text x="1252" y="804" class="t" fill="#b91c1c">AWS Backup</text>
+<text x="1252" y="823" class="s">kopie do eu-west-1</text>
+<text x="1252" y="838" class="s">(drugi region UE)</text>
+<text x="1500" y="300" class="fl" fill="#6d28d9">Dostawcy LLM – przetwarzanie w UE</text>
+<rect x="1500" y="330" width="210" height="62" rx="9" fill="#f3efff" stroke="#6d28d9" stroke-width="1.5"/>
+<text x="1512" y="354" class="t" fill="#6d28d9">Amazon Bedrock</text>
+<text x="1512" y="373" class="s">profil EU: Claude, open-weight</text>
+<rect x="1500" y="410" width="210" height="62" rx="9" fill="#f3efff" stroke="#6d28d9" stroke-width="1.5"/>
+<text x="1512" y="434" class="t" fill="#6d28d9">Azure OpenAI</text>
+<text x="1512" y="453" class="s">Data Zone Standard (EU)</text>
+<rect x="1500" y="490" width="210" height="62" rx="9" fill="#f3efff" stroke="#6d28d9" stroke-width="1.5"/>
+<text x="1512" y="514" class="t" fill="#6d28d9">Mistral (UE)</text>
+<text x="1512" y="533" class="s">La Plateforme</text>
+<path d="M1450,386 L1480,386" fill="none" stroke="#334155" stroke-width="1.5"/>
+<path d="M1480,361 L1480,521" fill="none" stroke="#334155" stroke-width="1.5"/>
+<path d="M1480,361 L1498,361" fill="none" stroke="#334155" stroke-width="1.5" marker-end="url(#ah)"/>
+<path d="M1480,441 L1498,441" fill="none" stroke="#334155" stroke-width="1.5" marker-end="url(#ah)"/>
+<path d="M1480,521 L1498,521" fill="none" stroke="#334155" stroke-width="1.5" marker-end="url(#ah)"/>
+<text x="1500" y="580" class="s">dev lokalnie: Ollama</text>
+<text x="1500" y="597" class="s">CI: fałszywy dostawca (nagrania)</text>
+<rect x="30" y="925" width="20" height="16" rx="4" fill="#f3efff" stroke="#6d28d9" stroke-width="1.5"/>
+<text x="58" y="937" class="s">LLM / agenci</text>
+<rect x="260" y="925" width="20" height="16" rx="4" fill="#e8f5f2" stroke="#0f766e" stroke-width="1.5"/>
+<text x="288" y="937" class="s">przetwarzanie deterministyczne</text>
+<rect x="490" y="925" width="20" height="16" rx="4" fill="#ffffff" stroke="#15212b" stroke-width="1.5"/>
+<text x="518" y="937" class="s">API</text>
+<rect x="720" y="925" width="20" height="16" rx="4" fill="#fff6e0" stroke="#b45309" stroke-width="1.5"/>
+<text x="748" y="937" class="s">dane</text>
+<rect x="950" y="925" width="20" height="16" rx="4" fill="#ecfeff" stroke="#0e7490" stroke-width="1.5"/>
+<text x="978" y="937" class="s">obserwowalność</text>
+<rect x="1180" y="925" width="20" height="16" rx="4" fill="#fef2f2" stroke="#b91c1c" stroke-width="1.5"/>
+<text x="1208" y="937" class="s">bezpieczeństwo</text>
+</svg>
