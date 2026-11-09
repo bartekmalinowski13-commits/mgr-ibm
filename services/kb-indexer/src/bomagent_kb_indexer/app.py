@@ -18,10 +18,61 @@ from bomagent_kb_indexer import __version__
 log = get_logger(__name__)
 
 
+async def _noop(message: Message) -> None:  # health-only mode (no queue configured)
+    return None
+
+
 class Settings(ServiceSettings):
     service_name: str = "bomagent-kb-indexer"
     queue_url: str | None = None  # SQS queue with work for this worker
     queue_wait_seconds: int = 10
+    platform_database_url: str | None = None  # global corpus (platform role)
+    files_bucket: str = "bomagent-local-files"
+    global_bucket: str | None = None
+    llm_gateway_url: str | None = None
+    llm_gateway_key: str | None = None
+    embedding_model: str = "fake-embedding"
+    use_docling: bool = False
+
+
+def build_handler(settings: Settings) -> Handler:
+    """Wire the indexer from settings (gateway embeddings, S3, both DB roles)."""
+    from bomagent_common.storage import S3ObjectStore
+    from bomagent_kb import KnowledgeBase
+    from bomagent_kb_indexer.handler import KbIndexer
+    from bomagent_llm.embeddings import EmbeddingClient, GatewayEmbeddings, HashingEmbeddings
+
+    if settings.database_url is None:
+        raise RuntimeError("BOMAGENT_DATABASE_URL is required")
+    embedder: EmbeddingClient
+    if settings.llm_gateway_url and settings.llm_gateway_key:
+        embedder = GatewayEmbeddings(
+            settings.llm_gateway_url, settings.llm_gateway_key, settings.embedding_model
+        )
+    else:
+        embedder = HashingEmbeddings()
+    indexer = KbIndexer(
+        kb=KnowledgeBase(embedder),
+        app_engine=make_engine(settings.database_url),
+        tenant_store=S3ObjectStore(
+            settings.files_bucket,
+            region=settings.aws_region,
+            endpoint_url=settings.aws_endpoint_url,
+        ),
+        platform_engine=make_engine(settings.platform_database_url)
+        if settings.platform_database_url
+        else None,
+        global_store=S3ObjectStore(
+            settings.global_bucket,
+            region=settings.aws_region,
+            endpoint_url=settings.aws_endpoint_url,
+            enforce_tenant=False,
+        )
+        if settings.global_bucket
+        else None,
+        use_docling=settings.use_docling,
+    )
+    return indexer.handle
 
 
 def _make_lifespan(settings: Settings, handler: Handler) -> Lifespan:
@@ -50,11 +101,6 @@ def _make_lifespan(settings: Settings, handler: Handler) -> Lifespan:
     return lifespan
 
 
-async def handle(message: Message) -> None:
-    """Placeholder dispatch; real handlers are registered in later milestones."""
-    log.info("message_received", message_type=message.type)
-
-
 def create_app(settings: Settings | None = None, handler: Handler | None = None) -> FastAPI:
     settings = settings or Settings()
     readiness: dict[str, ReadinessCheck] = {}
@@ -70,6 +116,8 @@ def create_app(settings: Settings | None = None, handler: Handler | None = None)
         version=__version__,
         title="BOM Agent KB indexer",
         readiness=readiness,
-        lifespan=_make_lifespan(settings, handler or handle),
+        lifespan=_make_lifespan(
+            settings, handler or (build_handler(settings) if settings.queue_url else _noop)
+        ),
         docs=False,
     )

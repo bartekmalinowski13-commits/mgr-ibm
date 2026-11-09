@@ -17,3 +17,13 @@ Open-source biomedical KiCad projects with a licence that permits redistribution
 (e.g. CERN-OHL, CC-BY(-SA), MIT/Apache for hardware files), each with: URL, commit,
 licence, date retrieved, and a hand-made reference BOM. Licences must be verified by a
 human before the files are committed.
+
+## Knowledge-base fixtures
+| Path | Source | Licence | Notes |
+|---|---|---|---|
+| `datasheets/*.md` | self-authored synthetic summaries | CC0-1.0 | short factual summaries written for tests, each marked "SYNTHETIC SUMMARY ... NOT MANUFACTURER DOCUMENTATION"; no text copied from datasheets |
+| `datasheets/malicious-injection.md` | self-authored adversarial document | CC0-1.0 | prompt-injection test case (fake part) |
+| `kb/queries.yaml` | self-authored | CC0-1.0 | retrieval evaluation set (recall@k) |
+
+Real datasheets for the thesis experiment must be downloaded by a human from manufacturers'
+sites into the (private) global corpus; they are **not** committed (copyright).

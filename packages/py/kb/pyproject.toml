@@ -10,6 +10,7 @@ dependencies = [
     "sqlalchemy[asyncio]>=2.0.36",
     "pgvector>=0.3.6",
     "pypdf>=5.1",
+    "bomagent-bom-core",
     "bomagent-platform-common",
     "bomagent-llm",
 ]
@@ -22,5 +23,6 @@ build-backend = "hatchling.build"
 packages = ["src/bomagent_kb"]
 
 [tool.uv.sources]
+bomagent-bom-core = { workspace = true }
 bomagent-platform-common = { workspace = true }
 bomagent-llm = { workspace = true }

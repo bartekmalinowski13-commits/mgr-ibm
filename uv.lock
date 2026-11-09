@@ -376,6 +376,7 @@ name = "bomagent-kb"
 version = "0.1.0"
 source = { editable = "packages/py/kb" }
 dependencies = [
+    { name = "bomagent-bom-core" },
     { name = "bomagent-llm" },
     { name = "bomagent-platform-common" },
     { name = "pgvector" },
@@ -386,6 +387,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
+    { name = "bomagent-bom-core", editable = "packages/py/bom-core" },
     { name = "bomagent-llm", editable = "packages/py/llm" },
     { name = "bomagent-platform-common", editable = "packages/py/platform-common" },
     { name = "pgvector", specifier = ">=0.3.6" },

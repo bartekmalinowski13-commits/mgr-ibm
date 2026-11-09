@@ -1,0 +1,21 @@
+# Retrieval evaluation set: query -> document (file stem in ../datasheets) that must be
+# retrieved. Used by packages/py/kb/tests (recall@k) and `bomagent kb-eval` later.
+queries:
+  - {q: "10 kΩ 0603 1% thick film resistor", doc: yageo-rc0603}
+  - {q: "RC0603FR-0749K9L", doc: yageo-rc0603}
+  - {q: "100 nF 50 V X7R 0603 ceramic capacitor", doc: murata-grm188}
+  - {q: "47 nF X7R 0603 capacitor", doc: murata-grm188}
+  - {q: "10 µF 10 V X5R 0603 bulk decoupling", doc: samsung-cl10}
+  - {q: "single lead heart rate monitor ECG front end", doc: adi-ad8232}
+  - {q: "zero-drift op amp SOT-23-5 micropower", doc: ti-opa333}
+  - {q: "dual zero-drift operational amplifier SOIC-8", doc: ti-opa2333}
+  - {q: "instrumentation amplifier gain resistor EEG", doc: ti-ina333}
+  - {q: "two channel 24-bit biopotential ADC respiration", doc: ti-ads1292r}
+  - {q: "3.3 V LDO 250 mA low quiescent current SOT-23", doc: microchip-mcp1700}
+  - {q: "ultra low noise LDO 1.8 V SOT-23-5", doc: ti-lp5907}
+  - {q: "ESD protection diode 5 V SOD-323", doc: nexperia-pesd5v0s1ba}
+  - {q: "ferrite bead 220 ohm 100 MHz 0603", doc: murata-blm18pg}
+  - {q: "green 0603 indicator LED", doc: liteon-ltst-c191}
+  - {q: "pulse oximetry SpO2 sensor module I2C", doc: maxim-max30102}
+  - {q: "2.54 mm 3 circuit vertical header", doc: molex-kk254}
+  - {q: "2.0 mm battery connector 2 circuits side entry", doc: jst-ph}
