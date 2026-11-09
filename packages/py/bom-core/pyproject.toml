@@ -1,0 +1,17 @@
+[project]
+name = "bomagent-bom-core"
+version = "0.1.0"
+description = "BOM domain model, JSON Schema, value/unit normalisation and grouping"
+readme = "README.md"
+requires-python = ">=3.12"
+license = "LicenseRef-Proprietary"
+dependencies = [
+    "pydantic>=2.9",
+]
+
+[build-system]
+requires = ["hatchling>=1.26"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/bomagent_bom"]

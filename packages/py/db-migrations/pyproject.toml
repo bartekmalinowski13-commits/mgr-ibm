@@ -1,0 +1,22 @@
+[project]
+name = "bomagent-db-migrations"
+version = "0.1.0"
+description = "PostgreSQL schema of the platform: Alembic migrations, roles bootstrap, RLS policies"
+readme = "README.md"
+requires-python = ">=3.12"
+license = "LicenseRef-Proprietary"
+dependencies = [
+    "alembic>=1.14",
+    "sqlalchemy>=2.0.36",
+    "psycopg[binary]>=3.2",
+]
+
+[project.scripts]
+bomagent-migrate = "bomagent_migrations:main"
+
+[build-system]
+requires = ["hatchling>=1.26"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/bomagent_migrations"]

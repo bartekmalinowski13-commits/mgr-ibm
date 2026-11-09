@@ -1,0 +1,178 @@
+[project]
+name = "bomagent-workspace"
+version = "0.1.0"
+description = "BOM Agent monorepo workspace root (not published)"
+requires-python = ">=3.12"
+dependencies = [
+    "bomagent-platform-common",
+    "bomagent-bom-core",
+    "bomagent-cad-parsers",
+    "bomagent-rules",
+    "bomagent-kb",
+    "bomagent-llm",
+    "bomagent-agents",
+    "bomagent-eval",
+    "bomagent-cli",
+    "bomagent-api",
+    "bomagent-ingest-worker",
+    "bomagent-agent-worker",
+    "bomagent-kb-indexer",
+    "bomagent-db-migrations",
+]
+
+[tool.uv]
+package = false
+
+[tool.uv.workspace]
+members = ["packages/py/*", "services/*"]
+
+[tool.uv.sources]
+bomagent-platform-common = { workspace = true }
+bomagent-bom-core = { workspace = true }
+bomagent-cad-parsers = { workspace = true }
+bomagent-rules = { workspace = true }
+bomagent-kb = { workspace = true }
+bomagent-llm = { workspace = true }
+bomagent-agents = { workspace = true }
+bomagent-eval = { workspace = true }
+bomagent-cli = { workspace = true }
+bomagent-api = { workspace = true }
+bomagent-ingest-worker = { workspace = true }
+bomagent-agent-worker = { workspace = true }
+bomagent-kb-indexer = { workspace = true }
+bomagent-db-migrations = { workspace = true }
+bomagent-testing = { workspace = true }
+
+[dependency-groups]
+dev = [
+    "bomagent-testing",
+    "pytest>=8.3",
+    "pytest-asyncio>=1.0",
+    "pytest-cov>=6.0",
+    "pytest-timeout>=2.3",
+    "hypothesis>=6.120",
+    "ruff>=0.8",
+    "mypy>=1.13",
+    "import-linter>=2.1",
+    "pre-commit>=4.0",
+    "testcontainers[postgres]>=4.9",
+    "moto[s3,sqs,server]>=5.0",
+    "schemathesis>=3.39",
+    "types-PyYAML",
+]
+
+# ---------------------------------------------------------------- ruff
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["packages/py/*/src", "services/*/src"]
+extend-exclude = ["tools", "docs", "**/migrations/versions/*.py"]
+
+[tool.ruff.lint]
+select = [
+    "E", "F", "W", "I", "N", "UP", "B", "A", "C4", "SIM", "RUF", "S", "PT", "ASYNC",
+    "DTZ", "T20", "PL", "TRY", "PERF", "LOG", "G",
+]
+ignore = [
+    "PLR0913", # many args are fine for constructors of value objects
+    "PLR2004", # magic values in domain code (units, thresholds) are explicit and tested
+    "TRY003",  # long messages in exceptions are intentional (user-facing problem details)
+    "S101",    # asserts are used only in tests (see per-file ignores) and for type narrowing
+    "PLC0415", # local imports are used deliberately for optional heavy dependencies
+]
+
+[tool.ruff.lint.per-file-ignores]
+"**/tests/**" = ["S", "PLR", "T20", "DTZ", "ARG", "N802"]
+"tests/**" = ["S", "PLR", "T20", "DTZ", "ARG"]
+
+[tool.ruff.lint.isort]
+known-first-party = [
+    "bomagent_common", "bomagent_bom", "bomagent_cad", "bomagent_rules", "bomagent_kb",
+    "bomagent_llm", "bomagent_agents", "bomagent_eval", "bomagent_cli", "bomagent_api",
+    "bomagent_ingest", "bomagent_agent_worker", "bomagent_kb_indexer", "bomagent_migrations",
+    "bomagent_testing",
+]
+
+# ---------------------------------------------------------------- mypy
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_unreachable = true
+pretty = true
+plugins = ["pydantic.mypy"]
+exclude = ["tools/", "docs/", "migrations/versions/"]
+
+[[tool.mypy.overrides]]
+module = [
+    "testcontainers.*", "moto.*", "ezdxf.*", "docling.*", "pdfplumber.*", "pypdf.*",
+    "langgraph.*", "langchain_core.*", "psycopg_pool.*", "claude_agent_sdk.*", "sexpdata.*",
+    "boto3.*", "botocore.*", "aiobotocore.*", "schemathesis.*",
+]
+ignore_missing_imports = true
+
+[tool.pydantic-mypy]
+init_forbid_extra = true
+init_typed = true
+warn_required_dynamic_aliases = true
+
+# ---------------------------------------------------------------- pytest
+[tool.pytest.ini_options]
+addopts = "--import-mode=importlib -ra --strict-markers -m \"not smoke and not e2e\""
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "session"
+asyncio_default_test_loop_scope = "session"
+timeout = 300
+testpaths = ["packages/py", "services", "tests"]
+markers = [
+    "integration: needs PostgreSQL+pgvector (Testcontainers or BOMAGENT_TEST_DATABASE_URL)",
+    "isolation: cross-tenant isolation tests - blocking in CI",
+    "contract: API contract tests against the committed OpenAPI document",
+    "smoke: smoke tests against a running stack (just smoke)",
+    "e2e: end-to-end tests on the local stack",
+    "slow: slow tests (excluded from the default fast loop)",
+]
+filterwarnings = [
+    "error::pytest.PytestUnraisableExceptionWarning",
+]
+
+[tool.coverage.run]
+branch = true
+source = ["packages/py", "services"]
+omit = ["*/tests/*", "*/migrations/versions/*"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+exclude_also = [
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+    "@overload",
+    "\\.\\.\\.$",
+]
+
+# ---------------------------------------------------------------- import-linter
+[tool.importlinter]
+root_packages = [
+    "bomagent_common", "bomagent_bom", "bomagent_cad", "bomagent_rules", "bomagent_kb",
+    "bomagent_llm", "bomagent_agents", "bomagent_eval", "bomagent_cli", "bomagent_api",
+    "bomagent_ingest", "bomagent_agent_worker", "bomagent_kb_indexer", "bomagent_migrations",
+]
+include_external_packages = true
+
+[[tool.importlinter.contracts]]
+name = "Layered architecture: services > cli > agents > domain libraries > foundation"
+type = "layers"
+layers = [
+    "bomagent_api | bomagent_ingest | bomagent_agent_worker | bomagent_kb_indexer",
+    "bomagent_cli",
+    "bomagent_agents",
+    "bomagent_kb | bomagent_eval",
+    "bomagent_cad | bomagent_rules | bomagent_llm",
+    "bomagent_bom | bomagent_common | bomagent_migrations",
+]
+
+[[tool.importlinter.contracts]]
+name = "Domain model is pure (no infrastructure)"
+type = "forbidden"
+source_modules = ["bomagent_bom", "bomagent_rules", "bomagent_cad", "bomagent_eval"]
+forbidden_modules = ["sqlalchemy", "fastapi", "httpx", "boto3", "bomagent_common"]

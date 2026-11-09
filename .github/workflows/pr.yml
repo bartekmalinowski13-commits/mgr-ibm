@@ -1,0 +1,140 @@
+# PR pipeline (ARCHITECTURE.md §13, TESTING.md). All actions pinned to commit SHAs.
+name: pr
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  UV_PYTHON: "3.12"
+  FORCE_COLOR: "1"
+
+jobs:
+  static:
+    name: lint, types, module boundaries
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with: { enable-cache: true }
+      - uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4.0.0
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with: { node-version: "22", cache: pnpm }
+      - run: uv sync --all-packages --frozen
+      - run: pnpm install --frozen-lockfile
+      - run: just lint
+
+  python-tests:
+    name: unit + integration (Testcontainers) + coverage
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with: { enable-cache: true }
+      - run: uv sync --all-packages --frozen
+      - name: pytest (fake LLM provider only - no real keys in CI)
+        run: >
+          uv run pytest -m "not smoke and not e2e and not isolation"
+          --cov --cov-report=xml --cov-report=term-missing:skip-covered
+      - name: coverage thresholds (TESTING.md)
+        run: uv run python tools/check_coverage.py coverage.xml
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with: { name: coverage-python, path: coverage.xml }
+
+  isolation:
+    # Required status check in branch protection: blocks merge on any cross-tenant leak.
+    name: tenant isolation (blocking)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with: { enable-cache: true }
+      - run: uv sync --all-packages --frozen
+      - run: uv run pytest -m isolation -v
+
+  contract:
+    name: API contract (OpenAPI drift + Schemathesis)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with: { enable-cache: true }
+      - run: uv sync --all-packages --frozen
+      - run: uv run pytest -m contract -v
+
+  typescript:
+    name: web + ui + infra (biome, tsc, vitest)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with: { node-version: "22", cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm -r --if-present run lint
+      - run: pnpm -r --if-present run typecheck
+      - run: pnpm -r --if-present run test
+      - run: pnpm -r --if-present run build
+
+  stack-smoke:
+    name: compose stack + smoke + E2E (fake LLM)
+    runs-on: ubuntu-24.04
+    needs: [static, python-tests]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with: { enable-cache: true }
+      - uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4.0.0
+      - run: uv sync --all-packages --frozen
+      - run: just up-core
+      - run: just smoke
+      - name: e2e (Playwright, critical set)
+        if: hashFiles('apps/web/playwright.config.ts') != ''
+        run: |
+          corepack enable && pnpm install --frozen-lockfile
+          pnpm --filter @bomagent/web exec playwright install --with-deps chromium
+          just e2e
+      - if: failure()
+        run: docker compose -f deploy/compose/compose.yaml logs --no-color > compose-logs.txt
+      - if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with: { name: compose-logs, path: compose-logs.txt }
+
+  security:
+    name: secrets + vulnerabilities
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { fetch-depth: 0 }
+      - uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
+        env: { GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}" }
+      - uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: fs
+          scanners: vuln,secret,misconfig
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: "1"
+
+  cdk:
+    name: cdk synth + cdk-nag
+    runs-on: ubuntu-24.04
+    if: hashFiles('infra/cdk/package.json') != ''
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with: { node-version: "22", cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @bomagent/infra run test
+      - run: pnpm --filter @bomagent/infra run synth

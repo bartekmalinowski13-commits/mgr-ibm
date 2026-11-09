@@ -19,3 +19,4 @@ Format: Kontekst → Decyzja → Konsekwencje → Rozważane alternatywy. Status
 | [0013](0013-iac-cdk-typescript.md) | IaC: AWS CDK w TypeScript + cdk-nag |
 | [0014](0014-frontend-react-shadcn.md) | Frontend: React + Vite + shadcn/ui |
 | [0015](0015-api-rest-openapi.md) | API: REST + OpenAPI 3.1 + SSE |
+| [0016](0016-db-migrations-package.md) | Jeden pakiet migracji z ręcznie pisanym DDL i rolami bazy |

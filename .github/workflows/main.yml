@@ -1,0 +1,59 @@
+# main: build images, SBOM, sign, deploy dev -> staging -> prod (ARCHITECTURE.md §13).
+# Deploy jobs are disabled until the AWS accounts exist: vars.AWS_DEPLOY_ENABLED == 'true'.
+# Authentication uses GitHub OIDC -> IAM role (no long-lived keys).
+name: main
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  images:
+    name: build images + SBOM + sign
+    if: vars.AWS_DEPLOY_ENABLED == 'true'
+    runs-on: ubuntu-24.04
+    permissions: { id-token: write, contents: read }
+    strategy:
+      matrix:
+        service:
+          - { package: bomagent-api, module: bomagent_api }
+          - { package: bomagent-ingest-worker, module: bomagent_ingest }
+          - { package: bomagent-agent-worker, module: bomagent_agent_worker }
+          - { package: bomagent-kb-indexer, module: bomagent_kb_indexer }
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: build, scan, SBOM (Syft), sign (cosign), push to ECR
+        run: |
+          echo "Implemented in M6 (infra/cdk + ECR in shared-services account)."
+          echo "Requires: vars.AWS_ACCOUNT_SHARED_SERVICES, vars.AWS_DEPLOY_ROLE_ARN"
+
+  deploy-dev:
+    if: vars.AWS_DEPLOY_ENABLED == 'true'
+    needs: images
+    runs-on: ubuntu-24.04
+    environment: dev
+    permissions: { id-token: write, contents: read }
+    steps:
+      - run: echo "cdk deploy --all (dev) + smoke - enabled in M6"
+
+  deploy-staging:
+    if: vars.AWS_DEPLOY_ENABLED == 'true'
+    needs: deploy-dev
+    runs-on: ubuntu-24.04
+    environment: staging
+    permissions: { id-token: write, contents: read }
+    steps:
+      - run: echo "cdk deploy --all (staging) + smoke + E2E - enabled in M6"
+
+  deploy-prod:
+    if: vars.AWS_DEPLOY_ENABLED == 'true'
+    needs: deploy-staging
+    runs-on: ubuntu-24.04
+    environment: prod # protected environment = manual approval
+    permissions: { id-token: write, contents: read }
+    steps:
+      - run: echo "cdk deploy --all (prod, rolling + circuit breaker) + smoke - enabled in M6"

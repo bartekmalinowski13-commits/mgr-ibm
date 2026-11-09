@@ -1,0 +1,8 @@
+title = "bomagent gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Local-only development defaults (compose) and test placeholders"
+regexes = ['''local-(admin|migrator|app|platform|clickhouse|valkey|only[a-z-]*)''', '''sk-local-only''', '''pk-lf-local''', '''sk-lf-local''', '''not-a-secret''']

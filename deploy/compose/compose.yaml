@@ -1,0 +1,260 @@
+# Local stack of BOM Agent (just up / just down). Nothing here is for production.
+# Credentials below are local-development defaults; override them in deploy/compose/.env
+# (copy from .env.example). Real secrets live in AWS Secrets Manager only.
+name: bomagent
+
+x-python-service: &python-service
+  build:
+    context: ../..
+    dockerfile: deploy/docker/python-service.Dockerfile
+  restart: unless-stopped
+  depends_on:
+    migrate: { condition: service_completed_successfully }
+    aws-init: { condition: service_completed_successfully }
+    otel-lgtm: { condition: service_started }
+  environment: &python-env
+    BOMAGENT_ENVIRONMENT: local
+    BOMAGENT_DATABASE_URL: postgresql+psycopg://bomagent_app:${BOMAGENT_APP_PASSWORD:-local-app}@postgres:5432/bomagent
+    BOMAGENT_OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-lgtm:4318
+    BOMAGENT_AWS_ENDPOINT_URL: http://moto:5000
+    BOMAGENT_AWS_REGION: eu-central-1
+    BOMAGENT_LLM_GATEWAY_URL: http://litellm:4000
+    BOMAGENT_LLM_GATEWAY_KEY: ${LITELLM_MASTER_KEY:-sk-local-only}
+    BOMAGENT_FILES_BUCKET: bomagent-local-files
+    AWS_ACCESS_KEY_ID: local
+    AWS_SECRET_ACCESS_KEY: local
+
+services:
+  # ---------------------------------------------------------------- data
+  postgres:
+    image: pgvector/pgvector:0.8.7-pg16-trixie
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-local-admin}
+      BOMAGENT_MIGRATOR_PASSWORD: ${BOMAGENT_MIGRATOR_PASSWORD:-local-migrator}
+      BOMAGENT_APP_PASSWORD: ${BOMAGENT_APP_PASSWORD:-local-app}
+      BOMAGENT_PLATFORM_PASSWORD: ${BOMAGENT_PLATFORM_PASSWORD:-local-platform}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./postgres/10-bootstrap.sh:/docker-entrypoint-initdb.d/10-bootstrap.sh:ro
+      - ../../packages/py/db-migrations/src/bomagent_migrations/bootstrap.sql:/bootstrap/bootstrap.sql:ro
+    ports: ["127.0.0.1:5432:5432"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d bomagent"]
+      interval: 5s
+      retries: 20
+
+  migrate:
+    <<: *python-service
+    restart: "no"
+    build:
+      context: ../..
+      dockerfile: deploy/docker/python-service.Dockerfile
+      args: { PACKAGE: bomagent-db-migrations, MODULE: bomagent_migrations }
+    depends_on:
+      postgres: { condition: service_healthy }
+    environment:
+      BOMAGENT_MIGRATOR_DATABASE_URL: postgresql+psycopg://bomagent_migrator:${BOMAGENT_MIGRATOR_PASSWORD:-local-migrator}@postgres:5432/bomagent
+    command: ["bomagent-migrate", "upgrade"]
+    healthcheck: { disable: true }
+
+  moto:
+    # S3 + SQS emulator (Apache-2.0). LocalStack Community requires an account token
+    # since 2026 - see docs/DECISIONS_LOG.md.
+    image: motoserver/moto:5.2.5
+    environment: { MOTO_PORT: "5000" }
+    ports: ["127.0.0.1:5000:5000"]
+
+  aws-init:
+    image: motoserver/moto:5.2.5
+    restart: "no"
+    depends_on: [moto]
+    entrypoint: ["python", "/init/init.py"]
+    environment:
+      BOMAGENT_AWS_ENDPOINT_URL: http://moto:5000
+      AWS_ACCESS_KEY_ID: local
+      AWS_SECRET_ACCESS_KEY: local
+    volumes: ["./aws-init:/init:ro"]
+
+  # ---------------------------------------------------------------- LLM
+  fake-llm:
+    <<: *python-service
+    build:
+      context: ../..
+      dockerfile: deploy/docker/python-service.Dockerfile
+      args: { PACKAGE: bomagent-llm, MODULE: bomagent_llm.fake_server }
+    depends_on: []
+    environment:
+      BOMAGENT_PORT: "4010"
+      BOMAGENT_FAKE_LLM_CASSETTES: /cassettes
+    volumes: ["../../tests/cassettes:/cassettes:ro"]
+    ports: ["127.0.0.1:4010:4010"]
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:4010/healthz')",
+        ]
+
+  litellm:
+    image: ghcr.io/berriai/litellm:v1.108.3
+    depends_on: [fake-llm, otel-lgtm]
+    command: ["--config", "/app/config.yaml", "--port", "4000"]
+    environment:
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:-sk-local-only}
+      LITELLM_TELEMETRY: "False"
+      OTEL_EXPORTER: otlp_http
+      OTEL_ENDPOINT: http://otel-lgtm:4318/v1/traces
+      OTEL_SERVICE_NAME: llm-gateway
+    volumes: ["./litellm/config.yaml:/app/config.yaml:ro"]
+    ports: ["127.0.0.1:4000:4000"]
+
+  ollama:
+    image: ollama/ollama:0.40.15
+    profiles: ["ollama"]
+    volumes: ["ollama:/root/.ollama"]
+    ports: ["127.0.0.1:11434:11434"]
+
+  # ---------------------------------------------------------------- observability
+  otel-lgtm:
+    # Grafana + Tempo + Loki + Prometheus + OTel Collector in one image (local only)
+    image: grafana/otel-lgtm:0.40.0
+    ports:
+      - "127.0.0.1:3000:3000" # Grafana
+      - "127.0.0.1:4317:4317" # OTLP gRPC
+      - "127.0.0.1:4318:4318" # OTLP HTTP
+      - "127.0.0.1:3200:3200" # Tempo API (smoke test queries traces here)
+
+  langfuse-web:
+    image: langfuse/langfuse:4.77.0
+    profiles: ["langfuse"]
+    depends_on: &langfuse-deps
+      postgres: { condition: service_healthy }
+      clickhouse: { condition: service_healthy }
+      valkey: { condition: service_started }
+      aws-init: { condition: service_completed_successfully }
+    environment: &langfuse-env
+      NEXTAUTH_URL: http://localhost:3001
+      NEXTAUTH_SECRET: ${LANGFUSE_NEXTAUTH_SECRET:-local-only-nextauth}
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-local-admin}@postgres:5432/langfuse
+      SALT: ${LANGFUSE_SALT:-local-only-salt}
+      ENCRYPTION_KEY: ${LANGFUSE_ENCRYPTION_KEY:-0000000000000000000000000000000000000000000000000000000000000000}
+      TELEMETRY_ENABLED: "false" # no phone-home (EU residency)
+      CLICKHOUSE_MIGRATION_URL: clickhouse://clickhouse:9000
+      CLICKHOUSE_URL: http://clickhouse:8123
+      CLICKHOUSE_USER: clickhouse
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-local-clickhouse}
+      CLICKHOUSE_CLUSTER_ENABLED: "false"
+      REDIS_HOST: valkey
+      REDIS_PORT: "6379"
+      REDIS_AUTH: ${VALKEY_PASSWORD:-local-valkey}
+      LANGFUSE_S3_EVENT_UPLOAD_BUCKET: langfuse
+      LANGFUSE_S3_EVENT_UPLOAD_REGION: eu-central-1
+      LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT: http://moto:5000
+      LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID: local
+      LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY: local
+      LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE: "true"
+      LANGFUSE_S3_MEDIA_UPLOAD_BUCKET: langfuse
+      LANGFUSE_S3_MEDIA_UPLOAD_REGION: eu-central-1
+      LANGFUSE_S3_MEDIA_UPLOAD_ENDPOINT: http://moto:5000
+      LANGFUSE_S3_MEDIA_UPLOAD_ACCESS_KEY_ID: local
+      LANGFUSE_S3_MEDIA_UPLOAD_SECRET_ACCESS_KEY: local
+      LANGFUSE_S3_MEDIA_UPLOAD_FORCE_PATH_STYLE: "true"
+      LANGFUSE_INIT_ORG_ID: bomagent-local
+      LANGFUSE_INIT_PROJECT_ID: bomagent-local
+      LANGFUSE_INIT_PROJECT_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-pk-lf-local}
+      LANGFUSE_INIT_PROJECT_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-sk-lf-local}
+    ports: ["127.0.0.1:3001:3000"]
+
+  langfuse-worker:
+    image: langfuse/langfuse-worker:4.77.0
+    profiles: ["langfuse"]
+    depends_on: *langfuse-deps
+    environment: *langfuse-env
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:25.8.33
+    profiles: ["langfuse"]
+    user: "101:101"
+    environment:
+      CLICKHOUSE_DB: default
+      CLICKHOUSE_USER: clickhouse
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-local-clickhouse}
+    volumes: ["clickhouse:/var/lib/clickhouse"]
+    healthcheck:
+      test:
+        ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8123/ping || exit 1"]
+      interval: 5s
+      retries: 20
+
+  valkey:
+    image: valkey/valkey:8.1.11-alpine
+    profiles: ["langfuse"]
+    command: ["valkey-server", "--requirepass", "${VALKEY_PASSWORD:-local-valkey}"]
+
+  # ---------------------------------------------------------------- application
+  api:
+    <<: *python-service
+    build:
+      context: ../..
+      dockerfile: deploy/docker/python-service.Dockerfile
+      args: { PACKAGE: bomagent-api, MODULE: bomagent_api }
+    environment:
+      <<: *python-env
+      BOMAGENT_SERVICE_NAME: bomagent-api
+      BOMAGENT_PLATFORM_DATABASE_URL: postgresql+psycopg://bomagent_platform:${BOMAGENT_PLATFORM_PASSWORD:-local-platform}@postgres:5432/bomagent
+      BOMAGENT_INGEST_QUEUE_URL: http://moto:5000/123456789012/ingest
+      BOMAGENT_RUNS_QUEUE_URL: http://moto:5000/123456789012/runs
+      BOMAGENT_KB_QUEUE_URL: http://moto:5000/123456789012/kb
+      BOMAGENT_AUTH_MODE: local
+    ports: ["127.0.0.1:8000:8000"]
+
+  ingest-worker:
+    <<: *python-service
+    build:
+      context: ../..
+      dockerfile: deploy/docker/python-service.Dockerfile
+      args: { PACKAGE: bomagent-ingest-worker, MODULE: bomagent_ingest }
+    environment:
+      <<: *python-env
+      BOMAGENT_SERVICE_NAME: bomagent-ingest-worker
+      BOMAGENT_QUEUE_URL: http://moto:5000/123456789012/ingest
+    # sandbox profile (mirrors the ECS task definition): no egress except AWS endpoints,
+    # read-only root FS, non-root, resource limits
+    read_only: true
+    tmpfs: ["/tmp:size=512m"]
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+    mem_limit: 2g
+    cpus: 1.0
+    ports: ["127.0.0.1:8001:8000"]
+
+  agent-worker:
+    <<: *python-service
+    build:
+      context: ../..
+      dockerfile: deploy/docker/python-service.Dockerfile
+      args: { PACKAGE: bomagent-agent-worker, MODULE: bomagent_agent_worker }
+    environment:
+      <<: *python-env
+      BOMAGENT_SERVICE_NAME: bomagent-agent-worker
+      BOMAGENT_QUEUE_URL: http://moto:5000/123456789012/runs
+    ports: ["127.0.0.1:8002:8000"]
+
+  kb-indexer:
+    <<: *python-service
+    build:
+      context: ../..
+      dockerfile: deploy/docker/python-service.Dockerfile
+      args: { PACKAGE: bomagent-kb-indexer, MODULE: bomagent_kb_indexer }
+    environment:
+      <<: *python-env
+      BOMAGENT_SERVICE_NAME: bomagent-kb-indexer
+      BOMAGENT_QUEUE_URL: http://moto:5000/123456789012/kb
+    ports: ["127.0.0.1:8003:8000"]
+
+volumes:
+  pgdata: {}
+  clickhouse: {}
+  ollama: {}
