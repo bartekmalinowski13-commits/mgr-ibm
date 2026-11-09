@@ -142,10 +142,15 @@ class SqsQueue:
             MaxNumberOfMessages=max_messages,
             WaitTimeSeconds=wait_seconds,
         )
-        return [
-            Received(Message.model_validate_json(m["Body"]), m["ReceiptHandle"])
-            for m in resp.get("Messages", [])
-        ]
+        out: list[Received] = []
+        for m in resp.get("Messages", []):
+            try:
+                out.append(Received(Message.model_validate_json(m["Body"]), m["ReceiptHandle"]))
+            except ValueError:
+                # poison message: leave it unacknowledged so SQS redrives it to the DLQ;
+                # never let it block valid messages of other tenants in the same batch
+                log.warning("message_invalid", message_id=m.get("MessageId", "?"))
+        return out
 
     async def ack(self, received: Received) -> None:
         await asyncio.to_thread(

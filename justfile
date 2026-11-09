@@ -38,7 +38,9 @@ lint:
     uv run ruff format --check .
     uv run mypy {{py_modules}}
     uv run lint-imports
-    if [ -f pnpm-lock.yaml ]; then pnpm -r --if-present run lint && pnpm -r --if-present run typecheck; fi
+    pnpm run lint
+    pnpm -r --if-present run lint
+    pnpm -r --if-present run typecheck
 
 fmt:
     uv run ruff format .

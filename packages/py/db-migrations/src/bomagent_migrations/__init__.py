@@ -51,7 +51,7 @@ def bootstrap(admin_url: str, passwords: dict[str, str] | None = None) -> None:
                 ),
                 {"r": role, "p": pwd},
             ).scalar_one()
-            conn.execute(text(stmt))
+            conn.exec_driver_sql(stmt.replace("%", "%%"))
     engine.dispose()
 
 

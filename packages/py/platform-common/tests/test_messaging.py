@@ -83,3 +83,16 @@ async def test_sqs_roundtrip_with_moto(ctx, monkeypatch):
         assert items[0].message.tenant_id == ctx.tenant_id
         await queue.ack(items[0])
         assert await queue.receive(wait_seconds=0) == []
+
+
+async def test_poison_sqs_message_does_not_block_batch(ctx, monkeypatch):
+    monkeypatch.setenv("AWS_ACCESS_KEY_ID", "testing")
+    monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "testing")
+    with mock_aws():
+        client = boto3.client("sqs", region_name="eu-central-1")
+        url = client.create_queue(QueueName="runs")["QueueUrl"]
+        client.send_message(QueueUrl=url, MessageBody="{not json")
+        queue = SqsQueue(url, region="eu-central-1")
+        await queue.send(Message.create("run.requested", ctx))
+        items = await queue.receive(wait_seconds=0)
+        assert [i.message.type for i in items] == ["run.requested"]

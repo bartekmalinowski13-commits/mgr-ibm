@@ -38,8 +38,9 @@ services:
       - ./postgres/10-bootstrap.sh:/docker-entrypoint-initdb.d/10-bootstrap.sh:ro
       - ../../packages/py/db-migrations/src/bomagent_migrations/bootstrap.sql:/bootstrap/bootstrap.sql:ro
     ports: ["127.0.0.1:5432:5432"]
+    networks: [default, sandbox]
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d bomagent"]
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U postgres -d bomagent"]
       interval: 5s
       retries: 20
 
@@ -63,6 +64,7 @@ services:
     image: motoserver/moto:5.2.5
     environment: { MOTO_PORT: "5000" }
     ports: ["127.0.0.1:5000:5000"]
+    networks: [default, sandbox]
 
   aws-init:
     image: motoserver/moto:5.2.5
@@ -216,19 +218,31 @@ services:
       context: ../..
       dockerfile: deploy/docker/python-service.Dockerfile
       args: { PACKAGE: bomagent-ingest-worker, MODULE: bomagent_ingest }
+    # Sandbox (mirrors the ECS task definition): only the internal "sandbox" network
+    # (Postgres + S3/SQS emulator, no internet egress), read-only root FS, non-root, no
+    # capabilities, resource limits, and no LLM credentials.
     environment:
-      <<: *python-env
+      BOMAGENT_ENVIRONMENT: local
       BOMAGENT_SERVICE_NAME: bomagent-ingest-worker
+      BOMAGENT_DATABASE_URL: postgresql+psycopg://bomagent_app:${BOMAGENT_APP_PASSWORD:-local-app}@postgres:5432/bomagent
+      BOMAGENT_AWS_ENDPOINT_URL: http://moto:5000
+      BOMAGENT_AWS_REGION: eu-central-1
+      BOMAGENT_FILES_BUCKET: bomagent-local-files
       BOMAGENT_QUEUE_URL: http://moto:5000/123456789012/ingest
-    # sandbox profile (mirrors the ECS task definition): no egress except AWS endpoints,
-    # read-only root FS, non-root, resource limits
+      AWS_ACCESS_KEY_ID: local
+      AWS_SECRET_ACCESS_KEY: local
+    networks: [sandbox]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      aws-init: { condition: service_completed_successfully }
     read_only: true
     tmpfs: ["/tmp:size=512m"]
     security_opt: ["no-new-privileges:true"]
     cap_drop: ["ALL"]
     mem_limit: 2g
     cpus: 1.0
-    ports: ["127.0.0.1:8001:8000"]
+    # health is checked inside the container (HEALTHCHECK); no published port on an
+    # internal network
 
   agent-worker:
     <<: *python-service
@@ -253,6 +267,11 @@ services:
       BOMAGENT_SERVICE_NAME: bomagent-kb-indexer
       BOMAGENT_QUEUE_URL: http://moto:5000/123456789012/kb
     ports: ["127.0.0.1:8003:8000"]
+
+networks:
+  default: {}
+  sandbox:
+    internal: true   # no route to the internet
 
 volumes:
   pgdata: {}

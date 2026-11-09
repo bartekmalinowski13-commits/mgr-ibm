@@ -21,23 +21,44 @@ DROPPED_KEYS = frozenset(
     {"content", "file_content", "file_bytes", "prompt", "messages", "completion", "text", "body"}
 )
 MASKED_KEYS = frozenset(
-    {"password", "secret", "token", "authorization", "api_key", "apikey", "cookie", "set-cookie"}
+    {
+        "password",
+        "secret",
+        "token",
+        "authorization",
+        "api_key",
+        "apikey",
+        "x-api-key",
+        "cookie",
+        "set-cookie",
+        "dsn",
+        "database_url",
+        "private_key",
+    }
 )
+MASKED_SUFFIXES = ("_token", "_secret", "_password", "_key", "-key", "_dsn", "_url_with_password")
 MASK = "***"
 
 
 def redact(_: Any, __: str, event_dict: MutableMapping[str, Any]) -> MutableMapping[str, Any]:
     """structlog processor removing sensitive values (recursively for nested dicts)."""
 
+    def _value(v: Any) -> Any:
+        if isinstance(v, dict):
+            return _clean(dict(v))
+        if isinstance(v, list | tuple):
+            return type(v)(_value(x) for x in v)
+        return v
+
     def _clean(d: MutableMapping[str, Any]) -> MutableMapping[str, Any]:
         for key in list(d.keys()):
-            lk = key.lower()
+            lk = str(key).lower()
             if lk in DROPPED_KEYS:
                 d[key] = "[redacted]"
-            elif lk in MASKED_KEYS or lk.endswith(("_token", "_secret", "_password")):
+            elif lk in MASKED_KEYS or lk.endswith(MASKED_SUFFIXES):
                 d[key] = MASK
-            elif isinstance(d[key], dict):
-                d[key] = _clean(dict(d[key]))
+            else:
+                d[key] = _value(d[key])
         return d
 
     return _clean(event_dict)

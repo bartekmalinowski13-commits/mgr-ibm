@@ -26,6 +26,7 @@ jobs:
           - { package: bomagent-kb-indexer, module: bomagent_kb_indexer }
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
       - name: build, scan, SBOM (Syft), sign (cosign), push to ECR
         run: |
           echo "Implemented in M6 (infra/cdk + ECR in shared-services account)."

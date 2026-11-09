@@ -7,6 +7,7 @@ Run with ``just smoke`` (local compose stack) or against an environment by setti
 from __future__ import annotations
 
 import os
+import subprocess
 import time
 
 import httpx
@@ -16,7 +17,6 @@ pytestmark = pytest.mark.smoke
 
 SERVICES = {
     "api": os.environ.get("SMOKE_API_URL", "http://localhost:8000"),
-    "ingest-worker": os.environ.get("SMOKE_INGEST_URL", "http://localhost:8001"),
     "agent-worker": os.environ.get("SMOKE_AGENT_URL", "http://localhost:8002"),
     "kb-indexer": os.environ.get("SMOKE_KB_INDEXER_URL", "http://localhost:8003"),
 }
@@ -30,6 +30,31 @@ def test_service_health_and_readiness(name: str) -> None:
     assert httpx.get(f"{base}/healthz", timeout=5).json()["status"] == "ok"
     ready = httpx.get(f"{base}/readyz", timeout=10)
     assert ready.status_code == 200, ready.text
+
+
+def test_sandboxed_ingest_worker_is_healthy() -> None:
+    """The ingest worker has no published port (internal network): ask Docker for the
+    container health status, or use SMOKE_INGEST_URL when it is reachable directly."""
+    url = os.environ.get("SMOKE_INGEST_URL")
+    if url:
+        assert httpx.get(f"{url}/readyz", timeout=10).status_code == 200
+        return
+    out = subprocess.run(
+        [
+            "docker",
+            "compose",
+            "-f",
+            "deploy/compose/compose.yaml",
+            "ps",
+            "--format",
+            "json",
+            "ingest-worker",
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout
+    assert '"Health":"healthy"' in out.replace(" ", ""), out
 
 
 def test_gateway_is_alive() -> None:

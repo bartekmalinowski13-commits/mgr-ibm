@@ -24,6 +24,24 @@ def test_redact_drops_content_and_masks_secrets():
     assert out["count"] == 3
 
 
+def test_redact_handles_lists_and_key_suffixes():
+    out = redact(
+        None,
+        "info",
+        {
+            "items": [{"token": "t", "n": 1}, ("x", {"private_key": "k"})],
+            "aws_secret_access_key": "s",
+            "x-api-key": "k",
+            "dsn": "postgresql://u:p@h/db",
+        },
+    )
+    assert out["items"][0] == {"token": "***", "n": 1}
+    assert out["items"][1][1] == {"private_key": "***"}
+    assert out["aws_secret_access_key"] == "***"
+    assert out["x-api-key"] == "***"
+    assert out["dsn"] == "***"
+
+
 def test_json_log_contains_tenant_and_no_content(capsys):
     configure_logging("svc-test", level="INFO", json=True)
     ctx = TenantContext(tenant_id=uuid.uuid4(), actor_id="u")

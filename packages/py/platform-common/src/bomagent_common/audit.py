@@ -90,14 +90,45 @@ async def emit_audit(
     return AuditRecord(id=event_id, seq=row.seq, hash=row.hash, prev_hash=row.prev_hash)
 
 
-async def verify_chain(conn: AsyncConnection, tenant_id: uuid.UUID) -> ChainVerification:
-    """Recompute the hash chain of one tenant (visible rows only - run in its context)."""
+@dataclass(frozen=True, slots=True)
+class ChainAnchor:
+    """Externally stored head of a chain (S3 Object Lock export)."""
+
+    seq: int
+    hash: str
+
+
+async def chain_head(conn: AsyncConnection, tenant_id: uuid.UUID) -> ChainAnchor | None:
+    row = (
+        await conn.execute(text("SELECT seq, hash FROM audit.chain_head(:tid)"), {"tid": tenant_id})
+    ).first()
+    return ChainAnchor(row.seq, row.hash) if row else None
+
+
+async def verify_chain(
+    conn: AsyncConnection, tenant_id: uuid.UUID, anchors: list[ChainAnchor] | None = None
+) -> ChainVerification:
+    """Recompute the hash chain of one tenant; must run in that tenant's context.
+
+    The recomputation alone detects edits made *without* re-hashing. Someone with owner
+    rights could re-hash the rest of the chain, so pass the exported ``anchors``: an
+    anchor whose stored hash no longer matches marks the chain broken at its ``seq``.
+    """
     row = (
         await conn.execute(
             text("SELECT checked, first_broken_seq FROM audit.verify_chain(:tid)"),
             {"tid": tenant_id},
         )
     ).one()
-    return ChainVerification(
-        ok=row.first_broken_seq is None, checked=row.checked, first_broken_seq=row.first_broken_seq
-    )
+    broken: int | None = row.first_broken_seq
+    for anchor in sorted(anchors or [], key=lambda a: a.seq):
+        current = (
+            await conn.execute(
+                text("SELECT hash FROM audit.events WHERE tenant_id = :tid AND seq = :seq"),
+                {"tid": tenant_id, "seq": anchor.seq},
+            )
+        ).scalar()
+        if current != anchor.hash:
+            broken = anchor.seq if broken is None else min(broken, anchor.seq)
+            break
+    return ChainVerification(ok=broken is None, checked=row.checked, first_broken_seq=broken)

@@ -31,6 +31,7 @@ def make_engine(url: str, *, pool_size: int = 5, echo: bool = False) -> AsyncEng
         max_overflow=pool_size,
         pool_pre_ping=True,
         echo=echo,
+        hide_parameters=True,  # bound values (customer data) never reach logs/exceptions
     )
 
 

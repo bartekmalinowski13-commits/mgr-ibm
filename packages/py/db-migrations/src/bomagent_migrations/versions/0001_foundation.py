@@ -54,7 +54,9 @@ UPGRADE = [
     CREATE POLICY platform_onboarding ON tenancy.tenants TO bomagent_platform
         USING (true) WITH CHECK (true)
     """,
-    "GRANT SELECT, UPDATE ON tenancy.tenants TO bomagent_app",
+    # the application may rename its organisation; plan/deployment/slug change only via
+    # the platform role (prevents plan escalation through a mass-assignment bug)
+    "GRANT SELECT, UPDATE (name) ON tenancy.tenants TO bomagent_app",
     "GRANT SELECT, INSERT, UPDATE ON tenancy.tenants TO bomagent_platform",
     # ------------------------------------------------------------------ audit log
     """
@@ -89,7 +91,7 @@ UPGRADE = [
             e.prev_hash, e.seq, e.id, e.tenant_id,
             to_char(e.occurred_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'),
             e.actor_type, e.actor_id, e.action, e.object_type, e.object_id,
-            host(e.source_ip), e.request_id, e.trace_id, e.before, e.after
+            e.source_ip::text, e.request_id, e.trace_id, e.before, e.after
         )::text
     $$
     """,
@@ -144,6 +146,12 @@ UPGRADE = [
         expected_seq bigint := 1;
         n bigint := 0;
     BEGIN
+        -- Without the matching tenant context RLS would hide every row and the chain would
+        -- look "valid" with 0 events - refuse instead of returning a false positive.
+        IF p_tenant IS DISTINCT FROM app.current_tenant_id() THEN
+            RAISE EXCEPTION 'verify_chain must run in the context of tenant %', p_tenant
+                USING ERRCODE = 'insufficient_privilege';
+        END IF;
         FOR r IN SELECT * FROM audit.events WHERE tenant_id = p_tenant ORDER BY seq LOOP
             n := n + 1;
             IF r.seq <> expected_seq
@@ -158,6 +166,16 @@ UPGRADE = [
     END
     $$
     """,
+    # Head of a tenant's chain - exported daily to S3 Object Lock (ADR-0011) as the external
+    # anchor: rewriting history (even by the table owner) then no longer matches the anchor.
+    """
+    CREATE FUNCTION audit.chain_head(p_tenant uuid)
+    RETURNS TABLE (seq bigint, hash text)
+    LANGUAGE sql STABLE AS $$
+        SELECT e.seq, e.hash FROM audit.events e
+         WHERE e.tenant_id = p_tenant ORDER BY e.seq DESC LIMIT 1
+    $$
+    """,
     "ALTER TABLE audit.events ENABLE ROW LEVEL SECURITY",
     "ALTER TABLE audit.events FORCE ROW LEVEL SECURITY",
     """
@@ -169,6 +187,7 @@ UPGRADE = [
     f"REVOKE UPDATE, DELETE, TRUNCATE ON audit.events FROM {APP_ROLES}",
     f"GRANT EXECUTE ON FUNCTION audit.verify_chain(uuid) TO {APP_ROLES}",
     f"GRANT EXECUTE ON FUNCTION audit.canonical(audit.events) TO {APP_ROLES}",
+    f"GRANT EXECUTE ON FUNCTION audit.chain_head(uuid) TO {APP_ROLES}",
 ]
 
 DOWNGRADE = [
