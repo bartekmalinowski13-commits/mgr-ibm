@@ -8,6 +8,7 @@ license = "LicenseRef-Proprietary"
 dependencies = [
     "pydantic>=2.9",
     "bomagent-bom-core",
+    "bomagent-cad-parsers",
 ]
 
 [build-system]
@@ -19,3 +20,4 @@ packages = ["src/bomagent_eval"]
 
 [tool.uv.sources]
 bomagent-bom-core = { workspace = true }
+bomagent-cad-parsers = { workspace = true }

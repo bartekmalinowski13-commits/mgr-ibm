@@ -1,0 +1,79 @@
+[
+  {
+    "refdes": "C1",
+    "value": "100n",
+    "footprint": "Capacitor_SMD:C_0603_1608Metric",
+    "mpn_in_schematic": "",
+    "dnp": false
+  },
+  {
+    "refdes": "C2",
+    "value": "100n",
+    "footprint": "Capacitor_SMD:C_0603_1608Metric",
+    "mpn_in_schematic": "",
+    "dnp": false
+  },
+  {
+    "refdes": "C3",
+    "value": "10u",
+    "footprint": "Capacitor_SMD:C_0603_1608Metric",
+    "mpn_in_schematic": "CL10A106KP8NNNC",
+    "dnp": false
+  },
+  {
+    "refdes": "C4",
+    "value": "1u",
+    "footprint": "Capacitor_SMD:C_0603_1608Metric",
+    "mpn_in_schematic": "GRM188R61C105KA93D",
+    "dnp": false
+  },
+  {
+    "refdes": "J1",
+    "value": "I2C + power",
+    "footprint": "Connector_JST:JST_PH_S4B-PH-K_1x04_P2.00mm_Horizontal",
+    "mpn_in_schematic": "S4B-PH-K-S(LF)(SN)",
+    "dnp": false
+  },
+  {
+    "refdes": "R1",
+    "value": "4k7",
+    "footprint": "Resistor_SMD:R_0603_1608Metric",
+    "mpn_in_schematic": "RC0603FR-074K7L",
+    "dnp": false
+  },
+  {
+    "refdes": "R2",
+    "value": "4k7",
+    "footprint": "Resistor_SMD:R_0603_1608Metric",
+    "mpn_in_schematic": "RC0603FR-074K7L",
+    "dnp": false
+  },
+  {
+    "refdes": "R3",
+    "value": "4k7",
+    "footprint": "Resistor_SMD:R_0603_1608Metric",
+    "mpn_in_schematic": "RC0603FR-074K7L",
+    "dnp": true
+  },
+  {
+    "refdes": "U1",
+    "value": "MAX30102",
+    "footprint": "bomagent:MAX30102_OESIP-14",
+    "mpn_in_schematic": "MAX30102EFD+T",
+    "dnp": false
+  },
+  {
+    "refdes": "U2",
+    "value": "LP5907-1.8",
+    "footprint": "Package_TO_SOT_SMD:SOT-23-5",
+    "mpn_in_schematic": "LP5907MFX-1.8/NOPB",
+    "dnp": false
+  },
+  {
+    "refdes": "U3",
+    "value": "MCP1700-3.3",
+    "footprint": "Package_TO_SOT_SMD:SOT-23",
+    "mpn_in_schematic": "MCP1700T-3302E/TT",
+    "dnp": false
+  }
+]

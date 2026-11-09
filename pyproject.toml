@@ -59,6 +59,7 @@ dev = [
     "moto[s3,sqs,server]>=5.0",
     "schemathesis>=3.39",
     "types-PyYAML",
+    "types-jsonschema",
 ]
 
 # ---------------------------------------------------------------- ruff
@@ -66,7 +67,8 @@ dev = [
 line-length = 100
 target-version = "py312"
 src = ["packages/py/*/src", "services/*/src"]
-extend-exclude = ["tools", "docs", "**/migrations/versions/*.py"]
+extend-exclude = ["tools/arch.py", "tools/platform_arch.py", "tools/build_docx.js", "docs"]
+force-exclude = true
 
 [tool.ruff.lint]
 select = [
@@ -79,11 +81,15 @@ ignore = [
     "TRY003",  # long messages in exceptions are intentional (user-facing problem details)
     "S101",    # asserts are used only in tests (see per-file ignores) and for type narrowing
     "PLC0415", # local imports are used deliberately for optional heavy dependencies
+    "PLR0912", # branchy parsers are clearer than artificial splitting; reviewed manually
+    "PLR0917", # keyword-heavy internal helpers
+    "PERF401", # explicit loops read better than extend() with long comprehensions
 ]
 
 [tool.ruff.lint.per-file-ignores]
 "**/tests/**" = ["S", "PLR", "T20", "DTZ", "ARG", "N802"]
 "tests/**" = ["S", "PLR", "T20", "DTZ", "ARG"]
+"tools/**" = ["T20", "S", "PLR"]
 
 [tool.ruff.lint.isort]
 known-first-party = [

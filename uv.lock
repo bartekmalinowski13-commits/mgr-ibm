@@ -339,12 +339,14 @@ version = "0.1.0"
 source = { editable = "packages/py/eval" }
 dependencies = [
     { name = "bomagent-bom-core" },
+    { name = "bomagent-cad-parsers" },
     { name = "pydantic" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "bomagent-bom-core", editable = "packages/py/bom-core" },
+    { name = "bomagent-cad-parsers", editable = "packages/py/cad-parsers" },
     { name = "pydantic", specifier = ">=2.9" },
 ]
 
@@ -545,6 +547,7 @@ dev = [
     { name = "ruff" },
     { name = "schemathesis" },
     { name = "testcontainers" },
+    { name = "types-jsonschema" },
     { name = "types-pyyaml" },
 ]
 
@@ -581,6 +584,7 @@ dev = [
     { name = "ruff", specifier = ">=0.8" },
     { name = "schemathesis", specifier = ">=3.39" },
     { name = "testcontainers", extras = ["postgres"], specifier = ">=4.9" },
+    { name = "types-jsonschema" },
     { name = "types-pyyaml" },
 ]
 
@@ -3712,6 +3716,18 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/ed/db/401793a0d5345409a28de2c571d4ef8bea9a08700c20ea7f7b6af3b050d2/typer-0.29.0.tar.gz", hash = "sha256:6871960a1603fba66af2ff751be48a6735af6480a67660afaf2fab2f7e008ed4", size = 206371, upload-time = "2026-11-09T18:48:12.751Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/c1/3d/cc08d3cb257764101c71c47f18e2f547782d013928edc877f155cb99229d/typer-0.29.0-py3-none-any.whl", hash = "sha256:b3c3de6e06a848274dc7bd56a433499e9cf25fa1d40aa3ba4eccfec4e1624c7b", size = 121058, upload-time = "2026-11-09T18:48:11.665Z" },
+]
+
+[[package]]
+name = "types-jsonschema"
+version = "4.26.0.20261006"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "referencing" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/29/d2/1f742605f5a6d39f993134885b8de41c98af606871d3ebddaf3e776bd1eb/types_jsonschema-4.26.0.20261006.tar.gz", hash = "sha256:3eb7db61b6819d40addfdaac7173e749071a7d4a9a4394f0c844598ec84b2500", size = 16843, upload-time = "2026-10-06T08:16:07.318Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/8b/a0/4f2e3c0dc3d5cad958006f2e0307065cc8fe4fbf0393ff0b69d55ee9bbe5/types_jsonschema-4.26.0.20261006-py3-none-any.whl", hash = "sha256:29301f4e65e3928540cdf5e23ad716e38bb0c0b416a48dada213edd3d70206ec", size = 16113, upload-time = "2026-10-06T08:16:06.355Z" },
 ]
 
 [[package]]

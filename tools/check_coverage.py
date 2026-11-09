@@ -15,7 +15,7 @@ EXCLUDED = ("packages/py/testing/",)
 
 
 def main(path: str) -> int:
-    root = ET.parse(path).getroot()  # noqa: S314
+    root = ET.parse(path).getroot()
     sources = [Path(s.text or "") for s in root.iter("source")]
     covered: dict[str, list[int]] = defaultdict(lambda: [0, 0])
     for cls in root.iter("class"):
