@@ -53,6 +53,15 @@ async def tenant_transaction(
 
 
 @contextlib.asynccontextmanager
+async def user_transaction(engine: AsyncEngine, user_sub: str) -> AsyncIterator[AsyncConnection]:
+    """Transaction for the login step: exposes only the memberships (and their tenants)
+    of ``user_sub`` via the ``member_self`` / ``member_tenants`` policies."""
+    async with engine.begin() as conn:
+        await conn.execute(text("SELECT set_config('app.user_sub', :sub, true)"), {"sub": user_sub})
+        yield conn
+
+
+@contextlib.asynccontextmanager
 async def platform_transaction(engine: AsyncEngine) -> AsyncIterator[AsyncConnection]:
     """Transaction without tenant context (platform role, e.g. global KB pipeline).
 
