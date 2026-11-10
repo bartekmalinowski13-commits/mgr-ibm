@@ -83,11 +83,13 @@ services:
     build:
       context: ../..
       dockerfile: deploy/docker/python-service.Dockerfile
-      args: { PACKAGE: bomagent-llm, MODULE: bomagent_llm.fake_server }
+      # bomagent-agents brings the per-prompt simulators (and bomagent-llm with the server)
+      args: { PACKAGE: bomagent-agents, MODULE: bomagent_llm.fake_server }
     depends_on: []
     environment:
       BOMAGENT_PORT: "4010"
       BOMAGENT_FAKE_LLM_CASSETTES: /cassettes
+      BOMAGENT_FAKE_LLM_SIMULATOR: bomagent_agents.simulators:simulate
     volumes: ["../../tests/cassettes:/cassettes:ro"]
     ports: ["127.0.0.1:4010:4010"]
     healthcheck:
@@ -254,6 +256,7 @@ services:
       <<: *python-env
       BOMAGENT_SERVICE_NAME: bomagent-agent-worker
       BOMAGENT_QUEUE_URL: http://moto:5000/123456789012/runs
+      BOMAGENT_ALLOW_LOCAL_MODELS: "true"  # fake-closed / fake-open-weight via LiteLLM
     ports: ["127.0.0.1:8002:8000"]
 
   kb-indexer:

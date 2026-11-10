@@ -98,3 +98,70 @@ def test_bom_reports_parse_errors(tmp_path):
     result = runner.invoke(app, ["bom", str(bad)])
     assert result.exit_code == 2
     assert "kicad.legacy" in result.output
+
+
+DATASHEETS = KICAD_FIXTURES.parent / "datasheets"
+
+
+def test_run_variant_with_simulator_writes_bom_and_trace(tmp_path):
+    out, trace = tmp_path / "bom.json", tmp_path / "trace.json"
+    result = runner.invoke(
+        app,
+        [
+            "run",
+            str(ECG),
+            "--variant",
+            "B",
+            "--datasheets",
+            str(DATASHEETS),
+            "--out",
+            str(out),
+            "--trace",
+            str(trace),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    bom = BomVersion.model_validate_json(out.read_text())
+    assert bom.variant == "B:fake-closed"
+    assert bom.items
+    assert json.loads(trace.read_text())["status"] == "completed"
+    assert "select" in result.output
+
+
+def test_run_records_cassettes(tmp_path):
+    cass = tmp_path / "cassettes"
+    result = runner.invoke(
+        app,
+        ["run", str(ECG), "--variant", "B", "--datasheets", str(DATASHEETS), "--record", str(cass)],
+    )
+    assert result.exit_code == 0, result.output
+    assert list(cass.glob("*.json"))
+
+
+def test_run_gateway_requires_key():
+    result = runner.invoke(
+        app, ["run", str(ECG), "--gateway-url", "http://gw"], env={"BOMAGENT_LLM_GATEWAY_KEY": ""}
+    )
+    assert result.exit_code == 2
+
+
+def test_compare_variants_against_reference(tmp_path):
+    out = tmp_path / "cmp.md"
+    result = runner.invoke(
+        app,
+        [
+            "compare",
+            str(ECG),
+            "--reference",
+            str(ECG / "reference_bom.csv"),
+            "--datasheets",
+            str(DATASHEETS),
+            "--out",
+            str(out),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    text = out.read_text()
+    assert "simulated - not research data" in text
+    assert "| A | 1.000" in text
+    assert "| B | 1.000" in text
