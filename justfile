@@ -67,6 +67,14 @@ smoke:
 e2e:
     pnpm --filter @bomagent/web exec playwright test --trace off
 
+# local stack without Docker (Postgres must be running; see tools/dev/native_stack.py)
+up-native:
+    uv run python tools/dev/native_stack.py
+
+# UI over HTTP against a running stack (just up / just up-native)
+e2e-stack:
+    E2E_STACK=1 pnpm --filter @bomagent/web exec playwright test --trace off
+
 # AWS CDK synth + cdk-nag (never deploys)
 synth:
     pnpm --filter @bomagent/infra run synth

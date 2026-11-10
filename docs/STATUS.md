@@ -17,7 +17,7 @@ _Aktualizuje Claude Code po każdym kamieniu milowym (patrz `docs/prompts/CLAUDE
 
 **Frontend (`feat/m5-web`):** vitest 12/12, Playwright 21/21 (w tym axe WCAG 2.1 AA, mobile smoke), `tsc`, `biome` czyste; zrzuty w `docs/design/screens/m5/`. Uruchom: `pnpm --filter @bomagent/web dev:mock`.
 
-**Weryfikacja (lokalnie, Postgres 16 + pgvector natywnie):** 350 testów zielonych na `feat/m5-web` (341 na `feat/m4-runs-api`) (w tym izolacja tenantów, integracyjne, kontrakt OpenAPI), pokrycie 95%, `ruff`, `mypy --strict`, `import-linter` czyste. Ścieżka dockerowa (`just up`, Testcontainers, E2E) **nie była uruchomiona** – w obu środowiskach brak demona Dockera; sprawdzi ją CI.
+**Weryfikacja (lokalnie, Postgres 16 + pgvector natywnie):** 350 testów zielonych na `feat/m5-web` (341 na `feat/m4-runs-api`) (w tym izolacja tenantów, integracyjne, kontrakt OpenAPI), pokrycie 95%, `ruff`, `mypy --strict`, `import-linter` czyste. Ścieżka dockerowa (`just up`, Testcontainers) **nie była uruchomiona** – brak demona Dockera; sprawdzi ją CI. Zamiast niej pełny stos uruchomiony natywnie (`just up-native`: Postgres + moto + fake LLM + API + 3 workery jako procesy) i przetestowany: `just e2e-stack` – 2/2 (upload KiCad przez presigned URL → parsowanie → przebiegi A i B przez SQS → porównanie → poprawka pozycji; dokument w bazie wiedzy → indeksowanie).
 
 ### Jak uruchomić
 ```bash

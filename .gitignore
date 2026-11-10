@@ -34,3 +34,4 @@ infra/cdk/cdk.out/
 evals/reports/local/
 *.tsbuildinfo
 apps/*/dist-demo/
+.native-stack/

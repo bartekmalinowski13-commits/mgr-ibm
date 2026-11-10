@@ -26,7 +26,7 @@ pnpm --filter @bomagent/web typecheck
 pnpm --filter @bomagent/web test       # vitest + Testing Library (w tym przełączanie organizacji)
 pnpm --filter @bomagent/web e2e        # Playwright + axe (WCAG 2.1 AA), desktop + mobile smoke
 PW_CHANNEL=chrome pnpm --filter @bomagent/web e2e   # gdy jest tylko systemowy Chrome
-E2E_BASE_URL=http://localhost:5173 pnpm --filter @bomagent/web e2e   # przeciw działającemu stosowi
+just up-native && just e2e-stack     # UI po HTTP na pełnym stosie (API, S3/SQS moto, parser, agenci, kb-indexer) bez Dockera
 node e2e/shot.mjs                      # zrzuty ekranów do review (serwer mock na :5179)
 pnpm --filter @bomagent/web build:demo # samodzielna kopia demo (mock, routing w pamięci) – dist-demo/
 ```
