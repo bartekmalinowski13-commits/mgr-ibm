@@ -105,7 +105,7 @@
     "created": "Created project",
     "empty": "A project holds the files of one device. Create your first project, then upload its KiCad files.",
     "files": "Design files",
-    "drop": "Drag the project files here (KiCad .kicad_sch/.kicad_pro/.kicad_pcb, IPC-2581 .xml, EDIF .edf, CSV BOM) or",
+    "drop": "Drag the project files here (KiCad .kicad_sch/.kicad_pro/.kicad_pcb, IPC-2581 .xml, EDIF .edf, ODB++ .tgz/.zip, CSV BOM) or",
     "browse": "choose from disk",
     "dropHint": "Up to 64 MB per file. Files are checked in an isolated environment before use.",
     "uploaded": "Uploaded {{count}} files",

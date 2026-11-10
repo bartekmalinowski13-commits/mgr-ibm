@@ -27,7 +27,8 @@ Założenie interpretacyjne: „Guidance” z wymagań = **Cadence** (OrCAD Capt
 | CSV BOM | done (M1) | `bomagent_cad.csv_bom` |
 | IPC-2581 rev B/C | done (M7) | `bomagent_cad.ipc2581` |
 | EDIF 2.0.0 | done (M7) | `bomagent_cad.edif` |
-| ODB++, DXF, PDF BOM | planned (M7, `docs/plans/M7-formats.md`) | - |
+| ODB++ (`.tgz`, `.zip`) | done (M7) | `bomagent_cad.odbpp` |
+| DXF, PDF BOM | planned (M7, `docs/plans/M7-formats.md`) | - |
 | Altium, OrCAD native, Allegro `.brd`, DWG, XLSX | not parsed - the upload returns an export hint | - |
 
 ## Kontrakt wtyczki

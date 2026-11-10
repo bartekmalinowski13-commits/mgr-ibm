@@ -105,7 +105,7 @@
     "created": "Utworzono projekt",
     "empty": "Projekt to zestaw plików jednego urządzenia. Utwórz pierwszy projekt, a potem wgraj pliki KiCad.",
     "files": "Pliki projektowe",
-    "drop": "Przeciągnij tutaj pliki projektu (KiCad .kicad_sch/.kicad_pro/.kicad_pcb, IPC-2581 .xml, EDIF .edf, CSV BOM) albo",
+    "drop": "Przeciągnij tutaj pliki projektu (KiCad .kicad_sch/.kicad_pro/.kicad_pcb, IPC-2581 .xml, EDIF .edf, ODB++ .tgz/.zip, CSV BOM) albo",
     "browse": "wybierz z dysku",
     "dropHint": "Do 64 MB na plik. Pliki są sprawdzane w izolowanym środowisku przed użyciem.",
     "uploaded": "Wgrano {{count}} plików",

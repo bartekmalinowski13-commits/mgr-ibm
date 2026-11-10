@@ -36,4 +36,4 @@ sites into the (private) global corpus; they are **not** committed (copyright).
 ## Neutral-format fixtures (M7)
 | Path | Source | Licence | Notes |
 |---|---|---|---|
-| `ipc2581/*.xml`, `edif/*.edf` | generated from `kicad/*` by `tools/make_format_fixtures.py` | same as `kicad/*` (self-authored) | mimic IPC-2581 rev C (BOM + AVL + placements) and EDIF 2.0.0 netlist exports; used for cross-format consistency tests |
+| `ipc2581/*.xml`, `edif/*.edf`, `odbpp/*.tgz` | generated from `kicad/*` by `tools/make_format_fixtures.py` | same as `kicad/*` (self-authored) | mimic IPC-2581 rev C (BOM + AVL + placements) and EDIF 2.0.0 netlist exports; used for cross-format consistency tests |

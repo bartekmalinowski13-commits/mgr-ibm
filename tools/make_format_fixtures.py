@@ -1,4 +1,4 @@
-"""Generate IPC-2581 and EDIF fixtures from the open KiCad fixtures (M7).
+"""Generate IPC-2581, EDIF and ODB++ fixtures from the open KiCad fixtures (M7).
 
 The generated files describe exactly the same parts as the KiCad designs, so each new
 parser gets a cross-format consistency test against the KiCad parse. They mimic what
@@ -10,6 +10,9 @@ they are self-authored and carry the licence of the KiCad fixtures (evals/fixtur
 
 from __future__ import annotations
 
+import gzip
+import io
+import tarfile
 from collections import defaultdict
 from pathlib import Path
 from xml.sax.saxutils import quoteattr
@@ -165,6 +168,46 @@ def _ident(s: str) -> str:
     return cleaned if cleaned[:1].isalpha() else "&" + cleaned
 
 
+def odbpp(design: ParsedDesign) -> bytes:
+    """ODB++ job as .tgz: eda/data (packages) + comp_+_top/components (CMP/PRP records)."""
+    parts = sorted(design.bom_components(), key=lambda c: c.refdes)
+    packages = sorted({_package(c) for c in parts})
+    job = design.design_name
+    eda = ["# ODB++ eda data (fixture)", "HDR bomagent fixtures"]
+    eda += [f"PKG {p} 1.27 -1 -1 1 1" for p in packages]
+    comps = ["# component records", "UNITS=MM"]
+    for i, c in enumerate(parts):
+        comps.append(f"# CMP {i}")
+        part = c.field("MPN") or c.value
+        comps.append(f"CMP {packages.index(_package(c))} 10.0 {i * 2.5:.1f} 0 N {c.refdes} {part}")
+        props = [
+            ("VALUE", c.value),
+            ("MPN", c.field("MPN")),
+            ("MANUFACTURER", c.field("Manufacturer")),
+        ]
+        if c.dnp:
+            props.append(("DNP", "YES"))
+        comps += [f"PRP {k} '{v}'" for k, v in props if v]
+    files = {
+        f"{job}/matrix/matrix": "STEP {\n   COL=1\n   NAME=PCB\n}\n",
+        f"{job}/steps/pcb/eda/data": "\n".join(eda) + "\n",
+        f"{job}/steps/pcb/layers/comp_+_top/components": "\n".join(comps) + "\n",
+    }
+    buf = io.BytesIO()
+    # deterministic archive: fixed mtime, sorted members, no owner names
+    with (
+        gzip.GzipFile(fileobj=buf, mode="wb", mtime=0) as gz,
+        tarfile.open(fileobj=gz, mode="w") as tar,
+    ):
+        for path, text in sorted(files.items()):
+            data = text.encode()
+            info = tarfile.TarInfo(path)
+            info.size = len(data)
+            info.mtime = 0
+            tar.addfile(info, io.BytesIO(data))
+    return buf.getvalue()
+
+
 def main() -> None:
     for name in DESIGNS:
         design = kicad_design(name)
@@ -173,6 +216,10 @@ def main() -> None:
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_text(render(design), encoding="utf-8")
             print(target.relative_to(ROOT))
+        target = ROOT / "evals" / "fixtures" / "odbpp" / f"{name}.tgz"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(odbpp(design))
+        print(target.relative_to(ROOT))
 
 
 if __name__ == "__main__":
