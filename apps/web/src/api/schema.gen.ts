@@ -92,6 +92,61 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/kb/documents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Kb Documents */
+        get: operations["list_kb_documents_v1_kb_documents_get"];
+        put?: never;
+        /** Create Document */
+        post: operations["create_document_v1_kb_documents_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/kb/documents/{document_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Kb Document */
+        get: operations["get_kb_document_v1_kb_documents__document_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/kb/documents/{document_id}/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Complete Document
+         * @description The file is in S3: queue it for extraction, injection screening and embedding.
+         */
+        post: operations["complete_document_v1_kb_documents__document_id__complete_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/projects": {
         parameters: {
             query?: never;
@@ -330,6 +385,117 @@ export interface components {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
         };
+        /** KbDocument */
+        KbDocument: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Created By */
+            created_by: string;
+            /** Error */
+            error?: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Indexed At */
+            indexed_at?: string | null;
+            /** Kind */
+            kind: string;
+            /** Manufacturer */
+            manufacturer: string;
+            /** Mime Type */
+            mime_type: string;
+            /**
+             * Scope
+             * @enum {string}
+             */
+            scope: "global" | "tenant";
+            /** Sha256 */
+            sha256: string;
+            /** Size Bytes */
+            size_bytes: number;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "pending" | "indexing" | "indexed" | "failed";
+            /** Title */
+            title: string;
+        };
+        /** KbDocumentCreated */
+        KbDocumentCreated: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Created By */
+            created_by: string;
+            /** Error */
+            error?: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Indexed At */
+            indexed_at?: string | null;
+            /** Kind */
+            kind: string;
+            /** Manufacturer */
+            manufacturer: string;
+            /** Mime Type */
+            mime_type: string;
+            /**
+             * Scope
+             * @enum {string}
+             */
+            scope: "global" | "tenant";
+            /** Sha256 */
+            sha256: string;
+            /** Size Bytes */
+            size_bytes: number;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "pending" | "indexing" | "indexed" | "failed";
+            /** Title */
+            title: string;
+            /** @description Absent when the same file is already in the knowledge base. */
+            upload?: components["schemas"]["UploadTarget"] | null;
+        };
+        /** KbDocumentIn */
+        KbDocumentIn: {
+            /** Filename */
+            filename: string;
+            /**
+             * Kind
+             * @default datasheet
+             * @enum {string}
+             */
+            kind: "datasheet" | "application_note" | "standard" | "component_library" | "correction" | "other";
+            /**
+             * Manufacturer
+             * @default
+             */
+            manufacturer: string;
+            /**
+             * Mime Type
+             * @enum {string}
+             */
+            mime_type: "application/pdf" | "text/markdown" | "text/plain" | "text/html";
+            /** Sha256 */
+            sha256: string;
+            /** Size Bytes */
+            size_bytes: number;
+            /** Title */
+            title: string;
+        };
         /** Page[AuditEntry] */
         Page_AuditEntry_: {
             /** Items */
@@ -341,6 +507,13 @@ export interface components {
         Page_Design_: {
             /** Items */
             items: components["schemas"]["Design"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
+        };
+        /** Page[KbDocument] */
+        Page_KbDocument_: {
+            /** Items */
+            items: components["schemas"]["KbDocument"][];
             /** Next Cursor */
             next_cursor?: string | null;
         };
@@ -636,6 +809,155 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Design"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_kb_documents_v1_kb_documents_get: {
+        parameters: {
+            query?: {
+                scope?: ("tenant" | "global") | null;
+                limit?: number;
+                cursor?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+                "x-request-id"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Page_KbDocument_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_document_v1_kb_documents_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+                "x-request-id"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["KbDocumentIn"];
+            };
+        };
+        responses: {
+            /** @description Already in the knowledge base */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KbDocumentCreated"];
+                };
+            };
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KbDocumentCreated"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_kb_document_v1_kb_documents__document_id__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+                "x-request-id"?: string | null;
+            };
+            path: {
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KbDocument"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    complete_document_v1_kb_documents__document_id__complete_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+                "x-request-id"?: string | null;
+            };
+            path: {
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KbDocument"];
                 };
             };
             /** @description Validation Error */

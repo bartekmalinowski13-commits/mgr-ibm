@@ -48,6 +48,7 @@ class ApiServices:
     catalog: Catalog
     allow_local_models: bool = False
     sse_poll_seconds: float = 1.0
+    kb_queue: Queue | None = None  # knowledge-base indexing (kb-indexer)
 
 
 def services(request: Request) -> ApiServices:

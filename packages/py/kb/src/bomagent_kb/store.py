@@ -18,7 +18,6 @@ import re
 import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass, field
-from enum import StrEnum
 from typing import Any, Protocol
 
 from opentelemetry import trace
@@ -29,9 +28,11 @@ from bomagent_bom.model import KbCitation
 from bomagent_common.audit import AuditEvent, emit_audit
 from bomagent_common.tenancy import current_tenant, require_tenant
 from bomagent_kb.chunking import chunk_document
+from bomagent_kb.documents import register_document
 from bomagent_kb.extract import ExtractedDocument, Page
 from bomagent_kb.parts import extract_part_numbers
 from bomagent_kb.safety import looks_like_injection, sanitize
+from bomagent_kb.store_types import DocumentMeta, Scope
 from bomagent_llm.embeddings import EmbeddingClient
 
 tracer = trace.get_tracer(__name__)
@@ -39,25 +40,8 @@ RRF_K = 60
 _WORD = re.compile(r"[A-Za-z0-9µΩ]+(?:[.,][0-9]+)?")
 
 
-class Scope(StrEnum):
-    GLOBAL = "global"
-    TENANT = "tenant"
-
-
 class DocumentNotFoundError(LookupError):
     """Unknown id or not visible in the current tenant context."""
-
-
-@dataclass(frozen=True)
-class DocumentMeta:
-    title: str
-    mime_type: str
-    sha256: str
-    size_bytes: int
-    kind: str = "datasheet"
-    manufacturer: str = ""
-    source_uri: str = ""
-    object_key: str | None = None
 
 
 @dataclass(frozen=True)
@@ -141,51 +125,7 @@ class KnowledgeBase:
     ) -> uuid.UUID:
         """Register a document (status ``pending``); returns the existing id for a
         duplicate (same content in the same scope)."""
-        tenant_id = require_tenant().tenant_id if scope == Scope.TENANT else None
-        existing = (
-            await conn.execute(
-                text(
-                    "SELECT id FROM kb.documents WHERE sha256 = :sha AND scope = :scope"
-                    " AND tenant_id IS NOT DISTINCT FROM :tid AND superseded_at IS NULL"
-                ),
-                {"sha": meta.sha256, "scope": scope.value, "tid": tenant_id},
-            )
-        ).scalar()
-        if existing is not None:
-            return uuid.UUID(str(existing))
-        doc_id = uuid.uuid4()
-        await conn.execute(
-            text(
-                """INSERT INTO kb.documents (id, tenant_id, scope, title, kind, manufacturer,
-                     source_uri, object_key, mime_type, sha256, size_bytes, created_by)
-                   VALUES (:id, :tid, :scope, :title, :kind, :mfr, :uri, :key, :mime, :sha,
-                     :size, :by)"""
-            ),
-            {
-                "id": doc_id,
-                "tid": tenant_id,
-                "scope": scope.value,
-                "title": meta.title[:500],
-                "kind": meta.kind,
-                "mfr": meta.manufacturer,
-                "uri": meta.source_uri,
-                "key": meta.object_key,
-                "mime": meta.mime_type,
-                "sha": meta.sha256,
-                "size": meta.size_bytes,
-                "by": created_by,
-            },
-        )
-        if scope == Scope.TENANT:
-            await emit_audit(
-                conn,
-                AuditEvent(
-                    action="kb.document.created",
-                    object_type="kb_document",
-                    object_id=str(doc_id),
-                    after={"title": meta.title, "kind": meta.kind, "sha256": meta.sha256},
-                ),
-            )
+        doc_id, _ = await register_document(conn, meta, scope=scope, created_by=created_by)
         return doc_id
 
     async def _document(self, conn: AsyncConnection, doc_id: uuid.UUID) -> Any:

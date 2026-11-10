@@ -4,6 +4,7 @@ from fastapi import FastAPI
 
 from bomagent_api import __version__
 from bomagent_api.auth import Authenticator, DevAuthenticator, OidcAuthenticator
+from bomagent_api.kb_routes import router as kb_router
 from bomagent_api.routes import ApiServices, router
 from bomagent_common.config import ServiceSettings
 from bomagent_common.db import make_engine, ping
@@ -16,6 +17,7 @@ class Settings(ServiceSettings):
     files_bucket: str = "bomagent-local-files"
     ingest_queue_url: str | None = None
     runs_queue_url: str | None = None
+    kb_queue_url: str | None = None
     # authentication: "oidc" (default, any OIDC provider; Cognito in AWS) or "dev" (local only)
     auth_mode: str = "oidc"
     oidc_issuer: str | None = None
@@ -74,6 +76,15 @@ def build_services(settings: Settings) -> ApiServices:
         authenticator=build_authenticator(settings),
         catalog=load_catalog(),
         allow_local_models=settings.allow_local_models,
+        kb_queue=(
+            SqsQueue(
+                settings.kb_queue_url,
+                region=settings.aws_region,
+                endpoint_url=settings.aws_endpoint_url,
+            )
+            if settings.kb_queue_url
+            else None
+        ),
     )
 
 
@@ -106,4 +117,5 @@ def create_app(settings: Settings | None = None, services: ApiServices | None = 
     if services is not None:
         app.state.services = services
         app.include_router(router)
+        app.include_router(kb_router)
     return app
