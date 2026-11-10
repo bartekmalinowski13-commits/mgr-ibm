@@ -1,0 +1,79 @@
+{
+  "created_at": "2026-11-10T19:20:57.325388+00:00",
+  "commit": "05fb0751f32a2a05f9b8f9181f6b2a0f124f0120",
+  "config": {
+    "name": "pilot-fake",
+    "designs": [
+      "evals/fixtures/kicad/ecg-frontend",
+      "evals/fixtures/kicad/pulse-ox",
+      "evals/fixtures/kicad/eeg-2ch"
+    ],
+    "variants": [
+      "A",
+      "B"
+    ],
+    "models": [
+      "fake-closed",
+      "fake-open-weight"
+    ],
+    "repeats": 3,
+    "kb_dir": "evals/fixtures/datasheets",
+    "cassettes": null,
+    "seed": 2026,
+    "runtimes": {}
+  },
+  "prompts": {
+    "extract_group": "1+4833d397",
+    "mpn_select": "1+a0f2e546",
+    "compose": "1+032112a0",
+    "validate": "1+3f516794",
+    "repair": "1+86a22a00",
+    "claude_agent_sdk": "1+f3dc57c3"
+  },
+  "rule_pack": {
+    "id": "core",
+    "version": "1.0.0"
+  },
+  "models": {
+    "fake-closed": {
+      "id": "fake-closed",
+      "gateway_model": "fake-closed",
+      "provider": "fake",
+      "license_class": "closed",
+      "residency": "local",
+      "region": null,
+      "capabilities": [
+        "chat",
+        "structured_output",
+        "tools"
+      ],
+      "tier": "strong",
+      "dimensions": null,
+      "cost_in_eur": 0.0,
+      "cost_out_eur": 0.0,
+      "enabled": true,
+      "verified": true,
+      "notes": ""
+    },
+    "fake-open-weight": {
+      "id": "fake-open-weight",
+      "gateway_model": "fake-open-weight",
+      "provider": "fake",
+      "license_class": "open-weight",
+      "residency": "local",
+      "region": null,
+      "capabilities": [
+        "chat",
+        "structured_output",
+        "tools"
+      ],
+      "tier": "strong",
+      "dimensions": null,
+      "cost_in_eur": 0.0,
+      "cost_out_eur": 0.0,
+      "enabled": true,
+      "verified": true,
+      "notes": ""
+    }
+  }
+}

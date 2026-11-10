@@ -238,5 +238,14 @@ def run(
         sys.stdout.write(report_markdown(report))
 
 
+def _register_subcommands() -> None:
+    from bomagent_cli.experiment import experiment_app
+
+    app.add_typer(experiment_app, name="experiment")
+
+
+_register_subcommands()
+
+
 def main() -> None:  # pragma: no cover
     app()
