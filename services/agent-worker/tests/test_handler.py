@@ -181,6 +181,12 @@ async def test_registered_run_uses_database_and_redelivery_is_a_no_op(app_engine
     status, error, actions, versions = await _state(app_engine, tenant, rid)
     assert (status, error, versions) == ("completed", None, 1)
     assert actions.count("run.completed") == 1
+    async with tenant_transaction(app_engine, tenant.tenant_id) as conn:
+        runs, calls = (
+            await conn.execute(text("SELECT runs, llm_calls FROM metering.usage_daily"))
+        ).one()
+    assert runs == 1  # metered once despite the redelivery
+    assert calls == result.usage.llm_calls
 
 
 async def test_failed_run_is_marked_failed_and_unknown_runs_rejected(app_engine, make_tenant):

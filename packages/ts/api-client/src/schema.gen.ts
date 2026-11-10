@@ -431,6 +431,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/usage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Usage this month and the plan's limits */
+        get: operations["usage_v1_usage_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1148,6 +1165,17 @@ export interface components {
              */
             wall_time_s: number;
         };
+        /** UsageReport */
+        UsageReport: {
+            /** Limits */
+            limits: {
+                [key: string]: number;
+            };
+            /** Usage */
+            usage: {
+                [key: string]: number;
+            };
+        };
     };
     responses: never;
     parameters: never;
@@ -1273,6 +1301,16 @@ export interface operations {
                     "application/problem+json": unknown;
                 };
             };
+            /** @description Problem details (RFC 9457) */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
         };
     };
     create_key_v1_api_keys_post: {
@@ -1342,6 +1380,16 @@ export interface operations {
             };
             /** @description Problem details (RFC 9457) */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Problem details (RFC 9457) */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1423,6 +1471,16 @@ export interface operations {
                     "application/problem+json": unknown;
                 };
             };
+            /** @description Problem details (RFC 9457) */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
         };
     };
     rotate_key_v1_api_keys__key_id__rotate_post: {
@@ -1490,6 +1548,16 @@ export interface operations {
             };
             /** @description Problem details (RFC 9457) */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Problem details (RFC 9457) */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1596,6 +1664,16 @@ export interface operations {
                     "application/problem+json": unknown;
                 };
             };
+            /** @description Problem details (RFC 9457) */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
         };
     };
     verify_v1_audit_events_verify_get: {
@@ -1689,6 +1767,16 @@ export interface operations {
                     "application/problem+json": unknown;
                 };
             };
+            /** @description Problem details (RFC 9457) */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
         };
     };
     list_invitations_v1_invitations_get: {
@@ -1767,6 +1855,16 @@ export interface operations {
             };
             /** @description Problem details (RFC 9457) */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Problem details (RFC 9457) */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1862,6 +1960,16 @@ export interface operations {
                     "application/problem+json": unknown;
                 };
             };
+            /** @description Problem details (RFC 9457) */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
         };
     };
     accept_invitation_v1_invitations_accept_post: {
@@ -1948,6 +2056,16 @@ export interface operations {
                     "application/problem+json": unknown;
                 };
             };
+            /** @description Problem details (RFC 9457) */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
         };
     };
     revoke_invitation_v1_invitations__invitation_id__delete: {
@@ -2023,6 +2141,16 @@ export interface operations {
             };
             /** @description Problem details (RFC 9457) */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Problem details (RFC 9457) */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -2123,6 +2251,16 @@ export interface operations {
                     "application/problem+json": unknown;
                 };
             };
+            /** @description Problem details (RFC 9457) */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
         };
     };
     list_members_v1_members_get: {
@@ -2198,6 +2336,16 @@ export interface operations {
             };
             /** @description Problem details (RFC 9457) */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Problem details (RFC 9457) */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -2289,6 +2437,16 @@ export interface operations {
                     "application/problem+json": unknown;
                 };
             };
+            /** @description Problem details (RFC 9457) */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
         };
     };
     update_member_v1_members__user_sub__patch: {
@@ -2370,6 +2528,16 @@ export interface operations {
             };
             /** @description Problem details (RFC 9457) */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Problem details (RFC 9457) */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -2474,6 +2642,16 @@ export interface operations {
                     "application/problem+json": unknown;
                 };
             };
+            /** @description Problem details (RFC 9457) */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
         };
     };
     list_projects_v1_projects_get: {
@@ -2562,6 +2740,16 @@ export interface operations {
             };
             /** @description Problem details (RFC 9457) */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Problem details (RFC 9457) */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -2668,6 +2856,16 @@ export interface operations {
                     "application/problem+json": unknown;
                 };
             };
+            /** @description Problem details (RFC 9457) */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
         };
     };
     read_project_v1_projects__project_id__get: {
@@ -2763,6 +2961,16 @@ export interface operations {
                     "application/problem+json": unknown;
                 };
             };
+            /** @description Problem details (RFC 9457) */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
         };
     };
     list_files_v1_projects__project_id__files_get: {
@@ -2850,6 +3058,16 @@ export interface operations {
             };
             /** @description Problem details (RFC 9457) */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Problem details (RFC 9457) */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -2957,6 +3175,16 @@ export interface operations {
                     "application/problem+json": unknown;
                 };
             };
+            /** @description Problem details (RFC 9457) */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
         };
     };
     list_runs_v1_runs_get: {
@@ -3046,6 +3274,16 @@ export interface operations {
             };
             /** @description Problem details (RFC 9457) */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Problem details (RFC 9457) */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -3152,6 +3390,16 @@ export interface operations {
                     "application/problem+json": unknown;
                 };
             };
+            /** @description Problem details (RFC 9457) */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
         };
     };
     read_run_v1_runs__run_id__get: {
@@ -3239,6 +3487,16 @@ export interface operations {
             };
             /** @description Problem details (RFC 9457) */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Problem details (RFC 9457) */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -3342,6 +3600,16 @@ export interface operations {
                     "application/problem+json": unknown;
                 };
             };
+            /** @description Problem details (RFC 9457) */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
         };
     };
     export_bom_v1_runs__run_id__bom_csv_get: {
@@ -3429,6 +3697,16 @@ export interface operations {
             };
             /** @description Problem details (RFC 9457) */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": unknown;
+                    "text/plain": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Problem details (RFC 9457) */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -3537,6 +3815,16 @@ export interface operations {
                     "application/problem+json": unknown;
                 };
             };
+            /** @description Problem details (RFC 9457) */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
         };
     };
     run_events_v1_runs__run_id__events_get: {
@@ -3622,6 +3910,119 @@ export interface operations {
             };
             /** @description Problem details (RFC 9457) */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Problem details (RFC 9457) */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+        };
+    };
+    usage_v1_usage_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+                "x-org-id"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UsageReport"];
+                };
+            };
+            /** @description Problem details (RFC 9457) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Problem details (RFC 9457) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Problem details (RFC 9457) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Problem details (RFC 9457) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Problem details (RFC 9457) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Problem details (RFC 9457) */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Problem details (RFC 9457) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Problem details (RFC 9457) */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -24,6 +24,17 @@ from bomagent_api.app import Settings, create_app
 pytestmark = [pytest.mark.integration, pytest.mark.contract]
 
 
+@pytest.fixture(scope="module", autouse=True)
+def generous_plan():
+    """The fuzzer sends hundreds of requests: lift plan limits so endpoints are exercised
+    (429 itself is part of the contract and covered in test_limits)."""
+    from bomagent_api import plans
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setitem(plans.PLANS, "pilot", plans.Plan(10**9, 10**9, 10**9, 10**9, 1e12))
+        yield
+
+
 @pytest.fixture(scope="module")
 def api(db_urls):
     # NullPool: the ASGI test clients run the app on their own event loops

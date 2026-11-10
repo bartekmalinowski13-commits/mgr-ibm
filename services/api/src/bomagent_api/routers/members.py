@@ -38,7 +38,7 @@ from bomagent_common.problems import ProblemError
 from bomagent_common.tenancy import TenantContext
 
 router = APIRouter(
-    prefix="/v1", tags=["members"], responses=problem_responses(400, 401, 403, 404, 409, 422)
+    prefix="/v1", tags=["members"], responses=problem_responses(400, 401, 403, 404, 409, 422, 429)
 )
 ROLE_ORDER = ("owner", "admin", "engineer", "reviewer", "viewer")
 INVITATION_TTL = timedelta(days=7)

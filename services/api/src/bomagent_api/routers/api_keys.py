@@ -23,7 +23,9 @@ from bomagent_common.problems import ProblemError
 from bomagent_common.tenancy import TenantContext
 
 router = APIRouter(
-    prefix="/v1/api-keys", tags=["api-keys"], responses=problem_responses(400, 401, 403, 404, 422)
+    prefix="/v1/api-keys",
+    tags=["api-keys"],
+    responses=problem_responses(400, 401, 403, 404, 422, 429),
 )
 COLS = "id, name, prefix, roles, created_by, created_at, expires_at, last_used_at"
 ACTIVE = "revoked_at IS NULL AND (expires_at IS NULL OR expires_at > now())"

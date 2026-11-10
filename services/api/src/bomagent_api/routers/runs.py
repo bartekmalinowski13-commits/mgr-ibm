@@ -16,6 +16,7 @@ from bomagent_api import idempotency
 from bomagent_api.auth import OrgContext, still_authorized
 from bomagent_api.authz import require
 from bomagent_api.pagination import clamp, encode_cursor, page_clause
+from bomagent_api.plans import check_new_run
 from bomagent_api.routers.projects import get_project
 from bomagent_api.schemas import BomEnvelope, BomItemPatch, Page, Run, RunCreate, problem_responses
 from bomagent_bom.export import to_csv
@@ -27,7 +28,9 @@ from bomagent_common.problems import ProblemError
 from bomagent_llm.catalog import ModelNotAllowedError
 
 router = APIRouter(
-    prefix="/v1/runs", tags=["runs"], responses=problem_responses(400, 401, 403, 404, 409, 413, 422)
+    prefix="/v1/runs",
+    tags=["runs"],
+    responses=problem_responses(400, 401, 403, 404, 409, 413, 422, 429),
 )
 RUN_COLS = (
     "id, project_id, variant, runtime, model_id, status, usage, error, created_by,"
@@ -77,6 +80,7 @@ async def create_run(
         if stored is not None:
             return Run(**stored)
         await get_project(conn, body.project_id)
+        await check_new_run(conn)
         keys = (
             (
                 await conn.execute(

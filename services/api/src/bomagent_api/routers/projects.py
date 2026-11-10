@@ -14,17 +14,19 @@ from bomagent_api import idempotency
 from bomagent_api.auth import OrgContext
 from bomagent_api.authz import require
 from bomagent_api.pagination import clamp, encode_cursor, page_clause
+from bomagent_api.plans import check_new_project
 from bomagent_api.schemas import FileInfo, Page, Project, ProjectCreate, problem_responses
 from bomagent_common.audit import AuditEvent, emit_audit
 from bomagent_common.db import tenant_transaction
 from bomagent_common.messaging import Message
+from bomagent_common.metering import record_usage
 from bomagent_common.problems import ProblemError
 from bomagent_common.storage import tenant_key
 
 router = APIRouter(
     prefix="/v1/projects",
     tags=["projects"],
-    responses=problem_responses(400, 401, 403, 404, 409, 413, 422),
+    responses=problem_responses(400, 401, 403, 404, 409, 413, 422, 429),
 )
 MAX_UPLOAD = 64 * 1024 * 1024
 _SAFE_NAME = re.compile(r"[^A-Za-z0-9._\-]")
@@ -77,6 +79,7 @@ async def create_project(
         stored = await idempotency.replay(conn, idempotency_key, payload)
         if stored is not None:
             return Project(**stored)
+        await check_new_project(conn)
         pid = uuid.uuid4()
         await conn.execute(
             text(
@@ -196,6 +199,7 @@ async def upload_file(
                     after={"name": name, "sha256": info.sha256, "size": len(data)},
                 ),
             )
+            await record_usage(conn, files_uploaded=1, bytes_uploaded=len(data))
     except BaseException:
         await store.delete(key)  # the row was not committed: drop the new object
         raise

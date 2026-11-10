@@ -213,6 +213,7 @@ async def org_context(
             raise ProblemError(
                 403, "Forbidden", "not a member of this organisation", slug="not-a-member"
             )
+        await _rate_limit(request, key_ctx)
         with tenant_scope(key_ctx):
             yield key_ctx
         return
@@ -245,8 +246,16 @@ async def org_context(
         roles=frozenset(member["roles"]),
         request_id=request.headers.get("x-request-id"),
     )
+    await _rate_limit(request, ctx)
     with tenant_scope(ctx):
         yield ctx
+
+
+async def _rate_limit(request: Request, ctx: TenantContext) -> None:
+    from bomagent_api.plans import hit_rate_limit, plan_of
+
+    async with tenant_transaction(request.app.state.engine, ctx.tenant_id) as conn:
+        await hit_rate_limit(conn, ctx.actor_id, await plan_of(conn))
 
 
 OrgContext = Annotated[TenantContext, Depends(org_context)]

@@ -34,6 +34,7 @@ from bomagent_common.audit import AuditEvent, emit_audit
 from bomagent_common.db import tenant_transaction
 from bomagent_common.logging import get_logger
 from bomagent_common.messaging import Message
+from bomagent_common.metering import record_usage
 from bomagent_common.storage import ObjectStore, key_belongs_to, tenant_key
 from bomagent_kb import KnowledgeBase
 from bomagent_llm.chat import ChatClient
@@ -121,6 +122,7 @@ class RunWorker:
                 ),
                 {"e": error, "i": run_id},
             )
+            await record_usage(conn, runs=1)
             await emit_audit(
                 conn,
                 AuditEvent(
@@ -192,6 +194,15 @@ class RunWorker:
                     "k": config.kb_snapshot_id,
                     "i": run_id,
                 },
+            )
+            u = result.usage
+            await record_usage(
+                conn,
+                runs=1,
+                llm_calls=u.llm_calls,
+                input_tokens=u.input_tokens,
+                output_tokens=u.output_tokens,
+                cost_eur=u.cost_eur,
             )
             if updated.rowcount:  # runs started through the API have a row; CLI runs do not
                 await conn.execute(

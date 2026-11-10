@@ -27,9 +27,16 @@ class ProblemError(Exception):
     """Raise from handlers to return a typed problem response."""
 
     def __init__(
-        self, status: int, title: str, detail: str | None = None, *, slug: str = ""
+        self,
+        status: int,
+        title: str,
+        detail: str | None = None,
+        *,
+        slug: str = "",
+        headers: dict[str, str] | None = None,
     ) -> None:
         super().__init__(detail or title)
+        self.headers = headers or {}
         self.problem = Problem(
             type=f"{PROBLEM_BASE}{slug}" if slug else "about:blank",
             title=title,
@@ -38,12 +45,15 @@ class ProblemError(Exception):
         )
 
 
-def _response(problem: Problem, request: Request) -> JSONResponse:
+def _response(
+    problem: Problem, request: Request, headers: dict[str, str] | None = None
+) -> JSONResponse:
     problem.instance = problem.instance or request.url.path
     return JSONResponse(
         problem.model_dump(exclude_none=True),
         status_code=problem.status,
         media_type=PROBLEM_MEDIA_TYPE,
+        headers=headers,
     )
 
 
@@ -55,7 +65,7 @@ def problem_response(problem: Problem, request: Request) -> JSONResponse:
 def install_problem_handlers(app: FastAPI) -> None:
     async def _problem(request: Request, exc: Exception) -> JSONResponse:
         assert isinstance(exc, ProblemError)
-        return _response(exc.problem.model_copy(), request)
+        return _response(exc.problem.model_copy(), request, exc.headers or None)
 
     async def _http(request: Request, exc: Exception) -> JSONResponse:
         assert isinstance(exc, StarletteHTTPException)

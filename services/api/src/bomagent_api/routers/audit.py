@@ -17,7 +17,7 @@ from bomagent_common.db import tenant_transaction
 router = APIRouter(
     prefix="/v1/audit-events",
     tags=["audit"],
-    responses=problem_responses(400, 401, 403, 404, 409, 413, 422),
+    responses=problem_responses(400, 401, 403, 404, 409, 413, 422, 429),
 )
 
 

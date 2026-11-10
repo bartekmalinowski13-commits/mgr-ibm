@@ -177,6 +177,11 @@ class InvitationAccept(_M):
     token: str = Field(min_length=20, max_length=200)
 
 
+class UsageReport(_M):
+    usage: dict[str, float]
+    limits: dict[str, float]
+
+
 KeyRole = Literal["engineer", "reviewer", "viewer"]
 
 

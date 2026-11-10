@@ -8,7 +8,9 @@ from fastapi import APIRouter, Request
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 
-from bomagent_api.auth import CurrentPrincipal, memberships
+from bomagent_api.auth import CurrentPrincipal, OrgContext, memberships
+from bomagent_api.authz import require
+from bomagent_api.plans import MAX_OWNED_ORGANIZATIONS, quota_exceeded, usage_report
 from bomagent_api.schemas import (
     DevToken,
     Me,
@@ -16,15 +18,18 @@ from bomagent_api.schemas import (
     Organization,
     OrganizationCreate,
     Token,
+    UsageReport,
     problem_responses,
 )
 from bomagent_common.audit import AuditEvent, emit_audit
-from bomagent_common.db import platform_transaction
+from bomagent_common.db import platform_transaction, tenant_transaction
 from bomagent_common.problems import ProblemError
 from bomagent_common.tenancy import TenantContext
 
 router = APIRouter(
-    prefix="/v1", tags=["identity"], responses=problem_responses(400, 401, 403, 404, 409, 413, 422)
+    prefix="/v1",
+    tags=["identity"],
+    responses=problem_responses(400, 401, 403, 404, 409, 413, 422, 429),
 )
 
 
@@ -56,6 +61,9 @@ async def create_organization(
         raise ProblemError(
             403, "Forbidden", "a verified e-mail address is required", slug="email-not-verified"
         )
+    owned = [m for m in await memberships(request, principal) if "owner" in m["roles"]]
+    if len(owned) >= MAX_OWNED_ORGANIZATIONS:
+        raise quota_exceeded(f"a user can own at most {MAX_OWNED_ORGANIZATIONS} organisations")
     org_id = uuid.uuid4()
     ctx = TenantContext(tenant_id=org_id, actor_id=principal.sub, roles=frozenset({"owner"}))
     try:
@@ -95,6 +103,13 @@ async def create_organization(
             409, "Conflict", "organisation slug already taken", slug="slug-taken"
         ) from exc
     return Organization(id=org_id, slug=body.slug, name=body.name, plan="pilot")
+
+
+@router.get("/usage", summary="Usage this month and the plan's limits")
+async def usage(request: Request, ctx: OrgContext) -> UsageReport:
+    require(ctx, "usage.read")
+    async with tenant_transaction(request.app.state.engine) as conn:
+        return UsageReport(**await usage_report(conn))
 
 
 @router.post(
