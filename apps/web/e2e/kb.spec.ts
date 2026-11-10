@@ -21,7 +21,7 @@ test("add a datasheet to the organisation's knowledge base and see it indexed", 
   await page.getByLabel("Plik (PDF, Markdown, tekst)").setInputFiles(SHEET);
   await page.getByLabel("Producent").fill("Analog Devices");
   await page.getByRole("button", { name: "Dodaj do bazy" }).click();
-  await expect(page.getByText("adi-ad8232.md")).toBeVisible();
+  await expect(page.getByText("adi-ad8232.md", { exact: true })).toBeVisible();
   await expect(page.getByText("Zaindeksowany")).toBeVisible({ timeout: 60_000 });
   await expect(page.getByText(/fragment/)).toBeVisible();
 
