@@ -45,6 +45,8 @@ async def _parsed_design(stack, ctx) -> str:
         await stack.client.post(f"/v1/designs/{design['id']}/complete", headers=h)
     ).status_code == 409
     await stack.drain()
+    listed = (await stack.client.get(f"/v1/projects/{project['id']}/designs", headers=h)).json()
+    assert [d["id"] for d in listed["items"]] == [design["id"]]
     parsed = (await stack.client.get(f"/v1/designs/{design['id']}", headers=h)).json()
     assert parsed["status"] == "parsed"
     assert parsed["components"] == 11
@@ -200,6 +202,9 @@ async def test_tenants_cannot_see_each_others_projects_designs_runs(stack, make_
     await stack.drain()
     run_id = run.json()["id"]
     assert (await stack.client.get(f"/v1/designs/{design_id}", headers=hb)).status_code == 404
+    projects_a = (await stack.client.get("/v1/projects", headers=ha)).json()["items"]
+    foreign = await stack.client.get(f"/v1/projects/{projects_a[0]['id']}/designs", headers=hb)
+    assert foreign.status_code == 404
     assert (await stack.client.get(f"/v1/runs/{run_id}", headers=hb)).status_code == 404
     assert (await stack.client.get(f"/v1/runs/{run_id}/bom", headers=hb)).status_code == 404
     assert (await stack.client.get("/v1/projects", headers=hb)).json()["items"] == []

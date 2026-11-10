@@ -1,0 +1,87 @@
+{
+  "status": "completed",
+  "error": null,
+  "trace": [
+    {
+      "step": "group",
+      "kind": "rule",
+      "agent": "normalizer",
+      "status": "ok",
+      "summary": "22 lines, 7 without MPN",
+      "started_at": "2026-11-10T03:25:38.303515Z",
+      "duration_s": 0.0018,
+      "llm_calls": 0,
+      "input_tokens": 0,
+      "output_tokens": 0
+    },
+    {
+      "step": "select",
+      "kind": "llm",
+      "agent": "selector",
+      "status": "ok",
+      "summary": "selected parts for 6/7 lines",
+      "started_at": "2026-11-10T03:25:38.306994Z",
+      "duration_s": 0.007,
+      "llm_calls": 7,
+      "input_tokens": 6016,
+      "output_tokens": 342
+    },
+    {
+      "step": "validate",
+      "kind": "rule",
+      "agent": "validator",
+      "status": "ok",
+      "summary": "4 findings, 0 LLM-decided lines to repair",
+      "started_at": "2026-11-10T03:25:38.315891Z",
+      "duration_s": 0.035,
+      "llm_calls": 0,
+      "input_tokens": 0,
+      "output_tokens": 0
+    },
+    {
+      "step": "generate",
+      "kind": "rule",
+      "agent": "generator",
+      "status": "ok",
+      "summary": "22 lines",
+      "started_at": "2026-11-10T03:25:38.353133Z",
+      "duration_s": 0.0007,
+      "llm_calls": 0,
+      "input_tokens": 0,
+      "output_tokens": 0
+    }
+  ],
+  "usage": {
+    "llm_calls": 7,
+    "input_tokens": 6016,
+    "output_tokens": 342,
+    "cached_input_tokens": 0,
+    "cost_eur": 0.0,
+    "wall_time_s": 0.095,
+    "tool_calls": 0
+  },
+  "config": {
+    "run_id": "7c704708-6ef6-45f6-bbe7-a6e5b1da5908",
+    "tenant_id": "local",
+    "variant": "B",
+    "model_id": "fake-closed",
+    "temperature": 0.0,
+    "concurrency": 4,
+    "kb_top_k": 6,
+    "kb_snapshot_id": null,
+    "budget": {
+      "max_llm_calls": 400,
+      "max_total_tokens": 2000000,
+      "max_seconds": 900.0,
+      "max_repair_iterations": 2,
+      "max_tool_rounds": 40
+    }
+  },
+  "model": {
+    "id": "fake-closed",
+    "gateway_model": "fake-closed",
+    "provider": "fake",
+    "license_class": "closed",
+    "residency": "local"
+  }
+}

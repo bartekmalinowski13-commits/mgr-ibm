@@ -32,3 +32,4 @@ infra/cdk/cdk.out/
 *.key
 # Local outputs
 evals/reports/local/
+*.tsbuildinfo

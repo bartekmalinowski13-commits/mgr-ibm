@@ -1,0 +1,111 @@
+{
+  "status": "completed",
+  "error": null,
+  "trace": [
+    {
+      "step": "plan",
+      "kind": "llm",
+      "agent": "orchestrator",
+      "status": "ok",
+      "summary": "5 planned steps",
+      "started_at": "2026-11-10T03:25:37.112902Z",
+      "duration_s": 0.0006,
+      "llm_calls": 1,
+      "input_tokens": 312,
+      "output_tokens": 40
+    },
+    {
+      "step": "extract",
+      "kind": "llm",
+      "agent": "extractor",
+      "status": "ok",
+      "summary": "28 components via 1 tool calls",
+      "started_at": "2026-11-10T03:25:37.114131Z",
+      "duration_s": 0.0022,
+      "llm_calls": 2,
+      "input_tokens": 2194,
+      "output_tokens": 1087
+    },
+    {
+      "step": "group",
+      "kind": "llm",
+      "agent": "grouper",
+      "status": "ok",
+      "summary": "22 lines",
+      "started_at": "2026-11-10T03:25:37.116908Z",
+      "duration_s": 0.0036,
+      "llm_calls": 1,
+      "input_tokens": 1816,
+      "output_tokens": 1291
+    },
+    {
+      "step": "select",
+      "kind": "llm",
+      "agent": "selector",
+      "status": "ok",
+      "summary": "selected parts for 6/7 lines",
+      "started_at": "2026-11-10T03:25:37.121866Z",
+      "duration_s": 0.0069,
+      "llm_calls": 7,
+      "input_tokens": 6016,
+      "output_tokens": 342
+    },
+    {
+      "step": "validate",
+      "kind": "llm",
+      "agent": "validator",
+      "status": "ok",
+      "summary": "1 issues, 0 lines to reselect",
+      "started_at": "2026-11-10T03:25:37.130077Z",
+      "duration_s": 0.001,
+      "llm_calls": 1,
+      "input_tokens": 2100,
+      "output_tokens": 32
+    },
+    {
+      "step": "compose",
+      "kind": "llm",
+      "agent": "composer",
+      "status": "ok",
+      "summary": "22 final lines",
+      "started_at": "2026-11-10T03:25:37.132787Z",
+      "duration_s": 0.0018,
+      "llm_calls": 1,
+      "input_tokens": 2095,
+      "output_tokens": 1357
+    }
+  ],
+  "usage": {
+    "llm_calls": 13,
+    "input_tokens": 14533,
+    "output_tokens": 4149,
+    "cached_input_tokens": 0,
+    "cost_eur": 0.0,
+    "wall_time_s": 0.033,
+    "tool_calls": 1
+  },
+  "config": {
+    "run_id": "737176f5-d788-496f-b8ae-a9a4d1f6e8ca",
+    "tenant_id": "local",
+    "variant": "A",
+    "model_id": "fake-closed",
+    "temperature": 0.0,
+    "concurrency": 4,
+    "kb_top_k": 6,
+    "kb_snapshot_id": null,
+    "budget": {
+      "max_llm_calls": 400,
+      "max_total_tokens": 2000000,
+      "max_seconds": 900.0,
+      "max_repair_iterations": 2,
+      "max_tool_rounds": 40
+    }
+  },
+  "model": {
+    "id": "fake-closed",
+    "gateway_model": "fake-closed",
+    "provider": "fake",
+    "license_class": "closed",
+    "residency": "local"
+  }
+}

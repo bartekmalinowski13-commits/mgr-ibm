@@ -1,0 +1,87 @@
+{
+  "design": "ecg-frontend",
+  "variant": "B:fake-closed",
+  "model": "",
+  "lines": {
+    "tp": 22,
+    "fp": 0,
+    "fn": 0
+  },
+  "designators": {
+    "tp": 28,
+    "fp": 0,
+    "fn": 0
+  },
+  "fields": {
+    "value": {
+      "correct": 28,
+      "compared": 28
+    },
+    "footprint": {
+      "correct": 28,
+      "compared": 28
+    },
+    "mpn": {
+      "correct": 26,
+      "compared": 26
+    },
+    "manufacturer": {
+      "correct": 24,
+      "compared": 26
+    },
+    "dnp": {
+      "correct": 28,
+      "compared": 28
+    },
+    "quantity": {
+      "correct": 22,
+      "compared": 22
+    }
+  },
+  "hallucinations": {
+    "predicted_mpns": 21,
+    "hallucinated": 0,
+    "examples": []
+  },
+  "usage": {
+    "llm_calls": 7,
+    "input_tokens": 6016,
+    "output_tokens": 342,
+    "cached_input_tokens": 0,
+    "cost_eur": 0.0,
+    "wall_time_s": 0.095,
+    "tool_calls": 0
+  },
+  "diffs": [
+    {
+      "refdes": "C1",
+      "field": "manufacturer",
+      "predicted": "Samsung",
+      "expected": "Murata"
+    },
+    {
+      "refdes": "C2",
+      "field": "manufacturer",
+      "predicted": "Samsung",
+      "expected": "Murata"
+    }
+  ],
+  "summary": {
+    "line_precision": 1.0,
+    "line_recall": 1.0,
+    "line_f1": 1.0,
+    "designator_f1": 1.0,
+    "mpn_hallucination_rate": 0.0,
+    "input_tokens": 6016.0,
+    "output_tokens": 342.0,
+    "llm_calls": 7.0,
+    "cost_eur": 0.0,
+    "wall_time_s": 0.095,
+    "acc_value": 1.0,
+    "acc_footprint": 1.0,
+    "acc_mpn": 1.0,
+    "acc_manufacturer": 0.9230769230769231,
+    "acc_dnp": 1.0,
+    "acc_quantity": 1.0
+  }
+}

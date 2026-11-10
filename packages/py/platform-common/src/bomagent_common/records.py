@@ -122,6 +122,12 @@ async def get_design(conn: AsyncConnection, design_id: uuid.UUID) -> Row | None:
     return await _one(conn, "SELECT * FROM app.designs WHERE id = :id", {"id": design_id})
 
 
+async def list_designs(
+    conn: AsyncConnection, project_id: uuid.UUID, limit: int, cursor: str | None
+) -> tuple[list[Row], str | None]:
+    return await _page(conn, "app.designs", "project_id = :pid", {"pid": project_id}, limit, cursor)
+
+
 async def set_design_status(
     conn: AsyncConnection,
     design_id: uuid.UUID,

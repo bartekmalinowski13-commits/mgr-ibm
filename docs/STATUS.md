@@ -12,7 +12,10 @@ _Aktualizuje Claude Code po każdym kamieniu milowym (patrz `docs/prompts/CLAUDE
 | M3 Agenci A/B | ✅ | gałąź `feat/m3-agents-runtimes` (na M0–M2) | Claude z projektu (sesja stanęła po M2) |
 | M4 API – część 1 (przebiegi end-to-end) | ✅ | gałąź `feat/m4-runs-api` (na M3) | Claude z projektu |
 | M4 część 2 (onboarding, SSO, klucze API, metering) | ⏳ | `docs/plans/M4-runs-api.md` | – |
-| M5–M8 | ⏳ | – | – |
+| M5 Frontend – część 1 | ✅ | gałąź `feat/m5-web` (na M4) | Claude z projektu |
+| M5 część 2, M6–M8 | ⏳ | `docs/plans/M5-web.md` | – |
+
+**Frontend (`feat/m5-web`):** vitest 10/10, Playwright 18/18 (w tym axe WCAG 2.1 AA, mobile smoke), `tsc`, `biome` czyste; zrzuty w `docs/design/screens/m5/`. Uruchom: `pnpm --filter @bomagent/web dev:mock`.
 
 **Weryfikacja (lokalnie, Postgres 16 + pgvector natywnie):** 341 testów zielonych na `feat/m4-runs-api` (w tym izolacja tenantów, integracyjne, kontrakt OpenAPI), pokrycie 95%, `ruff`, `mypy --strict`, `import-linter` czyste. Ścieżka dockerowa (`just up`, Testcontainers, E2E) **nie była uruchomiona** – w obu środowiskach brak demona Dockera; sprawdzi ją CI.
 
@@ -30,14 +33,14 @@ uv run bomagent run evals/fixtures/kicad/pulse-ox --variant A --trace trace.json
 Patrz `docs/DECISIONS_LOG.md`, kolumna „Do akceptacji = tak” (m.in. moto zamiast LocalStack, pypdf zamiast PyMuPDF – licencja AGPL, wymiar embeddingów 1024, checkpointy LangGraph w M4, adapter Claude Agent SDK tylko z Bedrock UE).
 
 ### Potrzebne od człowieka
-1. Scalić gałęzie do `main` po kolei (każda bazuje na poprzedniej): `claude/code-master-prompt-part-2-5651f9` (M0–M2) → `feat/m3-agents-runtimes` → `feat/m4-runs-api`; zobaczyć wynik CI (pierwsze uruchomienie Dockera/E2E).
+1. Scalić gałęzie do `main` po kolei (każda bazuje na poprzedniej): `claude/code-master-prompt-part-2-5651f9` (M0–M2) → `feat/m3-agents-runtimes` → `feat/m4-runs-api` → `feat/m5-web`; zobaczyć wynik CI (pierwsze uruchomienie Dockera/E2E).
 2. Konto AWS (organizacja, region eu-central-1) – dopiero do M6.
 3. Dostęp do modeli w UE (Bedrock EU, Azure OpenAI EU Data Zone) – włączenie modeli w `packages/py/llm/src/bomagent_llm/catalog/models.yaml` (`enabled`/`verified`) po sprawdzeniu ID w konsoli.
 4. Decyzja o zbiorze ewaluacyjnym (`docs/thesis/ZBIOR_EWALUACYJNY_KANDYDACI.md` na `main`).
 
 ### Następne kroki
 1. M4 część 2: onboarding organizacji, SSO per organizacja, klucze API, metering/limity, KB admin, edycja BOM → wiedza tenanta, checkpointy LangGraph w Postgresie, klient TS.
-2. M5: frontend wg `docs/design/UX_GUIDELINES.md`.
+2. M5 część 2: logowanie OIDC w UI, baza wiedzy, edycja BOM, ustawienia organizacji.
 3. M6: CDK + cdk-nag.
 4. M7: kolejne formaty (IPC-2581, PDF, DXF; spike’i Altium/OrCAD).
 5. M8: eksperyment na prawdziwych modelach (A/B × zamknięty/otwarty × N).

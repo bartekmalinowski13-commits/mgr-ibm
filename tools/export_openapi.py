@@ -27,4 +27,4 @@ def openapi() -> dict[str, object]:
 if __name__ == "__main__":
     out = Path(sys.argv[1] if len(sys.argv) > 1 else "services/api/openapi.json")
     out.write_text(json.dumps(openapi(), indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    print(f"wrote {out}")  # noqa: T201
+    print(f"wrote {out}")

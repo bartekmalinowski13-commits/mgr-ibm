@@ -247,6 +247,25 @@ async def create_design(
     return DesignCreated.model_validate(_design(row).model_dump() | {"uploads": uploads})
 
 
+@router.get("/projects/{project_id}/designs", response_model=Page[Design], tags=["designs"])
+async def list_designs(
+    project_id: uuid.UUID,
+    ctx: Ctx,
+    svc: Svc,
+    limit: Annotated[int, Query(ge=1, le=100)] = 20,
+    cursor: str | None = None,
+) -> Page[Design]:
+    require(*CAN_READ)(ctx)
+    try:
+        async with tenant_transaction(svc.engine, ctx.tenant_id) as conn:
+            if await records.get_project(conn, project_id) is None:
+                raise not_found("project")
+            rows, nxt = await records.list_designs(conn, project_id, limit, cursor)
+    except ValueError as exc:
+        raise ProblemError(400, "Bad Request", str(exc), slug="bad-cursor") from exc
+    return Page[Design](items=[_design(r) for r in rows], next_cursor=nxt)
+
+
 @router.post(
     "/designs/{design_id}/complete", status_code=202, response_model=Design, tags=["designs"]
 )

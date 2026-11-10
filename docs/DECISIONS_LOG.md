@@ -33,3 +33,8 @@ Założenia przyjęte bez konsultacji (człowiek niedostępny). Format: data · 
 | 2026-11-10 | M4 w nocy – jaki zakres? | część 1: przebiegi end-to-end przez API (projekty, upload, parsowanie, przebiegi, BOM, SSE, audyt), gałąź `feat/m4-runs-api` | daje działający kręgosłup produktu do review; onboarding/SSO/klucze API/metering w części 2 | tak |
 | 2026-11-10 | Tryb uwierzytelniania lokalnie | `BOMAGENT_AUTH_MODE=dev` (HS256, sekret z env, domyślny tylko w compose); w kodzie blokada dla staging/prod | lokalny stos i testy bez IdP; produkcja wyłącznie OIDC | nie |
 | 2026-11-10 | Gdzie SQL projektów/przebiegów | `bomagent_common.records` (fundament), używany przez API i workery | serwisy nie mogą importować się nawzajem (import-linter); jedna implementacja statusów | nie |
+| 2026-11-10 | Tabela BOM: TanStack Table czy własna? | zwykła tabela HTML + `useMemo` | 22–200 wierszy, brak sortowania wielokolumnowego; mniej zależności; TanStack Table można dodać przy edycji BOM | nie |
+| 2026-11-10 | Walidacja formularzy w UI | react-hook-form bez zod (reguły w `register`) | proste formularze; walidacja źródłowa jest w API (Pydantic) | nie |
+| 2026-11-10 | Routing | TanStack Router w wersji code-based (bez generatora plików) | 9 ekranów; mniej magii w buildzie | nie |
+| 2026-11-10 | Porównanie A vs B w UI | metryki liczone w przeglądarce z BOM + śladów obu przebiegów; „lepszy wynik” tylko dla kosztów (wywołania, tokeny, czas) | jakość (F1, halucynacje) wymaga BOM referencyjnego – to `bomagent eval`, nie UI produktu | tak |
+| 2026-11-10 | Tryb mock w UI | `VITE_API_MODE=mock` – dane z prawdziwych przebiegów symulatora, wyraźny znacznik „Tryb demonstracyjny” | review i E2E bez backendu; domyślnie UI używa HTTP | nie |
