@@ -15,7 +15,17 @@
       "!docs",
       "!tools",
       "!**/*.gen.ts",
-      "!services/api/openapi.json"
+      "!services/api/openapi.json",
+      "!**/*.md",
+      "!**/*.yaml",
+      "!**/*.yml",
+      "!evals",
+      "!**/*.html",
+      "!**/*.css",
+      "!packages/py",
+      "!services",
+      "!tests",
+      "!deploy"
     ]
   },
   "formatter": {
