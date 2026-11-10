@@ -84,6 +84,16 @@ async def test_injected_document_is_indexed_with_suspicious_chunks_flagged(stack
     assert got["status"] == "indexed"
 
 
+async def test_unfinished_registration_gets_a_new_upload_url(stack, make_tenant):
+    ctx = await make_tenant()
+    h = stack.token(ctx)
+    first = (await stack.client.post("/v1/kb/documents", json=_body(DATASHEET), headers=h)).json()
+    retry = await stack.client.post("/v1/kb/documents", json=_body(DATASHEET), headers=h)
+    assert retry.status_code == 200
+    assert retry.json()["id"] == first["id"]
+    assert retry.json()["upload"]["url"].startswith(f"memory://put/tenants/{ctx.tenant_id}/kb/")
+
+
 async def test_validation_and_roles(stack, make_tenant):
     ctx = await make_tenant()
     h = stack.token(ctx)

@@ -506,7 +506,7 @@ export interface components {
             status: "pending" | "indexing" | "indexed" | "failed";
             /** Title */
             title: string;
-            /** @description Absent when the same file is already in the knowledge base. */
+            /** @description Absent when the same file is already indexed (or being indexed). */
             upload?: components["schemas"]["UploadTarget"] | null;
         };
         /** KbDocumentIn */

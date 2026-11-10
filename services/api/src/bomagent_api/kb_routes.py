@@ -74,7 +74,8 @@ class KbDocument(BaseModel):
 
 class KbDocumentCreated(KbDocument):
     upload: UploadTarget | None = Field(
-        default=None, description="Absent when the same file is already in the knowledge base."
+        default=None,
+        description="Absent when the same file is already indexed (or being indexed).",
     )
 
 
@@ -112,14 +113,19 @@ async def create_document(
             row = await get_document(conn, stored_id)
     if row is None:  # pragma: no cover - just written in this tenant
         raise not_found("document")
-    if not created:
+    if not created and row["status"] in ("indexing", "indexed"):
         existing = KbDocumentCreated.model_validate(_doc(row).model_dump())
         return JSONResponse(existing.model_dump(mode="json"), status_code=200)
+    # new document, or an earlier registration whose upload never finished: (re)issue the URL
+    key = str(row["object_key"])
     with tenant_scope(ctx):
         url = await svc.store.presign_put(key)
-    return KbDocumentCreated.model_validate(
-        _doc(row).model_dump() | {"upload": UploadTarget(filename=body.filename, url=url)}
+    doc = KbDocumentCreated.model_validate(
+        _doc(row).model_dump() | {"upload": UploadTarget(filename=key.rsplit("/", 1)[-1], url=url)}
     )
+    if created:
+        return doc
+    return JSONResponse(doc.model_dump(mode="json"), status_code=200)
 
 
 @router.post("/documents/{document_id}/complete", status_code=202, response_model=KbDocument)
