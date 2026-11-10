@@ -43,6 +43,19 @@ export async function uploadFile(projectId: string, file: File): Promise<Schemas
   return json as Schemas["FileInfo"];
 }
 
+export async function evaluateRun(runId: string, file: File): Promise<Schemas["Evaluation"]> {
+  const body = new FormData();
+  body.append("reference", file, file.name);
+  const resp = await fetch(`/v1/runs/${runId}/evaluation`, {
+    method: "POST",
+    headers: headers(),
+    body,
+  });
+  const json = await resp.json();
+  if (!resp.ok) throw new ApiError(resp.status, json as Problem);
+  return json as Schemas["Evaluation"];
+}
+
 export async function downloadCsv(runId: string): Promise<Blob> {
   const resp = await fetch(`/v1/runs/${runId}/bom.csv`, { headers: headers() });
   if (!resp.ok) throw new ApiError(resp.status, (await resp.json()) as Problem);

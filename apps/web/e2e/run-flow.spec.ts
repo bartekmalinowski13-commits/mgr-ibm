@@ -48,6 +48,11 @@ test("new run from a template -> live progress -> BOM -> provenance -> correctio
   await expect(page.getByText("Gotowy")).toBeVisible();
   await expectAccessible(page);
 
+  await page.getByTestId("reference-input").setInputFiles(path.join(FIXTURE, "reference_bom.csv"));
+  await expect(page.getByText("F1 pozycji")).toBeVisible();
+  await expect(page.getByText(/rozbieżnoś/)).toBeVisible();
+  await expectAccessible(page);
+
   const row = page.locator("tbody tr").filter({ hasText: "C4" });
   await row.click();
   const panel = page.getByRole("complementary", { name: /Pozycja/ });

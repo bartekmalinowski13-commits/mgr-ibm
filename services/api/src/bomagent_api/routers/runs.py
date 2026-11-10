@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import asyncio
 import json
+import math
 import uuid
 from collections.abc import AsyncIterator
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Header, Request
+from fastapi import APIRouter, Header, Request, UploadFile
 from fastapi.responses import PlainTextResponse, StreamingResponse
 from sqlalchemy import text
 
@@ -21,8 +22,12 @@ from bomagent_api.routers.projects import deliver_now, get_project
 from bomagent_api.schemas import (
     BomEnvelope,
     BomItemPatch,
+    Counts,
+    Evaluation,
+    FieldAccuracy,
     ModelOption,
     Page,
+    ReferenceDiff,
     Run,
     RunCreate,
     problem_responses,
@@ -34,6 +39,8 @@ from bomagent_common.db import tenant_transaction
 from bomagent_common.messaging import Message
 from bomagent_common.outbox import enqueue
 from bomagent_common.problems import ProblemError
+from bomagent_eval.metrics import evaluate
+from bomagent_eval.reference import load_reference_csv
 from bomagent_llm.catalog import ModelNotAllowedError
 
 router = APIRouter(
@@ -280,6 +287,64 @@ async def read_bom(request: Request, ctx: OrgContext, run_id: uuid.UUID) -> BomE
     async with tenant_transaction(request.app.state.engine) as conn:
         _, version, bom = await latest_bom(conn, run_id)
     return BomEnvelope(run_id=run_id, version=version, bom=bom)
+
+
+MAX_REFERENCE = 1024 * 1024
+
+
+@router.post("/{run_id}/evaluation", summary="Evaluate the latest BOM against a reference BOM")
+async def evaluate_bom(
+    request: Request, ctx: OrgContext, run_id: uuid.UUID, reference: UploadFile
+) -> Evaluation:
+    """Metrics of the thesis (line P/R/F1, designators, field accuracy, MPN coverage)
+    against a reference BOM CSV the user uploads. Nothing is stored except an audit
+    event; the CSV is parsed as plain text (no design-file parser runs in the API)."""
+    require(ctx, "bom.read")
+    raw = await reference.read(MAX_REFERENCE + 1)
+    if len(raw) > MAX_REFERENCE:
+        raise ProblemError(
+            413, "Payload Too Large", "reference BOM larger than 1 MB", slug="file-too-large"
+        )
+    try:
+        ref_items = load_reference_csv(raw.decode("utf-8-sig"))
+    except (UnicodeDecodeError, ValueError) as exc:
+        raise ProblemError(
+            422,
+            "Unprocessable Entity",
+            "the reference must be a CSV BOM with a designator column (e.g. Reference)",
+            slug="invalid-reference",
+        ) from exc
+    if not ref_items:
+        raise ProblemError(
+            422, "Unprocessable Entity", "the reference BOM has no lines", slug="invalid-reference"
+        )
+    async with tenant_transaction(request.app.state.engine) as conn:
+        _, version, bom = await latest_bom(conn, run_id)
+        report = evaluate(bom, ref_items, design=bom.design_name, variant=bom.variant)
+        summary = {k: (None if math.isnan(v) else round(v, 6)) for k, v in report.summary().items()}
+        await emit_audit(
+            conn,
+            AuditEvent(
+                action="bom.evaluated",
+                object_type="run",
+                object_id=str(run_id),
+                after={
+                    "version": version,
+                    "reference_lines": len(ref_items),
+                    "line_f1": summary.get("line_f1"),
+                },
+            ),
+        )
+    return Evaluation(
+        run_id=run_id,
+        version=version,
+        reference_lines=len(ref_items),
+        summary=summary,
+        lines=Counts(**report.lines.model_dump()),
+        designators=Counts(**report.designators.model_dump()),
+        fields={k: FieldAccuracy(**v.model_dump()) for k, v in report.fields.items()},
+        diffs=[ReferenceDiff(**d.model_dump()) for d in report.diffs],
+    )
 
 
 @router.get(

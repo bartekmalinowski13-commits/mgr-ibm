@@ -282,6 +282,20 @@
         "title": "AuditEventOut",
         "type": "object"
       },
+      "Body_evaluate_bom_v1_runs__run_id__evaluation_post": {
+        "properties": {
+          "reference": {
+            "contentMediaType": "application/octet-stream",
+            "title": "Reference",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reference"
+        ],
+        "title": "Body_evaluate_bom_v1_runs__run_id__evaluation_post",
+        "type": "object"
+      },
       "Body_upload_file_v1_projects__project_id__files_post": {
         "properties": {
           "file": {
@@ -604,6 +618,119 @@
           "first_broken_seq"
         ],
         "title": "ChainStatus",
+        "type": "object"
+      },
+      "Counts": {
+        "additionalProperties": false,
+        "properties": {
+          "fn": {
+            "title": "Fn",
+            "type": "integer"
+          },
+          "fp": {
+            "title": "Fp",
+            "type": "integer"
+          },
+          "tp": {
+            "title": "Tp",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "tp",
+          "fp",
+          "fn"
+        ],
+        "title": "Counts",
+        "type": "object"
+      },
+      "Evaluation": {
+        "additionalProperties": false,
+        "properties": {
+          "designators": {
+            "$ref": "#/components/schemas/Counts"
+          },
+          "diffs": {
+            "items": {
+              "$ref": "#/components/schemas/ReferenceDiff"
+            },
+            "title": "Diffs",
+            "type": "array"
+          },
+          "fields": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/FieldAccuracy"
+            },
+            "title": "Fields",
+            "type": "object"
+          },
+          "lines": {
+            "$ref": "#/components/schemas/Counts"
+          },
+          "reference_lines": {
+            "title": "Reference Lines",
+            "type": "integer"
+          },
+          "run_id": {
+            "format": "uuid",
+            "title": "Run Id",
+            "type": "string"
+          },
+          "summary": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "description": "Thesis metrics (line P/R/F1, designator F1, MPN coverage, field accuracy, usage); null where a metric is undefined",
+            "title": "Summary",
+            "type": "object"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "run_id",
+          "version",
+          "reference_lines",
+          "summary",
+          "lines",
+          "designators",
+          "fields",
+          "diffs"
+        ],
+        "title": "Evaluation",
+        "type": "object"
+      },
+      "FieldAccuracy": {
+        "additionalProperties": false,
+        "properties": {
+          "compared": {
+            "title": "Compared",
+            "type": "integer"
+          },
+          "correct": {
+            "title": "Correct",
+            "type": "integer"
+          },
+          "reference_total": {
+            "title": "Reference Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "correct",
+          "compared",
+          "reference_total"
+        ],
+        "title": "FieldAccuracy",
         "type": "object"
       },
       "FileInfo": {
@@ -1626,6 +1753,35 @@
         ],
         "title": "ProvenanceKind",
         "type": "string"
+      },
+      "ReferenceDiff": {
+        "additionalProperties": false,
+        "properties": {
+          "expected": {
+            "title": "Expected",
+            "type": "string"
+          },
+          "field": {
+            "title": "Field",
+            "type": "string"
+          },
+          "predicted": {
+            "title": "Predicted",
+            "type": "string"
+          },
+          "refdes": {
+            "title": "Refdes",
+            "type": "string"
+          }
+        },
+        "required": [
+          "refdes",
+          "field",
+          "predicted",
+          "expected"
+        ],
+        "title": "ReferenceDiff",
+        "type": "object"
       },
       "Requirements": {
         "additionalProperties": false,
@@ -5972,6 +6128,170 @@
           }
         },
         "summary": "Correct a BOM line (new version)",
+        "tags": [
+          "runs"
+        ]
+      }
+    },
+    "/v1/runs/{run_id}/evaluation": {
+      "post": {
+        "description": "Metrics of the thesis (line P/R/F1, designators, field accuracy, MPN coverage)\nagainst a reference BOM CSV the user uploads. Nothing is stored except an audit\nevent; the CSV is parsed as plain text (no design-file parser runs in the API).",
+        "operationId": "evaluate_bom_v1_runs__run_id__evaluation_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Run Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-org-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Org-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_evaluate_bom_v1_runs__run_id__evaluation_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Evaluation"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {}
+            },
+            "description": "Problem details (RFC 9457)"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {}
+            },
+            "description": "Problem details (RFC 9457)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {}
+            },
+            "description": "Problem details (RFC 9457)"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {}
+            },
+            "description": "Problem details (RFC 9457)"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {}
+            },
+            "description": "Problem details (RFC 9457)"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {}
+            },
+            "description": "Problem details (RFC 9457)"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {}
+            },
+            "description": "Problem details (RFC 9457)"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {}
+            },
+            "description": "Problem details (RFC 9457)"
+          }
+        },
+        "summary": "Evaluate the latest BOM against a reference BOM",
         "tags": [
           "runs"
         ]

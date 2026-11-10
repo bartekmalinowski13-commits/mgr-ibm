@@ -20,5 +20,7 @@ Logowanie (lokalne), onboarding (organizacja, dołączenie kodem zaproszenia), s
 
 Porównanie wariantów A/B: metryki przebiegów (pozycje, wywołania LLM, tokeny, koszt, uwagi) i różnice per oznaczenie (wartość, producent, MPN) z kolorem pochodzenia.
 
+Ocena względem BOM referencyjnego: użytkownik wgrywa CSV (≤ 1 MB, nie jest zapisywany), API liczy metryki z `bomagent_eval` (te same co w eksperymencie), zdarzenie audytowe `bom.evaluated`.
+
 ## Do zrobienia w M5 (kolejne kroki)
-Porównanie z BOM referencyjnym (P/R/F1 – wymaga wgrania referencji i endpointu ewaluacji), Baza wiedzy (dokumenty organizacji, stan indeksowania – wymaga endpointów KB w API), oś kroków przebiegu z rodzajem kroku (wymaga zdarzeń kroków w SSE), logowanie Cognito (PKCE) razem z M6, zrzuty ekranów w PR.
+Baza wiedzy (dokumenty organizacji, stan indeksowania – wymaga endpointów KB w API), oś kroków przebiegu z rodzajem kroku (wymaga zdarzeń kroków w SSE), logowanie Cognito (PKCE) razem z M6, zrzuty ekranów w PR.

@@ -19,6 +19,7 @@ import { runRoute } from "../router";
 import { BomTable } from "./BomTable";
 import { LoadError, RunStatus, Skeleton } from "./common";
 import { ItemPanel } from "./ItemPanel";
+import { ReferencePanel } from "./ReferencePanel";
 
 const TERMINAL = new Set(["completed", "failed", "budget_exceeded"]);
 
@@ -166,6 +167,9 @@ export function RunScreen() {
           <div className="flex flex-col gap-4 2xl:flex-row 2xl:items-start">
             <div className="min-w-0 flex-1">
               <BomTable bom={bom.data.bom} selected={selected} onSelect={setSelected} />
+              <div className="mt-6">
+                <ReferencePanel runId={runId} />
+              </div>
             </div>
             {item ? (
               <ItemPanel

@@ -307,3 +307,52 @@ async def test_concurrent_idempotent_posts_and_bom_edits(env):
     )
     assert {r.status_code for r in edits} == {200}, [r.text for r in edits]
     assert sorted(r.json()["version"] for r in edits) == [2, 3, 4, 5, 6]
+
+
+async def test_evaluation_against_a_reference_bom(env):
+    s = uuid.uuid4().hex[:6]
+    alice = await env.org(await env.login(f"alice-{s}"), f"ev-{s}")
+    bob = await env.org(await env.login(f"bob-{s}"), f"ev2-{s}")
+    c = env.client
+    pid = (await c.post("/v1/projects", headers=alice, json={"name": "ecg"})).json()["id"]
+    fixture = KICAD_FIXTURES / "ecg-frontend"
+    for path in sorted(fixture.glob("*.kicad_*")):
+        await c.post(
+            f"/v1/projects/{pid}/files",
+            headers=alice,
+            files={"file": (path.name, path.read_bytes())},
+        )
+    await env.drain("ingest", IngestWorker(env.engine, env.store).handle)
+    run_id = (
+        await c.post("/v1/runs", headers=alice, json={"project_id": pid, "variant": "B"})
+    ).json()["id"]
+    retriever = await InMemoryRetriever.from_directory(FIXTURES / "datasheets")
+    worker = RunWorker(
+        engine=env.engine,
+        store=env.store,
+        chat=FakeChat(heuristic_responder),
+        kb=env.kb,
+        retriever_factory=lambda t, snap: retriever,
+    )
+    await env.drain("runs", worker.handle)
+
+    reference = (fixture / "reference_bom.csv").read_bytes()
+    url = f"/v1/runs/{run_id}/evaluation"
+    resp = await c.post(url, headers=alice, files={"reference": ("ref.csv", reference)})
+    assert resp.status_code == 200, resp.text
+    report = resp.json()
+    assert report["summary"]["line_f1"] > 0.8
+    assert report["lines"]["tp"] > 0
+    assert set(report["fields"]) >= {"mpn", "value"}
+    assert all({"refdes", "field", "predicted", "expected"} <= set(d) for d in report["diffs"])
+
+    bad = await c.post(url, headers=alice, files={"reference": ("ref.csv", b"just,some\nnoise")})
+    assert bad.status_code == 422
+    huge = await c.post(
+        url, headers=alice, files={"reference": ("ref.csv", b"a" * (1024 * 1024 + 1))}
+    )
+    assert huge.status_code == 413
+    other = await c.post(url, headers=bob, files={"reference": ("ref.csv", reference)})
+    assert other.status_code == 404
+    events = (await c.get("/v1/audit-events", headers=alice)).json()["items"]
+    assert "bom.evaluated" in [e["action"] for e in events]

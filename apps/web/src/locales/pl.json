@@ -301,5 +301,24 @@
     "differences_other": "{{count}} różnicy między wariantami",
     "same": "Oba warianty zdecydowały tak samo dla każdego oznaczenia.",
     "missing": "Brak w tym wariancie"
+  },
+  "reference": {
+    "title": "Porównanie z BOM referencyjnym",
+    "lead": "Wgraj zweryfikowany BOM (CSV z kolumną oznaczeń, np. Reference). Policzymy precyzję, czułość i F1 pozycji, pokrycie MPN i dokładność pól. Plik nie jest zapisywany.",
+    "upload": "Wgraj BOM referencyjny",
+    "metrics": {
+      "line_f1": "F1 pozycji",
+      "line_precision": "Precyzja",
+      "line_recall": "Czułość",
+      "designator_f1": "F1 oznaczeń",
+      "mpn_coverage": "Pokrycie MPN"
+    },
+    "diffs_one": "{{count}} rozbieżność",
+    "diffs_few": "{{count}} rozbieżności",
+    "diffs_many": "{{count}} rozbieżności",
+    "diffs_other": "{{count}} rozbieżności",
+    "field": "Pole",
+    "predicted": "W zestawieniu",
+    "expected": "W referencji"
   }
 }

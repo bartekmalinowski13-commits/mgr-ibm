@@ -431,6 +431,28 @@ export interface paths {
         patch: operations["patch_item_v1_runs__run_id__bom_items__line__patch"];
         trace?: never;
     };
+    "/v1/runs/{run_id}/evaluation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Evaluate the latest BOM against a reference BOM
+         * @description Metrics of the thesis (line P/R/F1, designators, field accuracy, MPN coverage)
+         *     against a reference BOM CSV the user uploads. Nothing is stored except an audit
+         *     event; the CSV is parsed as plain text (no design-file parser runs in the API).
+         */
+        post: operations["evaluate_bom_v1_runs__run_id__evaluation_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/runs/{run_id}/events": {
         parameters: {
             query?: never;
@@ -570,6 +592,11 @@ export interface components {
             /** Seq */
             seq: number;
         };
+        /** Body_evaluate_bom_v1_runs__run_id__evaluation_post */
+        Body_evaluate_bom_v1_runs__run_id__evaluation_post: {
+            /** Reference */
+            reference: string;
+        };
         /** Body_upload_file_v1_projects__project_id__files_post */
         Body_upload_file_v1_projects__project_id__files_post: {
             /** File */
@@ -705,6 +732,51 @@ export interface components {
             first_broken_seq: number | null;
             /** Ok */
             ok: boolean;
+        };
+        /** Counts */
+        Counts: {
+            /** Fn */
+            fn: number;
+            /** Fp */
+            fp: number;
+            /** Tp */
+            tp: number;
+        };
+        /** Evaluation */
+        Evaluation: {
+            designators: components["schemas"]["Counts"];
+            /** Diffs */
+            diffs: components["schemas"]["ReferenceDiff"][];
+            /** Fields */
+            fields: {
+                [key: string]: components["schemas"]["FieldAccuracy"];
+            };
+            lines: components["schemas"]["Counts"];
+            /** Reference Lines */
+            reference_lines: number;
+            /**
+             * Run Id
+             * Format: uuid
+             */
+            run_id: string;
+            /**
+             * Summary
+             * @description Thesis metrics (line P/R/F1, designator F1, MPN coverage, field accuracy, usage); null where a metric is undefined
+             */
+            summary: {
+                [key: string]: number | null;
+            };
+            /** Version */
+            version: number;
+        };
+        /** FieldAccuracy */
+        FieldAccuracy: {
+            /** Compared */
+            compared: number;
+            /** Correct */
+            correct: number;
+            /** Reference Total */
+            reference_total: number;
         };
         /** FileInfo */
         FileInfo: {
@@ -1070,6 +1142,17 @@ export interface components {
          * @enum {string}
          */
         ProvenanceKind: "parser" | "rule" | "agent" | "user";
+        /** ReferenceDiff */
+        ReferenceDiff: {
+            /** Expected */
+            expected: string;
+            /** Field */
+            field: string;
+            /** Predicted */
+            predicted: string;
+            /** Refdes */
+            refdes: string;
+        };
         /**
          * Requirements
          * @description Device requirements entered in the "Nowy przebieg" modal.
@@ -3858,6 +3941,115 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BomEnvelope"];
+                };
+            };
+            /** @description Problem details (RFC 9457) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Problem details (RFC 9457) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Problem details (RFC 9457) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Problem details (RFC 9457) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Problem details (RFC 9457) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Problem details (RFC 9457) */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Problem details (RFC 9457) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Problem details (RFC 9457) */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+        };
+    };
+    evaluate_bom_v1_runs__run_id__evaluation_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+                "x-org-id"?: string | null;
+            };
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_evaluate_bom_v1_runs__run_id__evaluation_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Evaluation"];
                 };
             };
             /** @description Problem details (RFC 9457) */

@@ -299,5 +299,22 @@
     "differences_other": "{{count}} differences between the variants",
     "same": "Both variants decided the same for every designator.",
     "missing": "Missing in this variant"
+  },
+  "reference": {
+    "title": "Compare with a reference BOM",
+    "lead": "Upload a verified BOM (CSV with a designator column, e.g. Reference). We compute line precision, recall and F1, MPN coverage and field accuracy. The file is not stored.",
+    "upload": "Upload reference BOM",
+    "metrics": {
+      "line_f1": "Line F1",
+      "line_precision": "Precision",
+      "line_recall": "Recall",
+      "designator_f1": "Designator F1",
+      "mpn_coverage": "MPN coverage"
+    },
+    "diffs_one": "{{count}} mismatch",
+    "diffs_other": "{{count}} mismatches",
+    "field": "Field",
+    "predicted": "In this BOM",
+    "expected": "In the reference"
   }
 }

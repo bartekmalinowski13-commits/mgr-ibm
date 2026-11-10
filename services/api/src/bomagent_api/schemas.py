@@ -185,6 +185,39 @@ class ModelOption(_M):
     tier: str | None
 
 
+class Counts(_M):
+    tp: int
+    fp: int
+    fn: int
+
+
+class FieldAccuracy(_M):
+    correct: int
+    compared: int
+    reference_total: int
+
+
+class ReferenceDiff(_M):
+    refdes: str
+    field: str
+    predicted: str
+    expected: str
+
+
+class Evaluation(_M):
+    run_id: uuid.UUID
+    version: int
+    reference_lines: int
+    summary: dict[str, float | None] = Field(
+        description="Thesis metrics (line P/R/F1, designator F1, MPN coverage, field accuracy,"
+        " usage); null where a metric is undefined"
+    )
+    lines: Counts
+    designators: Counts
+    fields: dict[str, FieldAccuracy]
+    diffs: list[ReferenceDiff]
+
+
 class UsageReport(_M):
     plan: Literal["pilot", "team", "business", "enterprise"]
     usage: dict[str, float]
