@@ -17,11 +17,16 @@ _Aktualizuje Claude Code po każdym kamieniu milowym (patrz `docs/prompts/CLAUDE
 | M4 (część) | migracja 0003 (członkostwa, projekty, pliki, przebiegi, niezmienne wersje BOM, klucze idempotencji – wszystko z RLS; logowanie przez `app.user_sub` bez obejścia RLS), API `/v1` (OIDC JWT + lokalny mock IdP tylko local/test, `X-Org-Id` z członkostwem i rolami z bazy, RBAC, projekty, upload plików → ingest-worker, przebiegi 202 → agent-worker + SSE, BOM JSON/CSV, edycja pozycji → nowa wersja + audyt + korekta w KB, audyt + weryfikacja łańcucha), OpenAPI 3.1 (`services/api/openapi.json`) + testy kontraktowe Schemathesis, klient TS `@bomagent/api-client` z kontrolą dryfu w CI + członkowie i zaproszenia (migracja 0004), złożone FK per tenant (0005), poprawki po security review | `600b6a9`, `c1ca0d9`, `0af9249`, `7f00117`, `377ef94`, `31f63b1` | ✅ (oprócz SSO); gotowe też: klucze API (0006), limity planów, rate limiting i metering (0007), transactional outbox + reaper przebiegów (0008); brak: konfiguracja SSO per organizacja (zależy od Cognito – M6) |
 | M5 (część) | `apps/web` (React/Vite/TanStack, tokeny z UX_GUIDELINES): logowanie lokalne, onboarding + dołączanie kodem, przełącznik organizacji, Start z szablonami, projekty + upload, modal Nowy przebieg (A/B/oba), przebieg na żywo (SSE), BOM z paskiem pochodzenia i panelem (uzasadnienie, źródła KB, uwagi, poprawka → nowa wersja), eksport CSV, log audytu, ustawienia (członkowie, zaproszenia, klucze API, zużycie); `packages/ts/ui`; E2E Playwright + axe; `tools/devstack.py` | `f23ec19` + kolejne | ✅ (oprócz logowania Cognito – M6); także porównanie wariantów A/B, ocena względem BOM referencyjnego (`POST /v1/runs/{id}/evaluation`), baza wiedzy (`/v1/kb/documents`) i oś kroków przebiegu (`GET /v1/runs/{id}/trace`); otwarte: oś kroków przebiegu, Cognito/PKCE, zrzuty w PR |
 | M6 | `infra/cdk`: 10 stacków (network, data, identity, compute, WAF us-east-1, edge, observability, kopia backupu eu-west-1, security baseline, CI/CD OIDC), cdk-nag bez niepotwierdzonych uwag, 20 testów asercji, `cdk synth` bez poświadczeń; SCP; logowanie Cognito (PKCE) w `apps/web`; pipeline `main.yml` + `tools/deploy.sh` (wyłączony do `AWS_DEPLOY_ENABLED`); runbooki | `12e774a`…`1ca067a` + kolejne | ✅ kod gotowy, **nie wdrożony** (wdrożenie: Ty, wg `docs/platform/runbooks/`) |
-| M7–M8 | formaty, eksperyment | – | ❌ nie rozpoczęte |
+| M8 (część) | `bomagent experiment run <config.yaml>`: macierz {A,B} × modele × projekty × powtórzenia, ocena każdej odpowiedzi wobec BOM referencyjnego, test permutacyjny par (jednostka = projekt) + bootstrap 95 %, powtarzalność, `manifest.json` (commit, wersje promptów, pakiet reguł, katalog modeli); pilot na fałszywym LLM w `evals/reports/pilot-fake/` | `d3e23aa` | 🟡 narzędzie gotowe; brak: zbiór ewaluacyjny ≥ 6 projektów z zweryfikowanymi BOM-ami, przebiegi na prawdziwych modelach, wykresy do rozdziału 7 |
+| M7 | kolejne formaty | – | ❌ nie rozpoczęte |
 
 Plany i brainstorming: `docs/plans/M0-foundation.md`, `M1-domain-core.md`, `M2-knowledge-base.md`, `M4-platform-backend.md`.
 
 ### Jak uruchomić
+
+```bash
+uv run bomagent experiment run evals/experiments/pilot-fake.yaml   # raport: evals/reports/pilot-fake/report.md
+```
 
 ```bash
 just bootstrap                       # uv sync --all-packages + pnpm install + pre-commit
@@ -83,7 +88,7 @@ just openapi                         # regeneracja openapi.json + typów klienta
 5. **Do wystawienia aplikacji pod linkiem (M4–M6):** konto AWS z dostępem do Bedrock w regionie UE, domena (Route 53 lub dostęp do DNS), rola IAM dla GitHub OIDC (przygotuję szablon), weryfikacja domeny w Amazon SES (maile), decyzja: konta lokalne (e-mail + hasło, Cognito) czy od razu SSO. Hostowanie: AWS `eu-central-1` – SPA na S3 + CloudFront + WAF, API/workery na ECS Fargate, Aurora PostgreSQL, logowanie Amazon Cognito. Wdrożenie uruchamiasz Ty z pipeline'u (ja nie tworzę zasobów w chmurze). Pierwszy admin powstanie przy wdrożeniu – hasło ustawiasz z maila, nie przekazujesz mi go.
 
 ### Następne kroki (dla kolejnej sesji: „kontynuuj”)
-1. M8 (rdzeń pracy): `bomagent experiment run` – macierz {A,B} × {zamknięty, open-weight} × N powtórzeń, statystyka i raport w `evals/reports/`; na fałszywym LLM jako test potoku, wyniki naukowe po dostarczeniu zweryfikowanych BOM-ów referencyjnych i dostępu do modeli w UE.
+1. M8: wykresy i tabele do rozdziału 7 z `results.csv`, test wykrywania wstrzykniętych błędów w raporcie eksperymentu; potem (po Twojej stronie) zbiór ≥ 6 projektów z BOM-ami referencyjnymi i włączenie modeli UE → przebieg właściwy (`evals/experiments/*.yaml`).
 2. M7: kolejne formaty (IPC-2581, ODB++, EDIF, PDF BOM, DXF) z fixture'ami i testami odporności; komunikaty o ograniczeniach w UI.
 3. SSO per organizacja (federacja SAML/OIDC w Cognito + formularz w ustawieniach), kroki przebiegu na żywo w SSE.
 4. Niskie uwagi z review M4 (DECISIONS_LOG), checkpointy LangGraph w Postgresie z RLS, budżet/snapshot KB w adapterze Agent SDK.
