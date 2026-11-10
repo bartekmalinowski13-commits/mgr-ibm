@@ -83,7 +83,7 @@ services:
     build:
       context: ../..
       dockerfile: deploy/docker/python-service.Dockerfile
-      args: { PACKAGE: bomagent-llm, MODULE: bomagent_llm.fake_server }
+      args: { PACKAGE: bomagent-agents, MODULE: bomagent_agents.fake_server }
     depends_on: []
     environment:
       BOMAGENT_PORT: "4010"

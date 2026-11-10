@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Any
 
 import typer
 
@@ -150,6 +150,92 @@ def eval_cmd(
         _write(json.dumps(payload, indent=2) + "\n", out)
     else:
         _write(report_markdown(report), out)
+
+
+def build_chat(model_id: str, cassettes: Path | None) -> Any:
+    """Fake provider for ``fake-*`` models; otherwise the LLM gateway from the environment
+    (``BOMAGENT_LLM_GATEWAY_URL`` / ``BOMAGENT_LLM_GATEWAY_KEY``)."""
+    import os
+
+    from bomagent_agents.fake_responder import heuristic_responder
+    from bomagent_llm.catalog import load_catalog
+    from bomagent_llm.chat import FakeChat, GatewayChat
+
+    spec = load_catalog().get(model_id)
+    if spec.provider == "fake":
+        return FakeChat(heuristic_responder, cassettes)
+    url, key = (
+        os.environ.get("BOMAGENT_LLM_GATEWAY_URL"),
+        os.environ.get("BOMAGENT_LLM_GATEWAY_KEY"),
+    )
+    if not url or not key:
+        raise _fail("set BOMAGENT_LLM_GATEWAY_URL and BOMAGENT_LLM_GATEWAY_KEY for real models")
+    return GatewayChat(url, key)
+
+
+@app.command()
+def run(
+    paths: Annotated[list[Path], typer.Argument(exists=True, help="design files or folder")],
+    variant: Annotated[str, typer.Option(help="A (LLM only) or B (hybrid)")] = "B",
+    runtime: Annotated[
+        str | None, typer.Option(help="langgraph_a|langgraph_b|claude_agent_sdk_a")
+    ] = None,
+    model: Annotated[str, typer.Option(help="model id from the catalogue")] = "fake-closed",
+    kb_dir: Annotated[Path, typer.Option(help="datasheets for retrieval")] = Path(
+        "evals/fixtures/datasheets"
+    ),
+    requirements: Annotated[Path | None, typer.Option(help="Requirements JSON")] = None,
+    reference: Annotated[Path | None, typer.Option(help="reference BOM CSV to score")] = None,
+    cassettes: Annotated[Path | None, typer.Option(help="recorded responses")] = None,
+    out: Annotated[Path | None, typer.Option(help="write BomVersion JSON here")] = None,
+) -> None:
+    """Run variant A or B on a design (fake provider by default; no keys needed)."""
+    import asyncio
+
+    from bomagent_agents.contracts import RunConfig, RunInput
+    from bomagent_agents.registry import context_factory, runtime_for
+    from bomagent_agents.retrieval import InMemoryRetriever
+
+    if variant not in {"A", "B"}:
+        raise _fail("--variant must be A or B")
+    try:
+        design = parse_files(collect_files(paths))
+    except ParseError as exc:
+        raise _fail(f"{exc} [{exc.code}]") from exc
+    chat = build_chat(model, cassettes)
+
+    async def go() -> Any:
+        retriever = await InMemoryRetriever.from_directory(kb_dir)
+        rt = runtime_for(variant, context_factory(chat, retriever), runtime=runtime)
+        result = await rt.run(
+            RunInput(
+                design=design,
+                requirements=load_requirements(requirements),
+                config=RunConfig(variant=variant, model_id=model),  # type: ignore[arg-type]
+            )
+        )
+        return result, await retriever.known_mpns()
+
+    result, known = asyncio.run(go())
+    typer.echo(
+        f"{result.runtime}: {result.status}, {len(result.bom.items)} lines, "
+        f"{result.usage.llm_calls} LLM calls, {result.usage.input_tokens}+"
+        f"{result.usage.output_tokens} tokens, {result.usage.wall_time_s:.2f} s",
+        err=True,
+    )
+    if out is not None:
+        out.write_text(to_json(result.bom) + "\n", encoding="utf-8")
+    if reference is not None:
+        report = evaluate(
+            result.bom,
+            load_reference(reference),
+            known_mpns=known,
+            design_mpns={c.field("MPN") for c in design.components} - {""},
+            design=design.design_name,
+            variant=variant,
+            model=model,
+        )
+        sys.stdout.write(report_markdown(report))
 
 
 def main() -> None:  # pragma: no cover

@@ -190,6 +190,9 @@ version = "0.1.0"
 source = { editable = "services/agent-worker" }
 dependencies = [
     { name = "bomagent-agents" },
+    { name = "bomagent-bom-core" },
+    { name = "bomagent-cad-parsers" },
+    { name = "bomagent-kb" },
     { name = "bomagent-llm" },
     { name = "bomagent-platform-common" },
     { name = "fastapi" },
@@ -199,6 +202,9 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "bomagent-agents", editable = "packages/py/agents" },
+    { name = "bomagent-bom-core", editable = "packages/py/bom-core" },
+    { name = "bomagent-cad-parsers", editable = "packages/py/cad-parsers" },
+    { name = "bomagent-kb", editable = "packages/py/kb" },
     { name = "bomagent-llm", editable = "packages/py/llm" },
     { name = "bomagent-platform-common", editable = "packages/py/platform-common" },
     { name = "fastapi", specifier = ">=0.115" },
@@ -216,9 +222,11 @@ dependencies = [
     { name = "bomagent-llm" },
     { name = "bomagent-platform-common" },
     { name = "bomagent-rules" },
+    { name = "fastapi" },
     { name = "langgraph" },
     { name = "opentelemetry-api" },
     { name = "pydantic" },
+    { name = "uvicorn", extra = ["standard"] },
 ]
 
 [package.metadata]
@@ -229,9 +237,11 @@ requires-dist = [
     { name = "bomagent-llm", editable = "packages/py/llm" },
     { name = "bomagent-platform-common", editable = "packages/py/platform-common" },
     { name = "bomagent-rules", editable = "packages/py/rules" },
+    { name = "fastapi", specifier = ">=0.115" },
     { name = "langgraph", specifier = ">=0.2.60" },
     { name = "opentelemetry-api", specifier = ">=1.28" },
     { name = "pydantic", specifier = ">=2.9" },
+    { name = "uvicorn", extras = ["standard"], specifier = ">=0.32" },
 ]
 
 [[package]]

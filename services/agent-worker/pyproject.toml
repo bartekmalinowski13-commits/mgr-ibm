@@ -11,6 +11,9 @@ dependencies = [
     "bomagent-platform-common",
     "bomagent-agents",
     "bomagent-llm",
+    "bomagent-kb",
+    "bomagent-cad-parsers",
+    "bomagent-bom-core",
 ]
 
 [build-system]
@@ -24,3 +27,6 @@ packages = ["src/bomagent_agent_worker"]
 bomagent-platform-common = { workspace = true }
 bomagent-agents = { workspace = true }
 bomagent-llm = { workspace = true }
+bomagent-kb = { workspace = true }
+bomagent-cad-parsers = { workspace = true }
+bomagent-bom-core = { workspace = true }

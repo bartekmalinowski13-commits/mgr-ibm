@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 
+import pytest
 from typer.testing import CliRunner
 
 from bomagent_bom.model import BomVersion
@@ -98,3 +99,37 @@ def test_bom_reports_parse_errors(tmp_path):
     result = runner.invoke(app, ["bom", str(bad)])
     assert result.exit_code == 2
     assert "kicad.legacy" in result.output
+
+
+def test_run_variants_with_fake_provider(tmp_path):
+    out = tmp_path / "bom.json"
+    for variant in ("A", "B"):
+        result = runner.invoke(
+            app,
+            [
+                "run",
+                str(ECG),
+                "--variant",
+                variant,
+                "--kb-dir",
+                str(KICAD_FIXTURES.parent / "datasheets"),
+                "--reference",
+                str(ECG / "reference_bom.csv"),
+                "--out",
+                str(out),
+            ],
+        )
+        assert result.exit_code == 0, result.output
+        assert "MPN coverage" in result.output
+        assert BomVersion.model_validate_json(out.read_text()).variant == variant
+    bad = runner.invoke(app, ["run", str(ECG), "--variant", "C"])
+    assert bad.exit_code == 2
+
+
+def test_run_with_real_model_requires_gateway(monkeypatch):
+    monkeypatch.delenv("BOMAGENT_LLM_GATEWAY_URL", raising=False)
+    from bomagent_cli.main import build_chat
+    from bomagent_llm.catalog import ModelNotAllowedError
+
+    with pytest.raises(ModelNotAllowedError):  # unverified models are refused up front
+        build_chat("claude-sonnet-eu", None)

@@ -9,6 +9,8 @@ dependencies = [
     "pydantic>=2.9",
     "langgraph>=0.2.60",
     "opentelemetry-api>=1.28",
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
     "bomagent-platform-common",
     "bomagent-bom-core",
     "bomagent-cad-parsers",
