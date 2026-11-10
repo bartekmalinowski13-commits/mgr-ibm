@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import hashlib
 import os
 import signal
 import subprocess
@@ -86,6 +87,34 @@ async def organisation(platform_url: str) -> uuid.UUID:
     return tid
 
 
+async def seed_global_kb(platform_url: str) -> int:
+    """Index the fixture datasheets into the shared corpus (platform role), so variant B's
+    part selection has something to cite locally. Idempotent."""
+    from bomagent_kb import DocumentMeta, KnowledgeBase, Scope, extract, get_document
+    from bomagent_llm.embeddings import HashingEmbeddings  # same vectors as the fake gateway
+
+    kb = KnowledgeBase(HashingEmbeddings())
+    engine = create_async_engine(platform_url)
+    indexed = 0
+    for path in sorted((ROOT / "evals" / "fixtures" / "datasheets").glob("*.md")):
+        data = path.read_bytes()
+        meta = DocumentMeta(
+            title=path.stem,
+            mime_type="text/markdown",
+            sha256=hashlib.sha256(data).hexdigest(),
+            size_bytes=len(data),
+            source_uri=f"fixture:{path.name}",
+        )
+        async with platform_transaction(engine) as conn:
+            doc_id = await kb.add_document(conn, meta, scope=Scope.GLOBAL, created_by="platform")
+            row = await get_document(conn, doc_id)
+            if row is not None and row["status"] != "indexed":
+                await kb.index_document(conn, doc_id, extract(path.name, data))
+                indexed += 1
+    await engine.dispose()
+    return indexed
+
+
 def aws_init() -> None:
     sys.path.insert(0, str(ROOT / "deploy" / "compose" / "aws-init"))
     os.environ["BOMAGENT_AWS_ENDPOINT_URL"] = MOTO
@@ -123,6 +152,8 @@ def main() -> None:
 
     urls = database(args.admin_url, args.db)
     tenant = asyncio.run(organisation(urls["bomagent_platform"]))
+    seeded = asyncio.run(seed_global_kb(urls["bomagent_platform"]))
+    print(f"shared knowledge base: {seeded} fixture datasheets indexed")
     token = DevAuthenticator(SECRET).issue(tenant, "bartek", ["owner"])
     STATE.mkdir(exist_ok=True)
     (STATE / "token").write_text(token)
