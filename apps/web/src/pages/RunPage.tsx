@@ -21,6 +21,7 @@ import {
 } from "../components/ui";
 import { findingsByLine, lineProvenance, shortFootprint, toCsv, worstSeverity } from "../lib/bom";
 import { formatNumber, formatSeconds, isSimulatedModel, modelLabel } from "../lib/format";
+import { ruleTitle } from "../lib/rules";
 import { useApp } from "../state";
 
 function Steps({ trace, running }: { trace: TraceStep[]; running: boolean }) {
@@ -272,7 +273,11 @@ function LineSheet({
                   <ul className="flex flex-col gap-2">
                     {findings.map((f) => (
                       <li key={`${f.rule_id}-${f.message}`} className="text-[13px]">
-                        <SeverityChip severity={f.severity} /> <span>{f.message}</span>
+                        <SeverityChip severity={f.severity} />{" "}
+                        <span className="font-medium">{ruleTitle(f.rule_id) ?? f.message}</span>
+                        {ruleTitle(f.rule_id) && (
+                          <span className="block text-[12.5px] text-ink-soft">{f.message}</span>
+                        )}
                         <span className="block text-[12px] text-muted">
                           {f.rule_id} · {f.rule_pack}@{f.rule_pack_version}
                         </span>
@@ -354,7 +359,9 @@ function BomTable({ bom, runId }: { bom: BomVersion; runId: string }) {
           <ul className="flex flex-col gap-1.5">
             {general.map((f) => (
               <li key={`${f.rule_id}-${f.message}`} className="text-[13px]">
-                <SeverityChip severity={f.severity} /> {f.message}
+                <SeverityChip severity={f.severity} />{" "}
+                <span className="font-medium">{ruleTitle(f.rule_id) ?? f.message}</span>
+                {ruleTitle(f.rule_id) && <span className="text-ink-soft"> – {f.message}</span>}
               </li>
             ))}
           </ul>

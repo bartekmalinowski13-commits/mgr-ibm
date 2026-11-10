@@ -35,6 +35,6 @@ pnpm --filter @bomagent/web build:demo # samodzielna kopia demo (mock, routing w
 
 - Brak logowania OIDC w UI (PKCE) – M4 część 2; teraz token wklejany do `localStorage`.
 - Przełącznik organizacji działa w trybie mock; w trybie HTTP organizacja wynika z tokenu.
-- Komunikaty reguł walidacji są po angielsku (z backendu) – tłumaczenie po `rule_id` w kolejnym kroku.
+- Tytuły reguł walidacji tłumaczone po `rule_id` (`src/lib/rules.ts`); szczegółowy komunikat z backendu zostaje po angielsku pod tytułem.
 - Upload z przeglądarki prosto do S3 (presigned PUT) wymaga CORS na buckecie – M6 (CDK).
 - Bundle produkcyjny ~585 kB (185 kB gzip; tryb mock jest wycinany w buildzie) – podział na chunki per ekran później.

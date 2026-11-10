@@ -28,7 +28,7 @@ weryfikacja). Kolejność:
    checkpointy LangGraph w Postgresie, wygenerowany klient TS (packages/ts/api-client).
 3. M5 część 2: logowanie OIDC w UI (PKCE, tokeny w pamięci), onboarding, ustawienia
    (członkowie, SSO, klucze API, limity), zatwierdzenie całego BOM i eksport wersji po
-   przeglądzie, porównanie oryginał ↔ przegląd, tłumaczenie komunikatów reguł po rule_id.
+   przeglądzie, porównanie oryginał ↔ przegląd, tłumaczenie szczegółów komunikatów reguł (parametry w Finding).
 4. M6: CDK + cdk-nag (bez wdrażania), CORS bucketu dla uploadu z przeglądarki.
 
 Jedna gałąź feat/… na zadanie, PR do main. Po każdym kamieniu: STATUS.md, DECISIONS_LOG.md.
