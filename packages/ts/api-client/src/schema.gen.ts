@@ -38,6 +38,64 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/api-keys": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List active API keys */
+        get: operations["list_keys_v1_api_keys_get"];
+        put?: never;
+        /**
+         * Create an API key (the secret is shown once)
+         * @description Not replayable with Idempotency-Key on purpose: the response holds a secret.
+         */
+        post: operations["create_key_v1_api_keys_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/api-keys/{key_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Revoke an API key */
+        delete: operations["revoke_key_v1_api_keys__key_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/api-keys/{key_id}/rotate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Rotate an API key
+         * @description Revokes the key and issues a new secret with the same name, scope and expiry.
+         */
+        post: operations["rotate_key_v1_api_keys__key_id__rotate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/audit-events": {
         parameters: {
             query?: never;
@@ -361,8 +419,8 @@ export interface paths {
         };
         /**
          * Live run progress (Server-Sent Events)
-         * @description Polls the run row; membership is re-checked every ``SSE_RECHECK_S`` so a removed
-         *     member's open stream ends.
+         * @description Polls the run row; access is re-checked every ``SSE_RECHECK_S`` so the stream of a
+         *     removed member or revoked key ends.
          */
         get: operations["run_events_v1_runs__run_id__events_get"];
         put?: never;
@@ -377,6 +435,70 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** ApiKey */
+        ApiKey: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Created By */
+            created_by: string;
+            /** Expires At */
+            expires_at: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Last Used At */
+            last_used_at: string | null;
+            /** Name */
+            name: string;
+            /** Prefix */
+            prefix: string;
+            /** Roles */
+            roles: ("engineer" | "reviewer" | "viewer")[];
+        };
+        /** ApiKeyCreate */
+        ApiKeyCreate: {
+            /** Expires In Days */
+            expires_in_days?: number | null;
+            /** Name */
+            name: string;
+            /** Roles */
+            roles: ("engineer" | "reviewer" | "viewer")[];
+        };
+        /** ApiKeyCreated */
+        ApiKeyCreated: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Created By */
+            created_by: string;
+            /** Expires At */
+            expires_at: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Key
+             * @description Secret API key; returned only once.
+             */
+            key: string;
+            /** Last Used At */
+            last_used_at: string | null;
+            /** Name */
+            name: string;
+            /** Prefix */
+            prefix: string;
+            /** Roles */
+            roles: ("engineer" | "reviewer" | "viewer")[];
+        };
         /**
          * AppliedPart
          * @enum {string}
@@ -759,6 +881,13 @@ export interface components {
             /** Slug */
             slug: string;
         };
+        /** Page[ApiKey] */
+        Page_ApiKey_: {
+            /** Items */
+            items: components["schemas"]["ApiKey"][];
+            /** Next Cursor */
+            next_cursor: string | null;
+        };
         /** Page[AuditEventOut] */
         Page_AuditEventOut_: {
             /** Items */
@@ -1070,6 +1199,307 @@ export interface operations {
             };
         };
     };
+    list_keys_v1_api_keys_get: {
+        parameters: {
+            query?: {
+                cursor?: string | null;
+                limit?: number;
+            };
+            header?: {
+                authorization?: string | null;
+                "x-org-id"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Page_ApiKey_"];
+                };
+            };
+            /** @description Problem details (RFC 9457) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Problem details (RFC 9457) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Problem details (RFC 9457) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Problem details (RFC 9457) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Problem details (RFC 9457) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+        };
+    };
+    create_key_v1_api_keys_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+                "x-org-id"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApiKeyCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiKeyCreated"];
+                };
+            };
+            /** @description Problem details (RFC 9457) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Problem details (RFC 9457) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Problem details (RFC 9457) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Problem details (RFC 9457) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Problem details (RFC 9457) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+        };
+    };
+    revoke_key_v1_api_keys__key_id__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+                "x-org-id"?: string | null;
+            };
+            path: {
+                key_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Problem details (RFC 9457) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Problem details (RFC 9457) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Problem details (RFC 9457) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Problem details (RFC 9457) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Problem details (RFC 9457) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+        };
+    };
+    rotate_key_v1_api_keys__key_id__rotate_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+                "x-org-id"?: string | null;
+            };
+            path: {
+                key_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiKeyCreated"];
+                };
+            };
+            /** @description Problem details (RFC 9457) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Problem details (RFC 9457) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Problem details (RFC 9457) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Problem details (RFC 9457) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Problem details (RFC 9457) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+        };
+    };
     list_events_v1_audit_events_get: {
         parameters: {
             query?: {
@@ -1079,8 +1509,8 @@ export interface operations {
                 actor_id?: string | null;
             };
             header?: {
-                "x-org-id"?: string | null;
                 authorization?: string | null;
+                "x-org-id"?: string | null;
             };
             path?: never;
             cookie?: never;
@@ -1172,8 +1602,8 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                "x-org-id"?: string | null;
                 authorization?: string | null;
+                "x-org-id"?: string | null;
             };
             path?: never;
             cookie?: never;
@@ -1268,8 +1698,8 @@ export interface operations {
                 limit?: number;
             };
             header?: {
-                "x-org-id"?: string | null;
                 authorization?: string | null;
+                "x-org-id"?: string | null;
             };
             path?: never;
             cookie?: never;
@@ -1351,8 +1781,8 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                "x-org-id"?: string | null;
                 authorization?: string | null;
+                "x-org-id"?: string | null;
             };
             path?: never;
             cookie?: never;
@@ -1524,8 +1954,8 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                "x-org-id"?: string | null;
                 authorization?: string | null;
+                "x-org-id"?: string | null;
             };
             path: {
                 invitation_id: string;
@@ -1699,8 +2129,8 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                "x-org-id"?: string | null;
                 authorization?: string | null;
+                "x-org-id"?: string | null;
             };
             path?: never;
             cookie?: never;
@@ -1782,8 +2212,8 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                "x-org-id"?: string | null;
                 authorization?: string | null;
+                "x-org-id"?: string | null;
             };
             path: {
                 user_sub: string;
@@ -1865,8 +2295,8 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                "x-org-id"?: string | null;
                 authorization?: string | null;
+                "x-org-id"?: string | null;
             };
             path: {
                 user_sub: string;
@@ -2053,8 +2483,8 @@ export interface operations {
                 limit?: number;
             };
             header?: {
-                "x-org-id"?: string | null;
                 authorization?: string | null;
+                "x-org-id"?: string | null;
             };
             path?: never;
             cookie?: never;
@@ -2147,8 +2577,8 @@ export interface operations {
             query?: never;
             header?: {
                 "idempotency-key"?: string | null;
-                "x-org-id"?: string | null;
                 authorization?: string | null;
+                "x-org-id"?: string | null;
             };
             path?: never;
             cookie?: never;
@@ -2244,8 +2674,8 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                "x-org-id"?: string | null;
                 authorization?: string | null;
+                "x-org-id"?: string | null;
             };
             path: {
                 project_id: string;
@@ -2339,8 +2769,8 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                "x-org-id"?: string | null;
                 authorization?: string | null;
+                "x-org-id"?: string | null;
             };
             path: {
                 project_id: string;
@@ -2434,8 +2864,8 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                "x-org-id"?: string | null;
                 authorization?: string | null;
+                "x-org-id"?: string | null;
             };
             path: {
                 project_id: string;
@@ -2537,8 +2967,8 @@ export interface operations {
                 project_id?: string | null;
             };
             header?: {
-                "x-org-id"?: string | null;
                 authorization?: string | null;
+                "x-org-id"?: string | null;
             };
             path?: never;
             cookie?: never;
@@ -2631,8 +3061,8 @@ export interface operations {
             query?: never;
             header?: {
                 "idempotency-key"?: string | null;
-                "x-org-id"?: string | null;
                 authorization?: string | null;
+                "x-org-id"?: string | null;
             };
             path?: never;
             cookie?: never;
@@ -2728,8 +3158,8 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                "x-org-id"?: string | null;
                 authorization?: string | null;
+                "x-org-id"?: string | null;
             };
             path: {
                 run_id: string;
@@ -2823,8 +3253,8 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                "x-org-id"?: string | null;
                 authorization?: string | null;
+                "x-org-id"?: string | null;
             };
             path: {
                 run_id: string;
@@ -2918,8 +3348,8 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                "x-org-id"?: string | null;
                 authorization?: string | null;
+                "x-org-id"?: string | null;
             };
             path: {
                 run_id: string;
@@ -3013,8 +3443,8 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                "x-org-id"?: string | null;
                 authorization?: string | null;
+                "x-org-id"?: string | null;
             };
             path: {
                 run_id: string;
@@ -3113,8 +3543,8 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                "x-org-id"?: string | null;
                 authorization?: string | null;
+                "x-org-id"?: string | null;
             };
             path: {
                 run_id: string;

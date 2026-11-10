@@ -177,6 +177,30 @@ class InvitationAccept(_M):
     token: str = Field(min_length=20, max_length=200)
 
 
+KeyRole = Literal["engineer", "reviewer", "viewer"]
+
+
+class ApiKeyCreate(_M):
+    name: str = Field(min_length=1, max_length=100)
+    roles: list[KeyRole] = Field(min_length=1, max_length=3)
+    expires_in_days: int | None = Field(default=None, ge=1, le=730)
+
+
+class ApiKey(_M):
+    id: uuid.UUID
+    name: str
+    prefix: str
+    roles: list[KeyRole]
+    created_by: str
+    created_at: datetime
+    expires_at: datetime | None
+    last_used_at: datetime | None
+
+
+class ApiKeyCreated(ApiKey):
+    key: str = Field(description="Secret API key; returned only once.")
+
+
 class Page[T](_M):
     items: list[T]
     next_cursor: str | None

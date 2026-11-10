@@ -13,7 +13,7 @@ from fastapi.responses import PlainTextResponse, StreamingResponse
 from sqlalchemy import text
 
 from bomagent_api import idempotency
-from bomagent_api.auth import CurrentPrincipal, OrgContext, memberships
+from bomagent_api.auth import OrgContext, still_authorized
 from bomagent_api.authz import require
 from bomagent_api.pagination import clamp, encode_cursor, page_clause
 from bomagent_api.routers.projects import get_project
@@ -179,11 +179,9 @@ SSE_RECHECK_S = 5.0
     summary="Live run progress (Server-Sent Events)",
     response_class=StreamingResponse,
 )
-async def run_events(
-    request: Request, ctx: OrgContext, principal: CurrentPrincipal, run_id: uuid.UUID
-) -> StreamingResponse:
-    """Polls the run row; membership is re-checked every ``SSE_RECHECK_S`` so a removed
-    member's open stream ends."""
+async def run_events(request: Request, ctx: OrgContext, run_id: uuid.UUID) -> StreamingResponse:
+    """Polls the run row; access is re-checked every ``SSE_RECHECK_S`` so the stream of a
+    removed member or revoked key ends."""
     require(ctx, "run.read")
     engine = request.app.state.engine
     async with tenant_transaction(engine) as conn:
@@ -194,14 +192,10 @@ async def run_events(
         last = None
         recheck_every = max(1, int(SSE_RECHECK_S / interval))
         for tick in range(int(request.app.state.sse_timeout_s / interval)):
-            if tick and tick % recheck_every == 0:
-                still = any(
-                    m["tenant_id"] == ctx.tenant_id and m["status"] == "active"
-                    for m in await memberships(request, principal)
-                )
-                if not still:
-                    yield 'event: end\ndata: {"status": "forbidden"}\n\n'
-                    return
+            due = tick and tick % recheck_every == 0
+            if due and not await still_authorized(request, ctx):
+                yield 'event: end\ndata: {"status": "forbidden"}\n\n'
+                return
             async with tenant_transaction(engine, ctx.tenant_id) as conn:
                 row = (
                     await conn.execute(

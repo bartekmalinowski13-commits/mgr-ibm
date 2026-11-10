@@ -179,3 +179,40 @@ async def test_invitations_visible_only_to_tenant_or_token_holder(app_engine, ma
                 ),
                 {"i": uuid.uuid4(), "t": a.tenant_id, "h": "b" * 64},
             )
+
+
+async def test_api_key_lookup_exposes_only_the_matching_active_key(app_engine, make_tenant):
+    import hashlib
+
+    a, b = await make_tenant(), await make_tenant()
+    digest = {n: hashlib.sha256(n.encode()).hexdigest() for n in ("live", "old", "gone")}
+    async with tenant_transaction(app_engine, a.tenant_id) as conn:
+        for name, expires, revoked in (
+            ("live", "now() + interval '1 day'", "NULL"),
+            ("old", "now() - interval '1 second'", "NULL"),
+            ("gone", "NULL", "now()"),
+        ):
+            await conn.execute(
+                text(
+                    "INSERT INTO tenancy.api_keys (id, tenant_id, name, prefix, key_hash, roles,"
+                    f" created_by, expires_at, revoked_at) VALUES (:i, :t, :n, 'bomk_abc', :h,"
+                    f" ARRAY['viewer'], 'u', {expires}, {revoked})"
+                ),
+                {"i": uuid.uuid4(), "t": a.tenant_id, "n": name, "h": digest[name]},
+            )
+
+    async def lookup(value: str) -> int:
+        async with platform_transaction(app_engine) as conn:
+            await conn.execute(
+                text("SELECT set_config('app.api_key_hash', :h, true)"), {"h": value}
+            )
+            return (await conn.execute(text("SELECT count(*) FROM tenancy.api_keys"))).scalar()
+
+    assert await lookup("") == 0
+    assert await lookup(digest["live"]) == 1
+    assert await lookup(digest["old"]) == 0  # expired
+    assert await lookup(digest["gone"]) == 0  # revoked
+    async with tenant_transaction(app_engine, b.tenant_id) as conn:
+        assert (await conn.execute(text("SELECT count(*) FROM tenancy.api_keys"))).scalar() == 0
+        with pytest.raises(DBAPIError, match="permission denied"):
+            await conn.execute(text("UPDATE tenancy.api_keys SET roles = ARRAY['owner']"))

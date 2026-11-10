@@ -10,6 +10,7 @@ token), then becomes the request's ``TenantContext``.
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import time
 import uuid
 from dataclasses import dataclass
@@ -21,11 +22,12 @@ from fastapi import Depends, Header, Request
 from jwt import PyJWKClient
 from sqlalchemy import text
 
-from bomagent_common.db import user_transaction
+from bomagent_common.db import tenant_transaction, user_transaction
 from bomagent_common.problems import ProblemError
 from bomagent_common.tenancy import TenantContext, tenant_scope
 
 ALGORITHMS = ["RS256"]
+API_KEY_PREFIX = "bomk_"
 LOCAL_ISSUER = "https://local-idp.bomagent.invalid"
 
 
@@ -118,8 +120,16 @@ def _bearer(authorization: str | None) -> str:
 async def current_principal(
     request: Request, authorization: Annotated[str | None, Header()] = None
 ) -> Principal:
-    verifier: TokenVerifier = request.app.state.verifier
     token = _bearer(authorization)
+    if token.startswith(API_KEY_PREFIX):
+        raise ProblemError(
+            401, "Unauthorized", "this endpoint needs a user token", slug="user-token-required"
+        )
+    return await _verify_user(request, token)
+
+
+async def _verify_user(request: Request, token: str) -> Principal:
+    verifier: TokenVerifier = request.app.state.verifier
     if verifier._jwk_client is None:
         return verifier.verify(token)
     return await asyncio.to_thread(verifier.verify, token)  # JWKS fetch blocks
@@ -134,12 +144,79 @@ async def memberships(request: Request, principal: Principal) -> list[dict[str, 
         return [dict(r._mapping) for r in rows]
 
 
+def api_key_hash(key: str) -> str:
+    return hashlib.sha256(key.encode()).hexdigest()
+
+
+async def api_key_context(request: Request, key: str) -> TenantContext:
+    """Resolve an organisation API key. The lookup runs without tenant context; RLS
+    (``api_key_lookup``) shows only the active key with this exact hash."""
+    engine = request.app.state.engine
+    async with engine.begin() as conn:
+        await conn.execute(
+            text("SELECT set_config('app.api_key_hash', :h, true)"), {"h": api_key_hash(key)}
+        )
+        row = (
+            await conn.execute(text("SELECT id, tenant_id, roles FROM tenancy.api_keys"))
+        ).first()
+    if row is None:
+        raise ProblemError(401, "Unauthorized", "invalid or expired token", slug="invalid-token")
+    async with tenant_transaction(engine, row.tenant_id) as conn:
+        await conn.execute(
+            text(
+                "UPDATE tenancy.api_keys SET last_used_at = now() WHERE id = :i AND"
+                " (last_used_at IS NULL OR last_used_at < now() - interval '1 minute')"
+            ),
+            {"i": row.id},
+        )
+    return TenantContext(
+        tenant_id=row.tenant_id,
+        actor_id=f"apikey:{row.id}",
+        actor_type="api_key",
+        roles=frozenset(row.roles),
+        request_id=request.headers.get("x-request-id"),
+    )
+
+
+async def still_authorized(request: Request, ctx: TenantContext) -> bool:
+    """Re-check for long-lived responses (SSE): membership or key still active."""
+    if ctx.actor_type == "api_key":
+        engine = request.app.state.engine
+        async with tenant_transaction(engine, ctx.tenant_id) as conn:
+            active = await conn.execute(
+                text(
+                    "SELECT 1 FROM tenancy.api_keys WHERE id = :i AND revoked_at IS NULL"
+                    " AND (expires_at IS NULL OR expires_at > now())"
+                ),
+                {"i": uuid.UUID(ctx.actor_id.removeprefix("apikey:"))},
+            )
+            return active.first() is not None
+    principal = Principal(sub=ctx.actor_id, email="", name="")
+    return any(
+        m["tenant_id"] == ctx.tenant_id and m["status"] == "active"
+        for m in await memberships(request, principal)
+    )
+
+
 async def org_context(
     request: Request,
-    principal: Annotated[Principal, Depends(current_principal)],
+    authorization: Annotated[str | None, Header()] = None,
     x_org_id: Annotated[str | None, Header()] = None,
 ) -> Any:
-    """Dependency: the active organisation as TenantContext (403 if not a member)."""
+    """Dependency: the active organisation as TenantContext. A user token needs
+    ``X-Org-Id`` and a membership (403 otherwise); an API key is bound to its own
+    organisation (``X-Org-Id`` optional, must match)."""
+    token = _bearer(authorization)
+    if token.startswith(API_KEY_PREFIX):
+        key_ctx = await api_key_context(request, token)
+        if x_org_id and x_org_id != str(key_ctx.tenant_id):
+            raise ProblemError(
+                403, "Forbidden", "not a member of this organisation", slug="not-a-member"
+            )
+        with tenant_scope(key_ctx):
+            yield key_ctx
+        return
+    principal = await _verify_user(request, token)
     if not x_org_id:
         raise ProblemError(400, "Bad Request", "header X-Org-Id is required", slug="org-required")
     try:
