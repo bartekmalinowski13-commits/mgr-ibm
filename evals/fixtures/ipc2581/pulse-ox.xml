@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<IPC-2581 revision="C" xmlns="http://webstds.ipc.org/2581">
+  <Content roleRef="Owner"><FunctionMode mode="ASSEMBLY"/><StepRef name="pulse-ox"/><BomRef name="pulse-ox_BOM"/></Content>
+  <LogisticHeader>
+    <Role id="Owner" roleFunction="SENDER"/>
+    <Enterprise id="V0" name="Analog Devices" code="NONE"/>
+    <Enterprise id="V1" name="JST" code="NONE"/>
+    <Enterprise id="V2" name="Microchip" code="NONE"/>
+    <Enterprise id="V3" name="Murata" code="NONE"/>
+    <Enterprise id="V4" name="Samsung Electro-Mechanics" code="NONE"/>
+    <Enterprise id="V5" name="Texas Instruments" code="NONE"/>
+    <Enterprise id="V6" name="Yageo" code="NONE"/>
+  </LogisticHeader>
+  <Bom name="pulse-ox_BOM">
+    <BomHeader assembly="pulse-ox" revision="1"/>
+    <BomItem OEMDesignNumberRef="ITEM-1" quantity="2" category="ELECTRICAL" description="">
+      <RefDes name="C1" packageRef="C_0603_1608Metric" populate="true" layerRef="TOP"/>
+      <RefDes name="C2" packageRef="C_0603_1608Metric" populate="true" layerRef="TOP"/>
+      <Characteristics category="ELECTRICAL"><Textual definitionSource="VALUE" textualCharacteristicName="Value" textualCharacteristicValue="100n"/></Characteristics>
+    </BomItem>
+    <BomItem OEMDesignNumberRef="ITEM-2" quantity="1" category="ELECTRICAL" description="">
+      <RefDes name="C3" packageRef="C_0603_1608Metric" populate="true" layerRef="TOP"/>
+      <Characteristics category="ELECTRICAL"><Textual definitionSource="VALUE" textualCharacteristicName="Value" textualCharacteristicValue="10u"/></Characteristics>
+    </BomItem>
+    <BomItem OEMDesignNumberRef="ITEM-3" quantity="1" category="ELECTRICAL" description="">
+      <RefDes name="C4" packageRef="C_0603_1608Metric" populate="true" layerRef="TOP"/>
+      <Characteristics category="ELECTRICAL"><Textual definitionSource="VALUE" textualCharacteristicName="Value" textualCharacteristicValue="1u"/></Characteristics>
+    </BomItem>
+    <BomItem OEMDesignNumberRef="ITEM-4" quantity="3" category="ELECTRICAL" description="I2C SDA pull-up">
+      <RefDes name="R1" packageRef="R_0603_1608Metric" populate="true" layerRef="TOP"/>
+      <RefDes name="R2" packageRef="R_0603_1608Metric" populate="true" layerRef="TOP"/>
+      <RefDes name="R3" packageRef="R_0603_1608Metric" populate="false" layerRef="TOP"/>
+      <Characteristics category="ELECTRICAL"><Textual definitionSource="VALUE" textualCharacteristicName="Value" textualCharacteristicValue="4k7"/></Characteristics>
+    </BomItem>
+    <BomItem OEMDesignNumberRef="ITEM-5" quantity="1" category="ELECTRICAL" description="">
+      <RefDes name="J1" packageRef="JST_PH_S4B-PH-K_1x04_P2.00mm_Horizontal" populate="true" layerRef="TOP"/>
+      <Characteristics category="ELECTRICAL"><Textual definitionSource="VALUE" textualCharacteristicName="Value" textualCharacteristicValue="I2C + power"/></Characteristics>
+    </BomItem>
+    <BomItem OEMDesignNumberRef="ITEM-6" quantity="1" category="ELECTRICAL" description="">
+      <RefDes name="U2" packageRef="SOT-23-5" populate="true" layerRef="TOP"/>
+      <Characteristics category="ELECTRICAL"><Textual definitionSource="VALUE" textualCharacteristicName="Value" textualCharacteristicValue="LP5907-1.8"/></Characteristics>
+    </BomItem>
+    <BomItem OEMDesignNumberRef="ITEM-7" quantity="1" category="ELECTRICAL" description="Pulse oximetry and heart-rate sensor">
+      <RefDes name="U1" packageRef="MAX30102_OESIP-14" populate="true" layerRef="TOP"/>
+      <Characteristics category="ELECTRICAL"><Textual definitionSource="VALUE" textualCharacteristicName="Value" textualCharacteristicValue="MAX30102"/></Characteristics>
+    </BomItem>
+    <BomItem OEMDesignNumberRef="ITEM-8" quantity="1" category="ELECTRICAL" description="">
+      <RefDes name="U3" packageRef="SOT-23" populate="true" layerRef="TOP"/>
+      <Characteristics category="ELECTRICAL"><Textual definitionSource="VALUE" textualCharacteristicName="Value" textualCharacteristicValue="MCP1700-3.3"/></Characteristics>
+    </BomItem>
+  </Bom>
+  <Ecad name="design"><CadData><Step name="pulse-ox">
+    <Component refDes="C1" packageRef="C_0603_1608Metric" layerRef="TOP" part="100n"/>
+    <Component refDes="C2" packageRef="C_0603_1608Metric" layerRef="TOP" part="100n"/>
+    <Component refDes="C3" packageRef="C_0603_1608Metric" layerRef="TOP" part="10u"/>
+    <Component refDes="C4" packageRef="C_0603_1608Metric" layerRef="TOP" part="1u"/>
+    <Component refDes="J1" packageRef="JST_PH_S4B-PH-K_1x04_P2.00mm_Horizontal" layerRef="TOP" part="I2C + power"/>
+    <Component refDes="R1" packageRef="R_0603_1608Metric" layerRef="TOP" part="4k7"/>
+    <Component refDes="R2" packageRef="R_0603_1608Metric" layerRef="TOP" part="4k7"/>
+    <Component refDes="R3" packageRef="R_0603_1608Metric" layerRef="TOP" part="4k7"/>
+    <Component refDes="U1" packageRef="MAX30102_OESIP-14" layerRef="TOP" part="MAX30102"/>
+    <Component refDes="U2" packageRef="SOT-23-5" layerRef="TOP" part="LP5907-1.8"/>
+    <Component refDes="U3" packageRef="SOT-23" layerRef="TOP" part="MCP1700-3.3"/>
+  </Step></CadData></Ecad>
+  <Avl name="AVL">
+    <AvlItem OEMDesignNumber="ITEM-2">
+      <AvlVmpn qualified="true" chosen="true"><AvlMpn name="CL10A106KP8NNNC" rank="1"/><AvlVendor enterpriseRef="V4"/></AvlVmpn>
+    </AvlItem>
+    <AvlItem OEMDesignNumber="ITEM-3">
+      <AvlVmpn qualified="true" chosen="true"><AvlMpn name="GRM188R61C105KA93D" rank="1"/><AvlVendor enterpriseRef="V3"/></AvlVmpn>
+    </AvlItem>
+    <AvlItem OEMDesignNumber="ITEM-4">
+      <AvlVmpn qualified="true" chosen="true"><AvlMpn name="RC0603FR-074K7L" rank="1"/><AvlVendor enterpriseRef="V6"/></AvlVmpn>
+    </AvlItem>
+    <AvlItem OEMDesignNumber="ITEM-5">
+      <AvlVmpn qualified="true" chosen="true"><AvlMpn name="S4B-PH-K-S(LF)(SN)" rank="1"/><AvlVendor enterpriseRef="V1"/></AvlVmpn>
+    </AvlItem>
+    <AvlItem OEMDesignNumber="ITEM-6">
+      <AvlVmpn qualified="true" chosen="true"><AvlMpn name="LP5907MFX-1.8/NOPB" rank="1"/><AvlVendor enterpriseRef="V5"/></AvlVmpn>
+    </AvlItem>
+    <AvlItem OEMDesignNumber="ITEM-7">
+      <AvlVmpn qualified="true" chosen="true"><AvlMpn name="MAX30102EFD+T" rank="1"/><AvlVendor enterpriseRef="V0"/></AvlVmpn>
+    </AvlItem>
+    <AvlItem OEMDesignNumber="ITEM-8">
+      <AvlVmpn qualified="true" chosen="true"><AvlMpn name="MCP1700T-3302E/TT" rank="1"/><AvlVendor enterpriseRef="V2"/></AvlVmpn>
+    </AvlItem>
+  </Avl>
+</IPC-2581>

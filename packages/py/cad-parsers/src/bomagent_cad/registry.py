@@ -5,6 +5,8 @@ from __future__ import annotations
 from bomagent_bom.model import ParsedDesign
 from bomagent_cad.base import FileRef, FormatParser, UnsupportedFormatError
 from bomagent_cad.csv_bom import CsvBomParser
+from bomagent_cad.edif import EdifParser
+from bomagent_cad.ipc2581 import Ipc2581Parser
 from bomagent_cad.kicad import KicadParser
 
 # extension -> (hint code for the UI i18n catalogue, English hint)
@@ -38,7 +40,7 @@ UNSUPPORTED_HINTS: dict[str, tuple[str, str]] = {
 
 
 def default_parsers() -> list[FormatParser]:
-    return [KicadParser(), CsvBomParser()]
+    return [KicadParser(), Ipc2581Parser(), EdifParser(), CsvBomParser()]
 
 
 def detect(files: list[FileRef], parsers: list[FormatParser] | None = None) -> FormatParser:
@@ -54,7 +56,7 @@ def detect(files: list[FileRef], parsers: list[FormatParser] | None = None) -> F
             if hint:
                 raise UnsupportedFormatError(hint[1], code=hint[0])
         raise UnsupportedFormatError(
-            "No supported design file found (KiCad 6-9 .kicad_sch, CSV BOM).",
+            "No supported design file found (KiCad 6-9 .kicad_sch, IPC-2581, EDIF, CSV BOM).",
             code="unsupported.unknown",
         )
     return best[1]

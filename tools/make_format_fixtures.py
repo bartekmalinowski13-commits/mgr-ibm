@@ -1,0 +1,179 @@
+"""Generate IPC-2581 and EDIF fixtures from the open KiCad fixtures (M7).
+
+The generated files describe exactly the same parts as the KiCad designs, so each new
+parser gets a cross-format consistency test against the KiCad parse. They mimic what
+EDA tools export (IPC-2581 rev C with BOM + AVL, EDIF 2.0.0 netlist with properties);
+they are self-authored and carry the licence of the KiCad fixtures (evals/fixtures/SOURCES.md).
+
+    uv run python tools/make_format_fixtures.py
+"""
+
+from __future__ import annotations
+
+from collections import defaultdict
+from pathlib import Path
+from xml.sax.saxutils import quoteattr
+
+from bomagent_bom.model import Component, ParsedDesign
+from bomagent_cad import FileRef, parse_files
+
+ROOT = Path(__file__).resolve().parents[1]
+KICAD = ROOT / "evals" / "fixtures" / "kicad"
+DESIGNS = ("ecg-frontend", "pulse-ox", "eeg-2ch")
+
+
+def kicad_design(name: str) -> ParsedDesign:
+    files = [
+        FileRef.from_path(p)
+        for p in sorted((KICAD / name).iterdir())
+        if p.suffix.startswith(".kicad")
+    ]
+    return parse_files(files)
+
+
+def _package(c: Component) -> str:
+    return c.footprint.split(":")[-1]
+
+
+def ipc2581(design: ParsedDesign) -> str:
+    parts = design.bom_components()
+    groups: dict[tuple[str, str, str, str], list[Component]] = defaultdict(list)
+    for c in parts:
+        groups[(c.value, _package(c), c.field("MPN"), c.field("Manufacturer"))].append(c)
+    vendors = sorted({k[3] for k in groups if k[3]})
+    q = quoteattr
+    out = [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '<IPC-2581 revision="C" xmlns="http://webstds.ipc.org/2581">',
+        f'  <Content roleRef="Owner"><FunctionMode mode="ASSEMBLY"/>'
+        f"<StepRef name={q(design.design_name)}/><BomRef name={q(design.design_name + '_BOM')}/>"
+        "</Content>",
+        "  <LogisticHeader>",
+        '    <Role id="Owner" roleFunction="SENDER"/>',
+        *(
+            f'    <Enterprise id={q("V" + str(i))} name={q(v)} code="NONE"/>'
+            for i, v in enumerate(vendors)
+        ),
+        "  </LogisticHeader>",
+        f"  <Bom name={q(design.design_name + '_BOM')}>",
+        f'    <BomHeader assembly={q(design.design_name)} revision="1"/>',
+    ]
+    for n, ((value, package, _mpn, _mfr), comps) in enumerate(sorted(groups.items())):
+        out.append(
+            f'    <BomItem OEMDesignNumberRef="ITEM-{n + 1}" quantity="{len(comps)}"'
+            f' category="ELECTRICAL" description={q(comps[0].field("Description"))}>'
+        )
+        for c in sorted(comps, key=lambda c: c.refdes):
+            populate = "false" if c.dnp else "true"
+            out.append(
+                f"      <RefDes name={q(c.refdes)} packageRef={q(package)}"
+                f' populate="{populate}" layerRef="TOP"/>'
+            )
+        out.append(
+            '      <Characteristics category="ELECTRICAL">'
+            f'<Textual definitionSource="VALUE" textualCharacteristicName="Value"'
+            f" textualCharacteristicValue={q(value)}/></Characteristics>"
+        )
+        out.append("    </BomItem>")
+    out.append("  </Bom>")
+    out.append('  <Ecad name="design"><CadData><Step name=' + q(design.design_name) + ">")
+    for c in sorted(parts, key=lambda c: c.refdes):
+        out.append(
+            f"    <Component refDes={q(c.refdes)} packageRef={q(_package(c))}"
+            f' layerRef="TOP" part={q(c.value)}/>'
+        )
+    out.append("  </Step></CadData></Ecad>")
+    out.append('  <Avl name="AVL">')
+    for n, ((_v, _p, mpn, mfr), _c) in enumerate(sorted(groups.items())):
+        if not mpn:
+            continue
+        vendor = f"V{vendors.index(mfr)}" if mfr else ""
+        out.append(f'    <AvlItem OEMDesignNumber="ITEM-{n + 1}">')
+        out.append(
+            f'      <AvlVmpn qualified="true" chosen="true"><AvlMpn name={q(mpn)} rank="1"/>'
+            + (f"<AvlVendor enterpriseRef={q(vendor)}/>" if vendor else "")
+            + "</AvlVmpn>"
+        )
+        out.append("    </AvlItem>")
+    out.append("  </Avl>")
+    out.append("</IPC-2581>")
+    return "\n".join(out) + "\n"
+
+
+def _edif_str(s: str) -> str:
+    return '"' + s.replace("%", "%37%").replace('"', "%34%") + '"'
+
+
+def edif(design: ParsedDesign) -> str:
+    parts = sorted(design.bom_components(), key=lambda c: c.refdes)
+    cells = sorted({c.lib_id.split(":")[-1] or "PART" for c in parts})
+    lines = [
+        f"(edif {_ident(design.design_name)}",
+        "  (edifVersion 2 0 0)",
+        "  (edifLevel 0)",
+        "  (keywordMap (keywordLevel 0))",
+        '  (status (written (timeStamp 2026 11 10 12 0 0) (program "bomagent fixtures")))',
+        "  (library parts (edifLevel 0) (technology (numberDefinition))",
+    ]
+    for cell in cells:
+        lines += [
+            f"    (cell {_ident(cell)} (cellType GENERIC)",
+            "      (view netlist (viewType NETLIST)",
+            "        (interface (port 1 (direction INOUT)) (port 2 (direction INOUT)))))",
+        ]
+    lines += [
+        "  )",
+        "  (library design (edifLevel 0) (technology (numberDefinition))",
+        f"    (cell {_ident(design.design_name)} (cellType GENERIC)",
+        "      (view netlist (viewType NETLIST)",
+        "        (interface)",
+        "        (contents",
+    ]
+    for c in parts:
+        props = [("VALUE", c.value), ("PCB_FOOTPRINT", c.footprint)]
+        props += [("MPN", c.field("MPN")), ("MANUFACTURER", c.field("Manufacturer"))]
+        if c.dnp:
+            props.append(("DNP", "1"))
+        lines.append(
+            f"          (instance (rename {_ident(c.refdes)} {_edif_str(c.refdes)})"
+            f" (viewRef netlist (cellRef {_ident(c.lib_id.split(':')[-1] or 'PART')}"
+            " (libraryRef parts)))"
+        )
+        for key, value in props:
+            if value:
+                lines.append(f"            (property {key} (string {_edif_str(value)}))")
+        lines.append("          )")
+    # one illustrative net: pin 1 of the first two parts
+    if len(parts) >= 2:
+        a, b = parts[0], parts[1]
+        lines.append(
+            f"          (net GND (joined (portRef 1 (instanceRef {_ident(a.refdes)}))"
+            f" (portRef 1 (instanceRef {_ident(b.refdes)}))))"
+        )
+    lines += [
+        "        ))))",
+        f"  (design {_ident(design.design_name)}"
+        f" (cellRef {_ident(design.design_name)} (libraryRef design))))",
+        "",
+    ]
+    return "\n".join(lines)
+
+
+def _ident(s: str) -> str:
+    """EDIF identifiers: letters, digits, underscore; must start with a letter (&-escaped)."""
+    cleaned = "".join(ch if ch.isalnum() or ch == "_" else "_" for ch in s)
+    return cleaned if cleaned[:1].isalpha() else "&" + cleaned
+
+
+def main() -> None:
+    for name in DESIGNS:
+        design = kicad_design(name)
+        for fmt, ext, render in (("ipc2581", "xml", ipc2581), ("edif", "edf", edif)):
+            target = ROOT / "evals" / "fixtures" / fmt / f"{name}.{ext}"
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(render(design), encoding="utf-8")
+            print(target.relative_to(ROOT))
+
+
+if __name__ == "__main__":
+    main()

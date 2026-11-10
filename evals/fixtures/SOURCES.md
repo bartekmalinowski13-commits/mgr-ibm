@@ -32,3 +32,8 @@ sites into the (private) global corpus; they are **not** committed (copyright).
 | Path | Source | Licence | Notes |
 |---|---|---|---|
 | `kicad-oss/bioamp-exg-pill/` | github.com/upsidedownlabs/BioAmp-EXG-Pill @ 86bb1f4 | CERN-OHL-S v2 (hardware) | KiCad 6 + KiCad 5 legacy schematic; no reference BOM yet (needs human verification) - see `SOURCE.md` |
+
+## Neutral-format fixtures (M7)
+| Path | Source | Licence | Notes |
+|---|---|---|---|
+| `ipc2581/*.xml`, `edif/*.edf` | generated from `kicad/*` by `tools/make_format_fixtures.py` | same as `kicad/*` (self-authored) | mimic IPC-2581 rev C (BOM + AVL + placements) and EDIF 2.0.0 netlist exports; used for cross-format consistency tests |

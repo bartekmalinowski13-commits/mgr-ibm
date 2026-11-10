@@ -19,6 +19,17 @@ Założenie interpretacyjne: „Guidance” z wymagań = **Cadence** (OrCAD Capt
 | DWG | `.dwg` | konwersja do DXF w izolowanym kontenerze (ODA File Converter – licencja do sprawdzenia, lub LibreDWG – GPLv3, ocena prawna dla SaaS), dalej jak DXF | jak DXF | ADR po ocenie licencji |
 | CSV/XLSX BOM | `.csv`, `.xlsx` | mapowanie kolumn z podglądem | pozycje BOM | import BOM referencyjnych i istniejących zestawień |
 
+## Implementation status
+
+| Format | Status | Parser |
+|---|---|---|
+| KiCad 6-9 | done (M1) | `bomagent_cad.kicad` |
+| CSV BOM | done (M1) | `bomagent_cad.csv_bom` |
+| IPC-2581 rev B/C | done (M7) | `bomagent_cad.ipc2581` |
+| EDIF 2.0.0 | done (M7) | `bomagent_cad.edif` |
+| ODB++, DXF, PDF BOM | planned (M7, `docs/plans/M7-formats.md`) | - |
+| Altium, OrCAD native, Allegro `.brd`, DWG, XLSX | not parsed - the upload returns an export hint | - |
+
 ## Kontrakt wtyczki
 ```python
 class FormatParser(Protocol):
