@@ -43,6 +43,21 @@ export async function uploadFile(projectId: string, file: File): Promise<Schemas
   return json as Schemas["FileInfo"];
 }
 
+export async function uploadKbDocument(
+  file: File,
+  kind: string,
+  manufacturer: string,
+): Promise<Schemas["KbDocument"]> {
+  const body = new FormData();
+  body.append("file", file, file.name);
+  body.append("kind", kind);
+  body.append("manufacturer", manufacturer);
+  const resp = await fetch("/v1/kb/documents", { method: "POST", headers: headers(), body });
+  const json = await resp.json();
+  if (!resp.ok) throw new ApiError(resp.status, json as Problem);
+  return json as Schemas["KbDocument"];
+}
+
 export async function evaluateRun(runId: string, file: File): Promise<Schemas["Evaluation"]> {
   const body = new FormData();
   body.append("reference", file, file.name);

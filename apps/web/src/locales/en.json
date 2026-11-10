@@ -47,7 +47,8 @@
     "switchOrg": "Switch organisation",
     "newOrg": "Create a new organisation",
     "signOut": "Sign out",
-    "language": "Polski"
+    "language": "Polski",
+    "kb": "Knowledge base"
   },
   "plan": {
     "pill": "{{plan}} plan",
@@ -316,5 +317,37 @@
     "field": "Field",
     "predicted": "In this BOM",
     "expected": "In the reference"
+  },
+  "kb": {
+    "title": "Knowledge base",
+    "lead": "Datasheets, application notes and standards the agents take evidence from (citations on BOM lines). Your organisation's documents are visible only to your organisation; their content is never treated as instructions for the agents.",
+    "tabs": {
+      "tenant": "Organisation knowledge",
+      "global": "Global corpus"
+    },
+    "file": "File (PDF, Markdown, text)",
+    "kind": "Kind",
+    "kinds": {
+      "datasheet": "Datasheet",
+      "application_note": "Application note",
+      "standard": "Standard",
+      "component_library": "Component library",
+      "correction": "User correction",
+      "other": "Other"
+    },
+    "add": "Add to knowledge base",
+    "added": "Added {{name}} – indexing in progress",
+    "hint": "Up to 32 MB. Files are indexed in the background; scans without a text layer need OCR.",
+    "empty": "No organisation documents yet. Add datasheets of the parts you use – the variant B agent cites them when choosing MPNs.",
+    "globalLead": "Shared corpus of public documents maintained by the platform operator (read-only).",
+    "globalEmpty": "The global corpus is empty in this environment.",
+    "chunks_one": "{{count}} chunk",
+    "chunks_other": "{{count}} chunks",
+    "status": {
+      "pending": "Queued",
+      "indexing": "Indexing",
+      "indexed": "Indexed",
+      "failed": "Failed"
+    }
   }
 }

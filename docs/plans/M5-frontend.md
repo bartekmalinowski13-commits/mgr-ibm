@@ -22,5 +22,7 @@ Porównanie wariantów A/B: metryki przebiegów (pozycje, wywołania LLM, tokeny
 
 Ocena względem BOM referencyjnego: użytkownik wgrywa CSV (≤ 1 MB, nie jest zapisywany), API liczy metryki z `bomagent_eval` (te same co w eksperymencie), zdarzenie audytowe `bom.evaluated`.
 
+Baza wiedzy: dokumenty organizacji (upload PDF/MD/TXT → S3 → outbox → kb-indexer, statusy, liczba fragmentów) i korpus globalny tylko do odczytu.
+
 ## Do zrobienia w M5 (kolejne kroki)
-Baza wiedzy (dokumenty organizacji, stan indeksowania – wymaga endpointów KB w API), oś kroków przebiegu z rodzajem kroku (wymaga zdarzeń kroków w SSE), logowanie Cognito (PKCE) razem z M6, zrzuty ekranów w PR.
+oś kroków przebiegu z rodzajem kroku (wymaga zdarzeń kroków w SSE), logowanie Cognito (PKCE) razem z M6, zrzuty ekranów w PR.

@@ -56,6 +56,11 @@ export const runRoute = createRoute({
   path: "/runs/$runId",
   component: lazyRouteComponent(() => import("./screens/RunScreen"), "RunScreen"),
 });
+const kb = createRoute({
+  getParentRoute: () => app,
+  path: "/kb",
+  component: lazyRouteComponent(() => import("./screens/KbScreen"), "KbScreen"),
+});
 const audit = createRoute({
   getParentRoute: () => app,
   path: "/audit",
@@ -79,6 +84,7 @@ export const router = createRouter({
       compareRoute,
       runs,
       runRoute,
+      kb,
       audit,
       settings,
     ]),

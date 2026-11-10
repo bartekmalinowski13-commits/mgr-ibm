@@ -47,7 +47,8 @@
     "switchOrg": "Przełącz organizację",
     "newOrg": "Załóż nową organizację",
     "signOut": "Wyloguj",
-    "language": "English"
+    "language": "English",
+    "kb": "Baza wiedzy"
   },
   "plan": {
     "pill": "Plan {{plan}}",
@@ -320,5 +321,39 @@
     "field": "Pole",
     "predicted": "W zestawieniu",
     "expected": "W referencji"
+  },
+  "kb": {
+    "title": "Baza wiedzy",
+    "lead": "Datasheety, noty aplikacyjne i normy, z których agenci biorą dowody (cytaty przy pozycjach BOM). Dokumenty organizacji widzi tylko Twoja organizacja; treść dokumentów nigdy nie jest traktowana jako polecenie dla agentów.",
+    "tabs": {
+      "tenant": "Wiedza organizacji",
+      "global": "Korpus globalny"
+    },
+    "file": "Plik (PDF, Markdown, tekst)",
+    "kind": "Rodzaj",
+    "kinds": {
+      "datasheet": "Datasheet",
+      "application_note": "Nota aplikacyjna",
+      "standard": "Norma",
+      "component_library": "Biblioteka komponentów",
+      "correction": "Poprawka użytkownika",
+      "other": "Inny"
+    },
+    "add": "Dodaj do bazy",
+    "added": "Dodano {{name}} – indeksowanie trwa",
+    "hint": "Do 32 MB. Pliki są indeksowane w tle; skany bez warstwy tekstu wymagają OCR.",
+    "empty": "Brak dokumentów organizacji. Dodaj datasheety części, których używacie – agent wariantu B cytuje je przy wyborze MPN.",
+    "globalLead": "Wspólny korpus dokumentów publicznych utrzymywany przez operatora platformy (tylko odczyt).",
+    "globalEmpty": "Korpus globalny jest pusty w tym środowisku.",
+    "chunks_one": "{{count}} fragment",
+    "chunks_few": "{{count}} fragmenty",
+    "chunks_many": "{{count}} fragmentów",
+    "chunks_other": "{{count}} fragmentu",
+    "status": {
+      "pending": "W kolejce",
+      "indexing": "Indeksowanie",
+      "indexed": "Zaindeksowany",
+      "failed": "Błąd"
+    }
   }
 }

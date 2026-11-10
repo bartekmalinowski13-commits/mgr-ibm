@@ -2,6 +2,7 @@ import { cn, Menu, MenuContent, MenuItem, MenuTrigger } from "@bomagent/ui";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link, Navigate, Outlet, useNavigate } from "@tanstack/react-router";
 import {
+  BookOpen,
   Check,
   ChevronsUpDown,
   FolderKanban,
@@ -135,6 +136,9 @@ export function Shell() {
         </Link>
         <Link to="/runs" className={navItem} onClick={() => setNavOpen(false)}>
           <ListChecks size={18} aria-hidden /> {t("nav.runs")}
+        </Link>
+        <Link to="/kb" className={navItem} onClick={() => setNavOpen(false)}>
+          <BookOpen size={18} aria-hidden /> {t("nav.kb")}
         </Link>
         <Link to="/audit" className={navItem} onClick={() => setNavOpen(false)}>
           <ScrollText size={18} aria-hidden /> {t("nav.audit")}
