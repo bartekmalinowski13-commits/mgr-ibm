@@ -196,3 +196,81 @@ async def test_revoke_expiry_and_tenant_boundaries(env):
     assert (
         await env.c.post("/v1/invitations/accept", headers=carol, json={"token": "x" * 200})
     ).status_code in (404, 422)
+
+
+# --------------------------------------------------------------------------- hardening
+async def test_onboarding_needs_verified_email_and_is_audited(env):
+    s = uuid.uuid4().hex[:6]
+    unverified = await env.login(f"u-{s}", verified=False)
+    resp = await env.c.post(
+        "/v1/organizations", headers=unverified, json={"name": "x", "slug": f"u-{s}"}
+    )
+    assert resp.status_code == 403
+    owner = await env.org(await env.login(f"o-{s}"), f"o-{s}")
+    events = (await env.c.get("/v1/audit-events", headers=owner)).json()["items"]
+    assert [e["action"] for e in events] == ["org.created"]
+
+
+def test_oidc_settings_are_required_outside_local():
+    with pytest.raises(RuntimeError, match="OIDC"):
+        create_app(Settings(environment="prod", auth_mode="oidc"))
+
+
+async def test_upload_limits_and_replacement(env):
+    from bomagent_common.messaging import InMemoryQueue
+
+    env.app.state.queues = {"ingest": InMemoryQueue(), "runs": InMemoryQueue()}
+    s = uuid.uuid4().hex[:6]
+    owner = await env.org(await env.login(f"o-{s}"), f"up-{s}")
+    pid = (await env.c.post("/v1/projects", headers=owner, json={"name": "p"})).json()["id"]
+    url = f"/v1/projects/{pid}/files"
+    huge = await env.c.post(
+        url, headers=owner | {"Content-Length": str(200 * 1024 * 1024)}, content=b"x"
+    )
+    assert huge.status_code == 413
+    assert huge.headers["content-type"].startswith("application/problem+json")
+
+    async def chunks():
+        yield b"--b\r\n"
+
+    chunked = await env.c.post(
+        url, headers=owner | {"Content-Type": "multipart/form-data; boundary=b"}, content=chunks()
+    )
+    assert chunked.status_code == 411
+
+    store = env.app.state.store
+    for body in (b"first", b"second"):
+        resp = await env.c.post(
+            url, headers=owner, files={"file": ("a.kicad_sch", body, "text/html")}
+        )
+        assert resp.status_code == 201, resp.text
+    kept = [k for k in store.objects if k.endswith("/a.kicad_sch")]
+    assert [store.objects[k] for k in kept] == [b"second"]  # the replaced object is deleted
+
+
+async def test_event_stream_ends_when_membership_is_removed(env, monkeypatch):
+    import asyncio
+
+    from bomagent_api.routers import runs
+    from bomagent_common.messaging import InMemoryQueue
+
+    monkeypatch.setattr(runs, "SSE_RECHECK_S", 0.02)
+    env.app.state.queues = {"ingest": InMemoryQueue(), "runs": InMemoryQueue()}
+    env.app.state.sse_interval_s = 0.01
+    env.app.state.sse_timeout_s = 10
+    s = uuid.uuid4().hex[:6]
+    owner = await env.org(await env.login(f"o-{s}"), f"sse-{s}")
+    viewer = await env.join(owner, f"v-{s}", ["viewer"])
+    pid = (await env.c.post("/v1/projects", headers=owner, json={"name": "p"})).json()["id"]
+    await env.c.post(
+        f"/v1/projects/{pid}/files", headers=owner, files={"file": ("a.kicad_sch", b"x")}
+    )
+    run_id = (
+        await env.c.post("/v1/runs", headers=owner, json={"project_id": pid, "variant": "B"})
+    ).json()["id"]  # stays queued: no worker runs
+
+    stream = asyncio.create_task(env.c.get(f"/v1/runs/{run_id}/events", headers=viewer))
+    await asyncio.sleep(0.1)
+    assert (await env.c.delete(f"/v1/members/v-{s}", headers=owner)).status_code == 204
+    resp = await asyncio.wait_for(stream, timeout=5)
+    assert resp.text.rstrip().endswith('data: {"status": "forbidden"}')

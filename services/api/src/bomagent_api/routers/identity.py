@@ -19,7 +19,7 @@ from bomagent_api.schemas import (
     problem_responses,
 )
 from bomagent_common.audit import AuditEvent, emit_audit
-from bomagent_common.db import platform_transaction, tenant_transaction
+from bomagent_common.db import platform_transaction
 from bomagent_common.problems import ProblemError
 from bomagent_common.tenancy import TenantContext
 
@@ -50,8 +50,14 @@ async def create_organization(
     request: Request, principal: CurrentPrincipal, body: OrganizationCreate
 ) -> Organization:
     """The caller becomes the owner. Tenant creation runs with the platform role (the
-    application role cannot create tenants); the audit event lands in the new tenant."""
+    application role cannot create tenants); the audit event lands in the new tenant in
+    the same transaction. A verified e-mail address is required."""
+    if not principal.email_verified or not principal.email:
+        raise ProblemError(
+            403, "Forbidden", "a verified e-mail address is required", slug="email-not-verified"
+        )
     org_id = uuid.uuid4()
+    ctx = TenantContext(tenant_id=org_id, actor_id=principal.sub, roles=frozenset({"owner"}))
     try:
         async with platform_transaction(request.app.state.platform_engine) as conn:
             await conn.execute(
@@ -67,26 +73,27 @@ async def create_organization(
                 {
                     "t": org_id,
                     "s": principal.sub,
-                    "e": principal.email or f"{principal.sub}@unknown.invalid",
+                    "e": principal.email.lower(),
                     "d": principal.name,
                 },
+            )
+            await conn.execute(
+                text("SELECT set_config('app.tenant_id', :t, true)"), {"t": str(org_id)}
+            )
+            await emit_audit(
+                conn,
+                AuditEvent(
+                    action="org.created",
+                    object_type="organization",
+                    object_id=str(org_id),
+                    after={"slug": body.slug, "name": body.name},
+                ),
+                ctx,
             )
     except IntegrityError as exc:
         raise ProblemError(
             409, "Conflict", "organisation slug already taken", slug="slug-taken"
         ) from exc
-    ctx = TenantContext(tenant_id=org_id, actor_id=principal.sub, roles=frozenset({"owner"}))
-    async with tenant_transaction(request.app.state.engine, org_id) as conn:
-        await emit_audit(
-            conn,
-            AuditEvent(
-                action="org.created",
-                object_type="organization",
-                object_id=str(org_id),
-                after={"slug": body.slug, "name": body.name},
-            ),
-            ctx,
-        )
     return Organization(id=org_id, slug=body.slug, name=body.name, plan="pilot")
 
 

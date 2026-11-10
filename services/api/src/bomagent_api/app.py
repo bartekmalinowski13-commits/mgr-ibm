@@ -13,15 +13,19 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 from bomagent_api import __version__
 from bomagent_api.auth import LocalIdp, TokenVerifier
 from bomagent_api.routers import audit, identity, members, projects, runs
+from bomagent_api.routers.projects import MAX_UPLOAD
 from bomagent_common.config import ServiceSettings
 from bomagent_common.db import make_engine, ping
 from bomagent_common.health import ReadinessCheck
 from bomagent_common.messaging import InMemoryQueue, Queue, SqsQueue
+from bomagent_common.problems import ProblemError, problem_response
 from bomagent_common.service import create_service_app
 from bomagent_common.storage import InMemoryObjectStore, ObjectStore, S3ObjectStore
 from bomagent_kb import KnowledgeBase
 from bomagent_llm.catalog import load_catalog
 from bomagent_llm.embeddings import EmbeddingClient, GatewayEmbeddings, HashingEmbeddings
+
+MULTIPART_OVERHEAD = 64 * 1024  # multipart boundaries and part headers
 
 
 class Settings(ServiceSettings):
@@ -65,6 +69,12 @@ def create_app(
     local = settings.environment in {"local", "test"}
     if settings.auth_mode == "local" and not local:
         raise RuntimeError("the local mock IdP is allowed only in local/test environments")
+    if (
+        settings.auth_mode == "oidc"
+        and not local
+        and not (settings.oidc_issuer and settings.oidc_jwks_url)
+    ):
+        raise RuntimeError("BOMAGENT_OIDC_ISSUER and BOMAGENT_OIDC_JWKS_URL are required")
     if engine is None and settings.database_url:
         engine = make_engine(settings.database_url)
     if platform_engine is None and settings.platform_database_url:
@@ -117,6 +127,23 @@ def create_app(
 
     for router in (identity.router, members.router, projects.router, runs.router, audit.router):
         app.include_router(router)
+
+    @app.middleware("http")
+    async def upload_size_guard(
+        request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
+        """Reject oversized uploads before the multipart body is spooled to disk."""
+        if request.method == "POST" and request.url.path.endswith("/files"):
+            length = request.headers.get("content-length")
+            if length is None or not length.isdigit():
+                err = ProblemError(411, "Length Required", "Content-Length is required")
+                return problem_response(err.problem, request)
+            if int(length) > MAX_UPLOAD + MULTIPART_OVERHEAD:
+                err = ProblemError(
+                    413, "Payload Too Large", "file larger than 64 MB", slug="file-too-large"
+                )
+                return problem_response(err.problem, request)
+        return await call_next(request)
 
     @app.middleware("http")
     async def security_headers(

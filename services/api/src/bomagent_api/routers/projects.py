@@ -136,51 +136,71 @@ async def upload_file(
             413, "Payload Too Large", "file larger than 64 MB", slug="file-too-large"
         )
     name = _SAFE_NAME.sub("_", (file.filename or "upload").rsplit("/", 1)[-1])[:200] or "upload"
-    async with tenant_transaction(request.app.state.engine) as conn:
-        await get_project(conn, project_id)
-        fid = uuid.uuid4()
-        key = tenant_key(ctx.tenant_id, "projects", str(project_id), str(fid), name)
-        await request.app.state.store.put(
-            key, data, file.content_type or "application/octet-stream"
-        )
-        await conn.execute(
-            text(
-                "INSERT INTO projects.files (id, tenant_id, project_id, name,"
-                " object_key, sha256, size_bytes, created_by) VALUES (:i,"
-                " app.current_tenant_id(), :p, :n, :k, :h, :s, :u)"
-                " ON CONFLICT (tenant_id, project_id, name) DO UPDATE SET object_key ="
-                " EXCLUDED.object_key, sha256 = EXCLUDED.sha256, size_bytes ="
-                " EXCLUDED.size_bytes, status = 'uploaded', summary = '{}'"
-            ),
-            {
-                "i": fid,
-                "p": project_id,
-                "n": name,
-                "k": key,
-                "h": hashlib.sha256(data).hexdigest(),
-                "s": len(data),
-                "u": ctx.actor_id,
-            },
-        )
-        row = (
+    store = request.app.state.store
+    fid = uuid.uuid4()
+    key = tenant_key(ctx.tenant_id, "projects", str(project_id), str(fid), name)
+    try:
+        async with tenant_transaction(request.app.state.engine) as conn:
+            await get_project(conn, project_id)
+            previous = (
+                await conn.execute(
+                    text(
+                        "SELECT object_key, sha256, size_bytes FROM projects.files"
+                        " WHERE project_id = :p AND name = :n FOR UPDATE"
+                    ),
+                    {"p": project_id, "n": name},
+                )
+            ).first()
+            # the client's content type is never stored or served back
+            await store.put(key, data, "application/octet-stream")
             await conn.execute(
                 text(
-                    f"SELECT {FILE_COLS} FROM projects.files"  # noqa: S608
-                    " WHERE project_id = :p AND name = :n"
+                    "INSERT INTO projects.files (id, tenant_id, project_id, name,"
+                    " object_key, sha256, size_bytes, created_by) VALUES (:i,"
+                    " app.current_tenant_id(), :p, :n, :k, :h, :s, :u)"
+                    " ON CONFLICT (tenant_id, project_id, name) DO UPDATE SET object_key ="
+                    " EXCLUDED.object_key, sha256 = EXCLUDED.sha256, size_bytes ="
+                    " EXCLUDED.size_bytes, status = 'uploaded', summary = '{}'"
                 ),
-                {"p": project_id, "n": name},
+                {
+                    "i": fid,
+                    "p": project_id,
+                    "n": name,
+                    "k": key,
+                    "h": hashlib.sha256(data).hexdigest(),
+                    "s": len(data),
+                    "u": ctx.actor_id,
+                },
             )
-        ).one()
-        info = FileInfo(**dict(row._mapping))
-        await emit_audit(
-            conn,
-            AuditEvent(
-                action="file.uploaded",
-                object_type="file",
-                object_id=str(info.id),
-                after={"name": name, "sha256": info.sha256, "size": len(data)},
-            ),
-        )
+            row = (
+                await conn.execute(
+                    text(
+                        f"SELECT {FILE_COLS} FROM projects.files"  # noqa: S608
+                        " WHERE project_id = :p AND name = :n"
+                    ),
+                    {"p": project_id, "n": name},
+                )
+            ).one()
+            info = FileInfo(**dict(row._mapping))
+            await emit_audit(
+                conn,
+                AuditEvent(
+                    action="file.uploaded",
+                    object_type="file",
+                    object_id=str(info.id),
+                    before=(
+                        {"sha256": previous.sha256, "size": previous.size_bytes}
+                        if previous
+                        else None
+                    ),
+                    after={"name": name, "sha256": info.sha256, "size": len(data)},
+                ),
+            )
+    except BaseException:
+        await store.delete(key)  # the row was not committed: drop the new object
+        raise
+    if previous is not None and previous.object_key != key:
+        await store.delete(previous.object_key)  # replaced: keep no orphaned copies
     await request.app.state.queues["ingest"].send(
         Message.create(
             "file.uploaded", ctx, {"project_id": str(project_id), "file_id": str(info.id)}

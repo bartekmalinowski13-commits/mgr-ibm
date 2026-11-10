@@ -41,6 +41,7 @@ def _check(key: str, enforce_tenant: bool) -> None:
 class ObjectStore(Protocol):
     async def put(self, key: str, data: bytes, content_type: str = ...) -> None: ...
     async def get(self, key: str) -> bytes: ...
+    async def delete(self, key: str) -> None: ...
     async def presign_put(self, key: str, expires: int = ...) -> str: ...
     async def presign_get(self, key: str, expires: int = ...) -> str: ...
 
@@ -62,6 +63,10 @@ class InMemoryObjectStore:
             return self.objects[key]
         except KeyError as exc:
             raise FileNotFoundError(key) from exc
+
+    async def delete(self, key: str) -> None:
+        _check(key, self._enforce)
+        self.objects.pop(key, None)
 
     async def presign_put(self, key: str, expires: int = 900) -> str:
         _check(key, self._enforce)
@@ -102,6 +107,10 @@ class S3ObjectStore:
         resp = await asyncio.to_thread(self._s3.get_object, Bucket=self._bucket, Key=key)
         body: bytes = resp["Body"].read()
         return body
+
+    async def delete(self, key: str) -> None:
+        _check(key, self._enforce)
+        await asyncio.to_thread(self._s3.delete_object, Bucket=self._bucket, Key=key)
 
     async def presign_put(self, key: str, expires: int = 900) -> str:
         _check(key, self._enforce)

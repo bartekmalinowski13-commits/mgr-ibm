@@ -2980,7 +2980,7 @@
     },
     "/v1/organizations": {
       "post": {
-        "description": "The caller becomes the owner. Tenant creation runs with the platform role (the\napplication role cannot create tenants); the audit event lands in the new tenant.",
+        "description": "The caller becomes the owner. Tenant creation runs with the platform role (the\napplication role cannot create tenants); the audit event lands in the new tenant in\nthe same transaction. A verified e-mail address is required.",
         "operationId": "create_organization_v1_organizations_post",
         "parameters": [
           {
@@ -4779,6 +4779,7 @@
     },
     "/v1/runs/{run_id}/events": {
       "get": {
+        "description": "Polls the run row; membership is re-checked every ``SSE_RECHECK_S`` so a removed\nmember's open stream ends.",
         "operationId": "run_events_v1_runs__run_id__events_get",
         "parameters": [
           {

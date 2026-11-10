@@ -9,6 +9,7 @@ token), then becomes the request's ``TenantContext``.
 
 from __future__ import annotations
 
+import asyncio
 import time
 import uuid
 from dataclasses import dataclass
@@ -118,7 +119,10 @@ async def current_principal(
     request: Request, authorization: Annotated[str | None, Header()] = None
 ) -> Principal:
     verifier: TokenVerifier = request.app.state.verifier
-    return verifier.verify(_bearer(authorization))
+    token = _bearer(authorization)
+    if verifier._jwk_client is None:
+        return verifier.verify(token)
+    return await asyncio.to_thread(verifier.verify, token)  # JWKS fetch blocks
 
 
 async def memberships(request: Request, principal: Principal) -> list[dict[str, Any]]:

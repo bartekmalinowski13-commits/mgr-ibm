@@ -47,6 +47,11 @@ def _response(problem: Problem, request: Request) -> JSONResponse:
     )
 
 
+def problem_response(problem: Problem, request: Request) -> JSONResponse:
+    """Problem response outside exception handlers (e.g. in middleware)."""
+    return _response(problem, request)
+
+
 def install_problem_handlers(app: FastAPI) -> None:
     async def _problem(request: Request, exc: Exception) -> JSONResponse:
         assert isinstance(exc, ProblemError)

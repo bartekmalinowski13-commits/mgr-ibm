@@ -195,7 +195,8 @@ export interface paths {
         /**
          * Create an organisation (onboarding)
          * @description The caller becomes the owner. Tenant creation runs with the platform role (the
-         *     application role cannot create tenants); the audit event lands in the new tenant.
+         *     application role cannot create tenants); the audit event lands in the new tenant in
+         *     the same transaction. A verified e-mail address is required.
          */
         post: operations["create_organization_v1_organizations_post"];
         delete?: never;
@@ -358,7 +359,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Live run progress (Server-Sent Events) */
+        /**
+         * Live run progress (Server-Sent Events)
+         * @description Polls the run row; membership is re-checked every ``SSE_RECHECK_S`` so a removed
+         *     member's open stream ends.
+         */
         get: operations["run_events_v1_runs__run_id__events_get"];
         put?: never;
         post?: never;
