@@ -7,6 +7,7 @@
     "dev": "vite",
     "dev:mock": "VITE_API_MODE=mock vite",
     "build": "tsc -b && vite build",
+    "build:demo": "VITE_API_MODE=mock VITE_HISTORY=memory VITE_BASE=./ vite build --outDir dist-demo",
     "preview": "vite preview",
     "typecheck": "tsc -b --noEmit",
     "test": "vitest run",

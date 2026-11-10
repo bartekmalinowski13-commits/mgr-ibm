@@ -6,6 +6,7 @@ import { VariantBadge } from "../components/RunStatus";
 import { Card, EmptyState, Mono, PageHeader, Skeleton, TableScroll } from "../components/ui";
 import i18n from "../i18n";
 import { formatDateTime } from "../lib/format";
+import { writeStored } from "../lib/storage";
 import { useApp } from "../state";
 
 export function AuditPage() {
@@ -131,7 +132,7 @@ export function SettingsPage() {
             aria-label={t("settings.language")}
             value={i18n.language}
             onValueChange={(lng) => {
-              localStorage.setItem("bomagent_lang", lng);
+              writeStored("bomagent_lang", lng);
               void i18n.changeLanguage(lng);
             }}
           >

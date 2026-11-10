@@ -3,6 +3,8 @@ import react from "@vitejs/plugin-react";
 import { defineConfig } from "vitest/config";
 
 export default defineConfig({
+  // "./" for the self-contained demo build (relative asset paths)
+  base: process.env.VITE_BASE ?? "/",
   plugins: [react(), tailwindcss()],
   server: {
     port: 5173,

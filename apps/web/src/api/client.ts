@@ -1,3 +1,4 @@
+import { readStored } from "../lib/storage";
 import type {
   AuditEntry,
   BomVersion,
@@ -41,7 +42,7 @@ export class ApiError extends Error {
 }
 
 function token(): string {
-  return localStorage.getItem("bomagent_token") ?? import.meta.env.VITE_DEV_TOKEN ?? "";
+  return readStored("bomagent_token") ?? import.meta.env.VITE_DEV_TOKEN ?? "";
 }
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {

@@ -1,5 +1,6 @@
 import i18n from "i18next";
 import { initReactI18next } from "react-i18next";
+import { readStored } from "./lib/storage";
 
 const pl = {
   nav: {
@@ -433,7 +434,7 @@ const en: Dict = {
 
 void i18n.use(initReactI18next).init({
   resources: { pl: { translation: pl }, en: { translation: en } },
-  lng: localStorage.getItem("bomagent_lang") ?? "pl",
+  lng: readStored("bomagent_lang") ?? "pl",
   fallbackLng: "en",
   interpolation: { escapeValue: false },
 });
