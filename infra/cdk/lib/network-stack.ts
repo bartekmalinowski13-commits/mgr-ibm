@@ -6,6 +6,7 @@ import * as logs from "aws-cdk-lib/aws-logs";
 import type { Construct } from "constructs";
 import { BaseStack } from "./base-stack";
 import type { EnvConfig } from "./config";
+import { acknowledge } from "./nag";
 
 export const VPC_CIDR = "10.40.0.0/16";
 
@@ -77,6 +78,11 @@ export class NetworkStack extends BaseStack {
       },
     });
 
+    acknowledge(
+      this.vpc,
+      "CloudFormation-Validate::W3010",
+      "Availability zones are fixed on purpose: synth runs without AWS credentials (no lookups); eu-central-1a/b/c exist in every account.",
+    );
     this.vpc.addGatewayEndpoint("S3", {
       service: ec2.GatewayVpcEndpointAwsService.S3,
       subnets: [

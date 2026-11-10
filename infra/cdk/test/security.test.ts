@@ -93,3 +93,61 @@ describe("identity", () => {
     });
   });
 });
+
+describe("compute", () => {
+  const { stacks } = synthEnv("prod");
+  const compute = Template.fromStack(stacks.compute);
+  const services = compute.findResources("AWS::ECS::Service");
+
+  it("every container runs as non-root with a read-only root file system", () => {
+    const defs = Object.values(compute.findResources("AWS::ECS::TaskDefinition"));
+    expect(defs.length).toBe(6);
+    for (const d of defs) {
+      for (const c of d.Properties.ContainerDefinitions) {
+        expect(c.User).toBe("10001:10001");
+        expect(c.ReadonlyRootFilesystem).toBe(true);
+      }
+    }
+  });
+
+  it("the ingest worker (untrusted files) runs in isolated subnets", () => {
+    const ingest = Object.entries(services).find(([id]) => id.startsWith("ingestService"));
+    expect(ingest).toBeDefined();
+    const subnets = JSON.stringify(ingest?.[1].Properties.NetworkConfiguration);
+    expect(subnets).toContain("isolated");
+    expect(subnets).not.toContain("app");
+  });
+
+  it("the ALB accepts only CloudFront and requires the origin header", () => {
+    const ingress = JSON.stringify(
+      [
+        ...Object.values(compute.findResources("AWS::EC2::SecurityGroup")),
+        ...Object.values(compute.findResources("AWS::EC2::SecurityGroupIngress")),
+      ].map((g) => g.Properties),
+    );
+    expect(ingress).toContain('"SourcePrefixListId":"pl-a3a144ca"');
+    expect(ingress).not.toContain('"CidrIp":"0.0.0.0/0","Description":"from 0.0.0.0/0');
+    expect(ingress).not.toMatch(/"IpProtocol":"tcp"[^}]*"CidrIp":"0\.0\.0\.0\/0"/);
+    compute.hasResourceProperties("AWS::ElasticLoadBalancingV2::Listener", {
+      DefaultActions: [{ Type: "fixed-response", FixedResponseConfig: { StatusCode: "403" } }],
+    });
+    compute.hasResourceProperties("AWS::ElasticLoadBalancingV2::ListenerRule", {
+      Conditions: [
+        { Field: "http-header", HttpHeaderConfig: { HttpHeaderName: "X-Origin-Verify" } },
+      ],
+    });
+  });
+
+  it("Bedrock may be called only in EU regions", () => {
+    const policies = JSON.stringify(compute.findResources("AWS::IAM::Policy"));
+    expect(policies).toContain(
+      '"aws:RequestedRegion":["eu-central-1","eu-west-1","eu-west-3","eu-north-1"]',
+    );
+  });
+
+  it("tasks may touch only tenant-prefixed objects of the files bucket", () => {
+    const policies = JSON.stringify(compute.findResources("AWS::IAM::Policy"));
+    expect(policies).toContain("arn:aws:s3:::bomagent-prod-files-000000000000/tenants/*");
+    expect(policies).not.toContain('"s3:*"');
+  });
+});

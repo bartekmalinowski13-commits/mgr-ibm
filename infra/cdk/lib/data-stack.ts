@@ -16,6 +16,11 @@ export interface DataStackProps extends StackProps {
 }
 
 export const QUEUES = ["ingest", "runs", "kb"] as const;
+
+/** Fixed name: task policies reference it literally (cdk-nag evidence stays stable). */
+export function filesBucketName(config: EnvConfig): string {
+  return `bomagent-${config.name}-files-${config.account}`;
+}
 export type QueueName = (typeof QUEUES)[number];
 /** Database roles of ADR-0016; the application roles have no BYPASSRLS. */
 export const DB_ROLES = ["bomagent_migrator", "bomagent_app", "bomagent_platform"] as const;
@@ -159,6 +164,7 @@ export class DataStack extends BaseStack {
     );
 
     this.filesBucket = new s3.Bucket(this, "Files", {
+      bucketName: filesBucketName(config),
       encryption: s3.BucketEncryption.KMS,
       encryptionKey: this.dataKey,
       bucketKeyEnabled: true,
