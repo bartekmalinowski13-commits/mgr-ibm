@@ -14,7 +14,7 @@ _Aktualizuje Claude Code po każdym kamieniu milowym (patrz `docs/prompts/CLAUDE
 | M1 | `bom-core` (model z pochodzeniem per pole, normalizacja wartości/jednostek, obudowy, grupowanie, eksport CSV/JSON, JSON Schema), `cad-parsers` (KiCad 6–9 + CSV BOM, podpowiedzi dla formatów nieobsługiwanych), `rules` core@1.0.0 (w tym flagi IEC 60601), `eval` (P/R/F1, dokładność pól, pokrycie i halucynacje MPN, wstrzykiwanie błędów, powtarzalność), CLI `bomagent parse|bom|eval`, 3 fixture'y KiCad (CC0) | `1d5d335`, poprawki po review `06f838f` | ✅ |
 | M2 | `llm` (katalog modeli EU closed/open-weight z bramką weryfikacji, embeddingi gateway/hashing), migracja 0002 (`kb.*` z RLS global/tenant), `kb` (ekstrakcja PDF, chunking, hybryda pgvector+FTS+RRF+reranker, snapshoty, korekty jako wiedza tenanta, flagowanie prompt injection), `kb-indexer` (handler SQS), 18 syntetycznych datasheetów + zestaw zapytań | `4e21c4d` | ✅ |
 | M3 | `llm.chat` (gateway z structured output, fałszywy dostawca z kasetami), `agents`: wersjonowane prompty, kontrakt `VariantRuntime`, budżety, `langgraph_b` (hybryda: reguły + agent MPN z RAG tylko dla nierozstrzygniętych + pętla naprawy), `langgraph_a` (100 % LLM), adapter `claude_agent_sdk_a`, MPN tylko z dowodów KB; `fake_server` do compose; CLI `bomagent run --variant A\|B`; `agent-worker` (SQS → wynik w S3 + audyt) | `6c8b783`, `f3ef61d`, poprawki po review w commicie „fix(agents)” | ✅ |
-| M4 (część) | migracja 0003 (członkostwa, projekty, pliki, przebiegi, niezmienne wersje BOM, klucze idempotencji – wszystko z RLS; logowanie przez `app.user_sub` bez obejścia RLS), API `/v1` (OIDC JWT + lokalny mock IdP tylko local/test, `X-Org-Id` z członkostwem i rolami z bazy, RBAC, projekty, upload plików → ingest-worker, przebiegi 202 → agent-worker + SSE, BOM JSON/CSV, edycja pozycji → nowa wersja + audyt + korekta w KB, audyt + weryfikacja łańcucha), OpenAPI 3.1 (`services/api/openapi.json`) + testy kontraktowe Schemathesis, klient TS `@bomagent/api-client` z kontrolą dryfu w CI | `600b6a9`, `c1ca0d9`, `0af9249` | 🟡 rdzeń gotowy; brak: zaproszenia, klucze API, limity/metering, konfiguracja SSO, rate limiting |
+| M4 (część) | migracja 0003 (członkostwa, projekty, pliki, przebiegi, niezmienne wersje BOM, klucze idempotencji – wszystko z RLS; logowanie przez `app.user_sub` bez obejścia RLS), API `/v1` (OIDC JWT + lokalny mock IdP tylko local/test, `X-Org-Id` z członkostwem i rolami z bazy, RBAC, projekty, upload plików → ingest-worker, przebiegi 202 → agent-worker + SSE, BOM JSON/CSV, edycja pozycji → nowa wersja + audyt + korekta w KB, audyt + weryfikacja łańcucha), OpenAPI 3.1 (`services/api/openapi.json`) + testy kontraktowe Schemathesis, klient TS `@bomagent/api-client` z kontrolą dryfu w CI + członkowie i zaproszenia (migracja 0004), złożone FK per tenant (0005), poprawki po security review | `600b6a9`, `c1ca0d9`, `0af9249`, `7f00117`, `377ef94`, `31f63b1` | 🟡 ok. 75 %; brak: klucze API, limity/metering, rate limiting, konfiguracja SSO, outbox i reaper przebiegów |
 | M5–M8 | frontend, CDK, formaty, eksperyment | – | ❌ nie rozpoczęte |
 
 Plany i brainstorming: `docs/plans/M0-foundation.md`, `M1-domain-core.md`, `M2-knowledge-base.md`, `M4-platform-backend.md`.
@@ -40,13 +40,14 @@ just openapi                         # regeneracja openapi.json + typów klienta
 ```
 
 ### Wyniki testów (2026-11-10, lokalnie, Python 3.13, PostgreSQL 16.15 + pgvector 0.6)
-- **394 testy zielone** (unit + integracyjne + izolacji, w tym izolacja projektów/przebiegów/BOM/audytu przez API) + 18 podtestów kontraktowych Schemathesis; pominięte z założenia tylko smoke/e2e.
+- **408 testów zielonych** (unit + integracyjne + izolacji, w tym izolacja projektów/przebiegów/BOM/audytu/zaproszeń i klucze obce między tenantami) + 25 podtestów kontraktowych Schemathesis; pominięte z założenia tylko smoke/e2e.
 - Pokrycie: `packages/py/*` **97,4 %** (próg 85 %), serwisy **89,7 %** (próg 75 %).
 - Klient TS: typecheck, vitest, biome, brak dryfu względem `openapi.json`.
 - ruff, ruff format, mypy --strict (95 plików), import-linter (2 kontrakty) – czyste.
 - M3 z fałszywym LLM (hydraulika, nie wynik naukowy): B na eeg-2ch – 4 wywołania LLM, pokrycie MPN 100 %; A – ok. 4× więcej wywołań (ekstrakcja, MPN dla wszystkich pozycji, walidacja, kompozycja).
 - Retrieval (M2) na syntetycznym korpusie: recall@5 = 1,00, recall@1 = 0,89 (18 zapytań).
 - Smoke natywnie (serwisy uruchomione bez Dockera): `/healthz` + `/readyz` z bazą dla 4 serwisów – zielone.
+- Security review subagentem M4: brak krytycznych; 2 wysokie (FK między tenantami, ponowne dostarczenie `run.requested`) i średnie naprawione; odłożone pozycje w `DECISIONS_LOG.md`.
 - Review subagentem po M0, M1 i M3 – wszystkie uwagi wysokiej wagi naprawione (commity `158a34c`, `06f838f` i „fix(agents): address M3 review”).
 
 ### Czego nie zrobiono / znane ograniczenia
@@ -75,7 +76,7 @@ just openapi                         # regeneracja openapi.json + typów klienta
 5. **Do wystawienia aplikacji pod linkiem (M4–M6):** konto AWS z dostępem do Bedrock w regionie UE, domena (Route 53 lub dostęp do DNS), rola IAM dla GitHub OIDC (przygotuję szablon), weryfikacja domeny w Amazon SES (maile), decyzja: konta lokalne (e-mail + hasło, Cognito) czy od razu SSO. Hostowanie: AWS `eu-central-1` – SPA na S3 + CloudFront + WAF, API/workery na ECS Fargate, Aurora PostgreSQL, logowanie Amazon Cognito. Wdrożenie uruchamiasz Ty z pipeline'u (ja nie tworzę zasobów w chmurze). Pierwszy admin powstanie przy wdrożeniu – hasło ustawiasz z maila, nie przekazujesz mi go.
 
 ### Następne kroki (dla kolejnej sesji: „kontynuuj”)
-1. Domknąć M4: uwagi z security review M4, zaproszenia i członkostwa (owner/admin), klucze API, limity i metering per tenant, rate limiting, konfiguracja SSO per organizacja.
+1. Domknąć M4: klucze API organizacji, limity i metering per tenant, rate limiting (w tym tworzenie organizacji), transactional outbox + reaper przebiegów, konfiguracja SSO per organizacja.
 2. M5: frontend wg `docs/design/UX_GUIDELINES.md` na `@bomagent/api-client` (lista projektów, upload, nowy przebieg, widok BOM z panelem pochodzenia, edycja, audyt).
 3. Checkpointy LangGraph w Postgresie z tabelami tenantowymi (RLS) + test izolacji; budżet i snapshot KB w adapterze Agent SDK.
 4. M6: CDK + cdk-nag (`just synth`), szablon roli GitHub OIDC.
