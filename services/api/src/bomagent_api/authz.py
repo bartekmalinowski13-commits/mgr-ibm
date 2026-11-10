@@ -29,6 +29,8 @@ POLICIES: dict[str, frozenset[str]] = {
     "member.manage": ADMIN,
     "apikey.manage": ADMIN,
     "usage.read": ADMIN,
+    "kb.read": READ,
+    "kb.write": WRITE,
     "org.update": ADMIN,
 }
 

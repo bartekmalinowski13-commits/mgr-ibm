@@ -335,3 +335,15 @@ async def test_review_fixes_members_keys_and_invites(env):
             {"i": first["id"]},
         )
     assert (await env.invite(owner, f"late-{s}@x.eu", ["viewer"])).status_code == 201
+
+
+async def test_content_length_must_be_ascii_digits(env):
+    s = uuid.uuid4().hex[:6]
+    owner = await env.org(await env.login(f"o-{s}"), f"cl-{s}")
+    for path in ("/v1/projects/x/files", "/v1/kb/documents", "/v1/runs/x/evaluation"):
+        resp = await env.c.post(path, headers=owner | {"Content-Length": b"\xb2"}, content=b"")
+        assert resp.status_code in (400, 411), (path, resp.status_code)
+    big = await env.c.post(
+        "/v1/kb/documents", headers=owner | {"Content-Length": str(40 * 1024 * 1024)}, content=b"x"
+    )
+    assert big.status_code == 413

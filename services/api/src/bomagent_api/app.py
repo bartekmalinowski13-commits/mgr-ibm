@@ -13,7 +13,10 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 from bomagent_api import __version__, maintenance
 from bomagent_api.auth import LocalIdp, TokenVerifier
 from bomagent_api.routers import api_keys, audit, identity, members, projects, runs
+from bomagent_api.routers import kb as kb_routes
+from bomagent_api.routers.kb import MAX_DOCUMENT
 from bomagent_api.routers.projects import MAX_UPLOAD
+from bomagent_api.routers.runs import MAX_REFERENCE
 from bomagent_common.config import ServiceSettings
 from bomagent_common.db import make_engine, ping
 from bomagent_common.health import ReadinessCheck
@@ -28,6 +31,19 @@ from bomagent_llm.embeddings import EmbeddingClient, GatewayEmbeddings, HashingE
 MULTIPART_OVERHEAD = 64 * 1024  # multipart boundaries and part headers
 
 
+def _upload_limit(method: str, path: str) -> int | None:
+    """Largest accepted body of an upload endpoint (checked before the body is read)."""
+    if method != "POST":
+        return None
+    if path.endswith("/files"):
+        return MAX_UPLOAD
+    if path == "/v1/kb/documents":
+        return MAX_DOCUMENT
+    if path.endswith("/evaluation"):
+        return MAX_REFERENCE
+    return None
+
+
 class Settings(ServiceSettings):
     service_name: str = "bomagent-api"
     platform_database_url: str | None = None
@@ -38,6 +54,7 @@ class Settings(ServiceSettings):
     files_bucket: str = "bomagent-local-files"
     ingest_queue_url: str | None = None
     runs_queue_url: str | None = None
+    kb_queue_url: str | None = None
     llm_gateway_url: str | None = None
     llm_gateway_key: str | None = None
     embedding_model: str = "fake-embedding"
@@ -109,7 +126,11 @@ def create_app(
     )
     app.state.queues = queues or {
         name: (SqsQueue(url, **s3) if url else InMemoryQueue())  # type: ignore[arg-type]
-        for name, url in (("ingest", settings.ingest_queue_url), ("runs", settings.runs_queue_url))
+        for name, url in (
+            ("ingest", settings.ingest_queue_url),
+            ("runs", settings.runs_queue_url),
+            ("kb", settings.kb_queue_url),
+        )
     }
     embedder: EmbeddingClient = (
         GatewayEmbeddings(
@@ -140,8 +161,24 @@ def create_app(
         runs.router,
         runs.models_router,
         audit.router,
+        kb_routes.router,
     ):
         app.include_router(router)
+
+    _install_guards(app)
+
+    if settings.cors_origins:
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=settings.cors_origins,
+            allow_methods=["GET", "POST", "PATCH"],
+            allow_headers=["Authorization", "Content-Type", "X-Org-Id", "Idempotency-Key"],
+        )
+    return app
+
+
+def _install_guards(app: FastAPI) -> None:
+    """URL/upload guards and security headers on every response."""
 
     @app.middleware("http")
     async def upload_size_guard(
@@ -153,14 +190,15 @@ def create_app(
         if b"%00" in raw.lower() or b"\x00" in raw or "\x00" in request.url.path:
             err = ProblemError(400, "Bad Request", "NUL characters are not allowed in the URL")
             return problem_response(err.problem, request)
-        if request.method == "POST" and request.url.path.endswith("/files"):
-            length = request.headers.get("content-length")
-            if length is None or not length.isdigit():
+        limit = _upload_limit(request.method, request.url.path)
+        if limit is not None:
+            length = request.headers.get("content-length", "")
+            if not (length.isascii() and length.isdigit()):
                 err = ProblemError(411, "Length Required", "Content-Length is required")
                 return problem_response(err.problem, request)
-            if int(length) > MAX_UPLOAD + MULTIPART_OVERHEAD:
+            if int(length) > limit + MULTIPART_OVERHEAD:
                 err = ProblemError(
-                    413, "Payload Too Large", "file larger than 64 MB", slug="file-too-large"
+                    413, "Payload Too Large", "the upload is too large", slug="file-too-large"
                 )
                 return problem_response(err.problem, request)
         return await call_next(request)
@@ -173,15 +211,6 @@ def create_app(
         for k, v in SECURITY_HEADERS.items():
             response.headers.setdefault(k, v)
         return response
-
-    if settings.cors_origins:
-        app.add_middleware(
-            CORSMiddleware,
-            allow_origins=settings.cors_origins,
-            allow_methods=["GET", "POST", "PATCH"],
-            allow_headers=["Authorization", "Content-Type", "X-Org-Id", "Idempotency-Key"],
-        )
-    return app
 
 
 def openapi_document() -> dict[str, Any]:

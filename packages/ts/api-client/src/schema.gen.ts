@@ -186,6 +186,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/kb/documents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Knowledge-base documents (organisation or global corpus) */
+        get: operations["list_documents_v1_kb_documents_get"];
+        put?: never;
+        /**
+         * Add a document to the organisation's knowledge
+         * @description Duplicates (same content) return the existing document.
+         */
+        post: operations["upload_document_v1_kb_documents_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/me": {
         parameters: {
             query?: never;
@@ -597,6 +618,22 @@ export interface components {
             /** Reference */
             reference: string;
         };
+        /** Body_upload_document_v1_kb_documents_post */
+        Body_upload_document_v1_kb_documents_post: {
+            /** File */
+            file: string;
+            /**
+             * Kind
+             * @default datasheet
+             * @enum {string}
+             */
+            kind: "datasheet" | "application_note" | "standard" | "component_library" | "other";
+            /**
+             * Manufacturer
+             * @default
+             */
+            manufacturer: string;
+        };
         /** Body_upload_file_v1_projects__project_id__files_post */
         Body_upload_file_v1_projects__project_id__files_post: {
             /** File */
@@ -924,6 +961,43 @@ export interface components {
              */
             scope: "global" | "tenant";
         };
+        /** KbDocument */
+        KbDocument: {
+            /** Chunks */
+            chunks: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Error */
+            error: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Indexed At */
+            indexed_at: string | null;
+            /** Kind */
+            kind: string;
+            /** Manufacturer */
+            manufacturer: string;
+            /**
+             * Scope
+             * @enum {string}
+             */
+            scope: "global" | "tenant";
+            /** Size Bytes */
+            size_bytes: number;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "pending" | "indexing" | "indexed" | "failed";
+            /** Title */
+            title: string;
+        };
         /** Me */
         Me: {
             /** Email */
@@ -1025,6 +1099,13 @@ export interface components {
         Page_Invitation_: {
             /** Items */
             items: components["schemas"]["Invitation"][];
+            /** Next Cursor */
+            next_cursor: string | null;
+        };
+        /** Page[KbDocument] */
+        Page_KbDocument_: {
+            /** Items */
+            items: components["schemas"]["KbDocument"][];
             /** Next Cursor */
             next_cursor: string | null;
         };
@@ -2256,6 +2337,200 @@ export interface operations {
             };
             /** @description Problem details (RFC 9457) */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Problem details (RFC 9457) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Problem details (RFC 9457) */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+        };
+    };
+    list_documents_v1_kb_documents_get: {
+        parameters: {
+            query?: {
+                scope?: "tenant" | "global";
+                cursor?: string | null;
+                limit?: number;
+            };
+            header?: {
+                authorization?: string | null;
+                "x-org-id"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Page_KbDocument_"];
+                };
+            };
+            /** @description Problem details (RFC 9457) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Problem details (RFC 9457) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Problem details (RFC 9457) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Problem details (RFC 9457) */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Problem details (RFC 9457) */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Problem details (RFC 9457) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Problem details (RFC 9457) */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+        };
+    };
+    upload_document_v1_kb_documents_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+                "x-org-id"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_upload_document_v1_kb_documents_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KbDocument"];
+                };
+            };
+            /** @description Problem details (RFC 9457) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Problem details (RFC 9457) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Problem details (RFC 9457) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Problem details (RFC 9457) */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Problem details (RFC 9457) */
+            415: {
                 headers: {
                     [name: string]: unknown;
                 };

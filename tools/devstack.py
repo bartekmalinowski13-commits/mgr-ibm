@@ -32,6 +32,7 @@ from bomagent_common.messaging import Handler, InMemoryQueue, process_one
 from bomagent_common.storage import InMemoryObjectStore
 from bomagent_ingest.handler import IngestWorker
 from bomagent_kb import KnowledgeBase
+from bomagent_kb_indexer.handler import KbIndexer
 from bomagent_llm.chat import FakeChat
 from bomagent_llm.embeddings import HashingEmbeddings
 from bomagent_migrations import APP_ROLE, PLATFORM_ROLE, bootstrap, upgrade
@@ -83,7 +84,7 @@ async def serve(urls: dict[str, str], port: int) -> None:
     engine = make_engine(urls[APP_ROLE])
     platform = make_engine(urls[PLATFORM_ROLE], pool_size=2)
     store = InMemoryObjectStore(enforce_tenant=False)
-    queues = {"ingest": InMemoryQueue(), "runs": InMemoryQueue()}
+    queues = {"ingest": InMemoryQueue(), "runs": InMemoryQueue(), "kb": InMemoryQueue()}
     kb = KnowledgeBase(HashingEmbeddings())
     app = create_app(
         Settings(environment="local", auth_mode="local", maintenance_interval_s=5),
@@ -105,6 +106,13 @@ async def serve(urls: dict[str, str], port: int) -> None:
     workers = [
         asyncio.create_task(consume(queues["ingest"], IngestWorker(engine, store).handle, stop)),
         asyncio.create_task(consume(queues["runs"], runs.handle, stop)),
+        asyncio.create_task(
+            consume(
+                queues["kb"],
+                KbIndexer(kb=kb, app_engine=engine, tenant_store=store).handle,
+                stop,
+            )
+        ),
     ]
     server = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=port, log_config=None))
     try:

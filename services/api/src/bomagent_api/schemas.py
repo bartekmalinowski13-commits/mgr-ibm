@@ -218,6 +218,20 @@ class Evaluation(_M):
     diffs: list[ReferenceDiff]
 
 
+class KbDocument(_M):
+    id: uuid.UUID
+    scope: Literal["global", "tenant"]
+    title: str
+    kind: str
+    manufacturer: str
+    status: Literal["pending", "indexing", "indexed", "failed"]
+    error: str | None
+    size_bytes: int
+    chunks: int
+    created_at: datetime
+    indexed_at: datetime | None
+
+
 class UsageReport(_M):
     plan: Literal["pilot", "team", "business", "enterprise"]
     usage: dict[str, float]
