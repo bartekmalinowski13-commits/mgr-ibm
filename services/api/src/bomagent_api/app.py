@@ -138,6 +138,7 @@ def create_app(
         api_keys.router,
         projects.router,
         runs.router,
+        runs.models_router,
         audit.router,
     ):
         app.include_router(router)

@@ -18,7 +18,15 @@ from bomagent_api.authz import require
 from bomagent_api.pagination import clamp, encode_cursor, page_clause
 from bomagent_api.plans import check_new_run
 from bomagent_api.routers.projects import deliver_now, get_project
-from bomagent_api.schemas import BomEnvelope, BomItemPatch, Page, Run, RunCreate, problem_responses
+from bomagent_api.schemas import (
+    BomEnvelope,
+    BomItemPatch,
+    ModelOption,
+    Page,
+    Run,
+    RunCreate,
+    problem_responses,
+)
 from bomagent_bom.export import to_csv
 from bomagent_bom.model import BomVersion, Provenance, ProvenanceKind
 from bomagent_common.audit import AuditEvent, emit_audit
@@ -32,6 +40,9 @@ router = APIRouter(
     prefix="/v1/runs",
     tags=["runs"],
     responses=problem_responses(400, 401, 403, 404, 409, 413, 422, 429),
+)
+models_router = APIRouter(
+    prefix="/v1", tags=["runs"], responses=problem_responses(400, 401, 403, 422, 429)
 )
 RUN_COLS = (
     "id, project_id, variant, runtime, model_id, status, usage, error, created_by,"
@@ -145,6 +156,25 @@ async def create_run(
         await idempotency.store(conn, idempotency_key, payload, 202, run.model_dump(mode="json"))
     await deliver_now(request, ctx.tenant_id, outbox_id)
     return run
+
+
+@models_router.get("/models", summary="Models allowed for runs in this environment")
+async def list_models(request: Request, ctx: OrgContext) -> list[ModelOption]:
+    """The catalogue entries a run may use (enabled, verified, EU; local fakes only in
+    local/test) - the same rule ``POST /v1/runs`` enforces."""
+    require(ctx, "run.read")
+    local = request.app.state.allow_local_models
+    return [
+        ModelOption(
+            id=m.id,
+            provider=m.provider,
+            license_class=m.license_class.value,
+            residency=m.residency,
+            tier=m.tier,
+        )
+        for m in request.app.state.catalog.enabled("chat")
+        if local or m.residency != "local"
+    ]
 
 
 @router.get("", summary="List runs")

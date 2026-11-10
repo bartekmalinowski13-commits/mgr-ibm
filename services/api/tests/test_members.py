@@ -274,3 +274,13 @@ async def test_event_stream_ends_when_membership_is_removed(env, monkeypatch):
     assert (await env.c.delete(f"/v1/members/v-{s}", headers=owner)).status_code == 204
     resp = await asyncio.wait_for(stream, timeout=5)
     assert resp.text.rstrip().endswith('data: {"status": "forbidden"}')
+
+
+async def test_models_lists_only_allowed_chat_models(env):
+    s = uuid.uuid4().hex[:6]
+    owner = await env.org(await env.login(f"o-{s}"), f"mdl-{s}")
+    models = (await env.c.get("/v1/models", headers=owner)).json()
+    ids = {m["id"] for m in models}
+    assert {"fake-closed", "fake-open-weight"} <= ids
+    assert "fake-embedding" not in ids  # not a chat model
+    assert "claude-sonnet-eu" not in ids  # unverified in the EU region

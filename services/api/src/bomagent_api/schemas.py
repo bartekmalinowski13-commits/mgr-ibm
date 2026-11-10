@@ -177,6 +177,14 @@ class InvitationAccept(_M):
     token: str = Field(min_length=20, max_length=200)
 
 
+class ModelOption(_M):
+    id: str
+    provider: str
+    license_class: Literal["closed", "open-weight"]
+    residency: str
+    tier: str | None
+
+
 class UsageReport(_M):
     usage: dict[str, float]
     limits: dict[str, float]
