@@ -151,3 +151,33 @@ describe("compute", () => {
     expect(policies).not.toContain('"s3:*"');
   });
 });
+
+describe("edge", () => {
+  const { stacks } = synthEnv("prod");
+
+  it("WAF for CloudFront lives in us-east-1 with managed rules and a rate limit", () => {
+    expect(stacks.waf.region).toBe("us-east-1");
+    const waf = Template.fromStack(stacks.waf);
+    waf.hasResourceProperties("AWS::WAFv2::WebACL", { Scope: "CLOUDFRONT" });
+    expect(JSON.stringify(waf.toJSON())).toContain("AWSManagedRulesCommonRuleSet");
+    expect(JSON.stringify(waf.toJSON())).toContain("RateLimitPerIp");
+  });
+
+  it("CloudFront enforces HTTPS, sends security headers and reaches S3 only via OAC", () => {
+    const edge = Template.fromStack(stacks.edge);
+    edge.resourceCountIs("AWS::CloudFront::OriginAccessControl", 1);
+    edge.hasResourceProperties("AWS::CloudFront::ResponseHeadersPolicy", {
+      ResponseHeadersPolicyConfig: {
+        SecurityHeadersConfig: {
+          StrictTransportSecurity: { AccessControlMaxAgeSec: 31536000, IncludeSubdomains: true },
+          FrameOptions: { FrameOption: "DENY" },
+        },
+      },
+    });
+    const dist = JSON.stringify(edge.findResources("AWS::CloudFront::Distribution"));
+    expect(dist).toContain('"ViewerProtocolPolicy":"redirect-to-https"');
+    expect(dist).toContain('"PathPattern":"/v1/*"');
+    expect(dist).toContain("X-Origin-Verify");
+    expect(dist).toContain("WebACLId");
+  });
+});
