@@ -22,6 +22,19 @@ class Settings(ServiceSettings):
     service_name: str = "bomagent-ingest-worker"
     queue_url: str | None = None  # SQS queue with work for this worker
     queue_wait_seconds: int = 10
+    files_bucket: str = "bomagent-local-files"
+
+
+def build_handler(settings: Settings) -> Handler:
+    from bomagent_common.storage import S3ObjectStore
+    from bomagent_ingest.handler import IngestWorker
+
+    if settings.database_url is None:
+        raise RuntimeError("BOMAGENT_DATABASE_URL is required")
+    store = S3ObjectStore(
+        settings.files_bucket, region=settings.aws_region, endpoint_url=settings.aws_endpoint_url
+    )
+    return IngestWorker(make_engine(settings.database_url), store).handle
 
 
 def _make_lifespan(settings: Settings, handler: Handler) -> Lifespan:
@@ -50,9 +63,8 @@ def _make_lifespan(settings: Settings, handler: Handler) -> Lifespan:
     return lifespan
 
 
-async def handle(message: Message) -> None:
-    """Placeholder dispatch; real handlers are registered in later milestones."""
-    log.info("message_received", message_type=message.type)
+async def _noop(message: Message) -> None:  # health-only mode (no queue configured)
+    log.info("message_ignored", message_type=message.type)
 
 
 def create_app(settings: Settings | None = None, handler: Handler | None = None) -> FastAPI:
@@ -70,6 +82,8 @@ def create_app(settings: Settings | None = None, handler: Handler | None = None)
         version=__version__,
         title="BOM Agent ingest worker",
         readiness=readiness,
-        lifespan=_make_lifespan(settings, handler or handle),
+        lifespan=_make_lifespan(
+            settings, handler or (build_handler(settings) if settings.queue_url else _noop)
+        ),
         docs=False,
     )

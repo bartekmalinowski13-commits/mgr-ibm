@@ -9,6 +9,10 @@ dependencies = [
     "fastapi>=0.115",
     "uvicorn[standard]>=0.32",
     "alembic>=1.14",
+    "pyjwt[crypto]>=2.10",
+    "python-multipart>=0.0.20",
+    "bomagent-cad-parsers",
+    "bomagent-eval",
     "bomagent-platform-common",
     "bomagent-bom-core",
     "bomagent-kb",
@@ -27,3 +31,5 @@ bomagent-platform-common = { workspace = true }
 bomagent-bom-core = { workspace = true }
 bomagent-kb = { workspace = true }
 bomagent-llm = { workspace = true }
+bomagent-cad-parsers = { workspace = true }
+bomagent-eval = { workspace = true }

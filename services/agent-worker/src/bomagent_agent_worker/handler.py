@@ -15,6 +15,7 @@ import uuid
 from collections.abc import Callable
 from dataclasses import dataclass
 
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from bomagent_agents.contracts import RunConfig, RunInput, RunOutput
@@ -67,6 +68,11 @@ class RunWorker:
         keys = [str(k) for k in p["object_keys"]]
         if not keys or not all(key_belongs_to(message.tenant_id, k) for k in keys):
             raise RejectedRunError("design files must be under the tenant prefix")
+        async with tenant_transaction(self.engine, message.tenant_id) as conn:
+            await conn.execute(
+                text("UPDATE runs.runs SET status = 'running', started_at = now() WHERE id = :i"),
+                {"i": run_id},
+            )
         files = [FileRef(k.rsplit("/", 1)[-1], await self.store.get(k)) for k in keys]
         design = parse_files(files)
         config = RunConfig(
@@ -96,6 +102,34 @@ class RunWorker:
             "application/json",
         )
         async with tenant_transaction(self.engine, message.tenant_id) as conn:
+            updated = await conn.execute(
+                text(
+                    "UPDATE runs.runs SET status = :s, finished_at = now(),"
+                    " usage = CAST(:u AS jsonb), trace = CAST(:t AS jsonb),"
+                    " kb_snapshot_id = :k WHERE id = :i"
+                ),
+                {
+                    "s": result.status,
+                    "u": result.usage.model_dump_json(),
+                    "t": json.dumps([s.model_dump(mode="json") for s in result.trace]),
+                    "k": config.kb_snapshot_id,
+                    "i": run_id,
+                },
+            )
+            if updated.rowcount:  # runs started through the API have a row; CLI runs do not
+                await conn.execute(
+                    text(
+                        "INSERT INTO bom.versions (id, tenant_id, run_id, version, content,"
+                        " reason, created_by) VALUES (:i, app.current_tenant_id(), :r, 1,"
+                        " CAST(:c AS jsonb), 'generated', :u)"
+                    ),
+                    {
+                        "i": uuid.uuid4(),
+                        "r": run_id,
+                        "c": result.bom.model_dump_json(),
+                        "u": f"agent:{result.runtime}",
+                    },
+                )
             await emit_audit(
                 conn,
                 AuditEvent(
