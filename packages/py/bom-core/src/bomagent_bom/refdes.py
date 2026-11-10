@@ -35,6 +35,7 @@ PREFIX_KIND: dict[str, str] = {
     "BT": "battery",
     "H": "mechanical",
     "MH": "mechanical",
+    "MP": "mechanical",  # mechanical part (drawing BOMs, DXF)
     "JP": "jumper",
     "LS": "speaker",
     "BZ": "buzzer",

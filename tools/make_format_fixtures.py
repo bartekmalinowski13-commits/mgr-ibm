@@ -5,7 +5,7 @@ parser gets a cross-format consistency test against the KiCad parse. They mimic 
 EDA tools export (IPC-2581 rev C with BOM + AVL, EDIF 2.0.0 netlist with properties);
 they are self-authored and carry the licence of the KiCad fixtures (evals/fixtures/SOURCES.md).
 
-    uv run python tools/make_format_fixtures.py
+    PYTHONHASHSEED=0 uv run python tools/make_format_fixtures.py   # byte-identical DXF
 """
 
 from __future__ import annotations
@@ -208,6 +208,83 @@ def odbpp(design: ParsedDesign) -> bytes:
     return buf.getvalue()
 
 
+#: mechanical parts list of the ECG front-end enclosure (self-authored example)
+MECHANICAL = [
+    # pos, part number, description, qty, material, manufacturer
+    ("1", "1551KTBU", "Enclosure, top and bottom shell", "1", "ABS UL94-HB", "Hammond"),
+    ("2", "ISO7380-M2x6-A2", "Button head screw M2x6", "4", "Stainless A2", ""),
+    ("3", "LP-3MM-12", "Light pipe 3 mm", "1", "PC", "Bivar"),
+    ("4", "GSK-ECG-01", "Gasket, front panel", "1", "Silicone 40 ShA", ""),
+    ("5", "LBL-ECG-01", "Product label (applied part BF symbol)", "1", "Polyester", ""),
+]
+DXF_HEADERS = ("POS", "PART NUMBER", "DESCRIPTION", "QTY", "MATERIAL", "MANUFACTURER")
+
+
+def dxf_attribs() -> str:
+    """Parts list as blocks with attributes (one INSERT per row)."""
+    import ezdxf
+
+    doc = ezdxf.new("R2010")
+    block = doc.blocks.new("BOM_ROW")
+    tags = ("POS", "PART_NO", "DESCRIPTION", "QTY", "MATERIAL", "MANUFACTURER")
+    for i, tag in enumerate(tags):
+        block.add_attdef(tag, (i * 30, 0), dxfattribs={"height": 2.5})
+    msp = doc.modelspace()
+    for row, values in enumerate(MECHANICAL):
+        insert = msp.add_blockref("BOM_ROW", (0, row * 5))
+        insert.add_auto_attribs(dict(zip(tags, values, strict=True)))
+    return _dxf_text(doc)
+
+
+def dxf_table() -> str:
+    """Parts list as a grid of TEXT entities (exploded table), header at the bottom
+    and rows stacked upwards, as in ISO 7573 parts lists."""
+    import ezdxf
+
+    doc = ezdxf.new("R2010")
+    msp = doc.modelspace()
+    columns = (0, 15, 60, 130, 145, 185)
+    for x, header in zip(columns, DXF_HEADERS, strict=True):
+        msp.add_text(header, height=2.5, dxfattribs={"insert": (x, 0)})
+    for row, values in enumerate(MECHANICAL, start=1):
+        for x, value in zip(columns, values, strict=True):
+            if value:
+                msp.add_text(value, height=2.5, dxfattribs={"insert": (x, row * 6)})
+    msp.add_text("Title: ECG front-end enclosure", height=5, dxfattribs={"insert": (0, -30)})
+    return _dxf_text(doc)
+
+
+def _dxf_text(doc: object) -> str:
+    stream = io.StringIO()
+    doc.write(stream)  # type: ignore[attr-defined]
+    # drop volatile header values (timestamps, GUIDs) so the fixture is reproducible
+    lines = stream.getvalue().splitlines()
+    out: list[str] = []
+    skip = 0
+    for i, line in enumerate(lines):
+        if skip:
+            skip -= 1
+            continue
+        if line.strip() in {
+            "$TDCREATE",
+            "$TDUPDATE",
+            "$TDUCREATE",
+            "$TDUUPDATE",
+            "$FINGERPRINTGUID",
+            "$VERSIONGUID",
+            "$TDINDWG",
+        }:
+            nxt = lines[i + 1].strip() if i + 1 < len(lines) else ""
+            skip = 2 if nxt in {"40", "2"} else 0
+            if skip:
+                out.append(line)
+                out.append(lines[i + 1])
+                out.append("0" if nxt == "40" else "{00000000-0000-0000-0000-000000000000}")
+            continue
+        out.append(line)
+    return "\n".join(out) + "\n"
+
+
 def main() -> None:
     for name in DESIGNS:
         design = kicad_design(name)
@@ -219,6 +296,11 @@ def main() -> None:
         target = ROOT / "evals" / "fixtures" / "odbpp" / f"{name}.tgz"
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes(odbpp(design))
+        print(target.relative_to(ROOT))
+    for name, render_dxf in (("enclosure-attribs", dxf_attribs), ("enclosure-table", dxf_table)):
+        target = ROOT / "evals" / "fixtures" / "dxf" / f"{name}.dxf"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(render_dxf(), encoding="utf-8")
         print(target.relative_to(ROOT))
 
 

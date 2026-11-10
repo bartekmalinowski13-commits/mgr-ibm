@@ -9,6 +9,7 @@ dependencies = [
     "pydantic>=2.9",
     "defusedxml>=0.7",
     "bomagent-bom-core",
+    "ezdxf>=1.4",
 ]
 
 [build-system]
