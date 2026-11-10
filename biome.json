@@ -15,7 +15,11 @@
       "!docs",
       "!tools",
       "!**/*.gen.ts",
-      "!services/api/openapi.json"
+      "!services/api/openapi.json",
+      "!**/*.md",
+      "!**/*.yaml",
+      "!**/*.yml",
+      "!packages/py/bom-core/schemas"
     ]
   },
   "formatter": {
