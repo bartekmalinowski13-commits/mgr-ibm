@@ -1,0 +1,41 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ProtectAuditAndThreatDetection",
+      "Effect": "Deny",
+      "Action": [
+        "cloudtrail:StopLogging",
+        "cloudtrail:DeleteTrail",
+        "cloudtrail:UpdateTrail",
+        "guardduty:DeleteDetector",
+        "guardduty:DisassociateFromMasterAccount",
+        "guardduty:UpdateDetector",
+        "securityhub:DisableSecurityHub",
+        "config:DeleteConfigurationRecorder",
+        "config:StopConfigurationRecorder",
+        "access-analyzer:DeleteAnalyzer"
+      ],
+      "Resource": "*",
+      "Condition": {
+        "ArnNotLike": { "aws:PrincipalArn": "arn:aws:iam::*:role/OrganizationSecurityAdmin" }
+      }
+    },
+    {
+      "Sid": "NoPublicBuckets",
+      "Effect": "Deny",
+      "Action": ["s3:PutAccountPublicAccessBlock", "s3:DeletePublicAccessBlock"],
+      "Resource": "*",
+      "Condition": {
+        "ArnNotLike": { "aws:PrincipalArn": "arn:aws:iam::*:role/OrganizationSecurityAdmin" }
+      }
+    },
+    {
+      "Sid": "NoRootUser",
+      "Effect": "Deny",
+      "Action": "*",
+      "Resource": "*",
+      "Condition": { "StringLike": { "aws:PrincipalArn": "arn:aws:iam::*:root" } }
+    }
+  ]
+}

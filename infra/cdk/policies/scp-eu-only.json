@@ -1,0 +1,55 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "DenyOutsideEU",
+      "Effect": "Deny",
+      "NotAction": [
+        "iam:*",
+        "organizations:*",
+        "sts:*",
+        "support:*",
+        "budgets:*",
+        "ce:*",
+        "cloudfront:*",
+        "wafv2:*",
+        "route53:*",
+        "route53domains:*",
+        "acm:*",
+        "health:*",
+        "account:*",
+        "trustedadvisor:*",
+        "globalaccelerator:*",
+        "kms:*",
+        "securityhub:*",
+        "guardduty:*",
+        "config:*",
+        "cloudtrail:*",
+        "logs:*"
+      ],
+      "Resource": "*",
+      "Condition": {
+        "StringNotEquals": {
+          "aws:RequestedRegion": ["eu-central-1", "eu-west-1", "eu-west-3", "eu-north-1"]
+        }
+      }
+    },
+    {
+      "Sid": "GlobalServicesOnlyInUsEast1",
+      "Effect": "Deny",
+      "Action": ["kms:*", "logs:*", "securityhub:*", "guardduty:*", "config:*", "cloudtrail:*"],
+      "Resource": "*",
+      "Condition": {
+        "StringNotEquals": {
+          "aws:RequestedRegion": [
+            "eu-central-1",
+            "eu-west-1",
+            "eu-west-3",
+            "eu-north-1",
+            "us-east-1"
+          ]
+        }
+      }
+    }
+  ]
+}
