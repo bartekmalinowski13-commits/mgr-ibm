@@ -18,6 +18,7 @@ import {
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { type NewRunPreset, ShellCtx } from "../lib/layout";
+import { authConfig, logoutUrl } from "../lib/oidc";
 import { formatEur } from "../lib/provenance";
 import { useMe, useProjects, useUsage } from "../lib/queries";
 import { useSession } from "../lib/session";
@@ -156,7 +157,16 @@ export function Shell() {
         >
           <Languages size={18} aria-hidden /> {t("nav.language")}
         </button>
-        <button type="button" className={cn(navItem, "text-left")} onClick={signOut}>
+        <button
+          type="button"
+          className={cn(navItem, "text-left")}
+          onClick={() => {
+            signOut();
+            void authConfig().then((cfg) => {
+              if (cfg.mode === "oidc") window.location.assign(logoutUrl(cfg));
+            });
+          }}
+        >
           <LogOut size={18} aria-hidden />
           <span className="min-w-0 truncate">
             {t("nav.signOut")} <span className="text-muted">({session.email})</span>

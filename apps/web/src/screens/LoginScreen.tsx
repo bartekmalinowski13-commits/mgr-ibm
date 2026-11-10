@@ -1,7 +1,8 @@
 import { Button, Input } from "@bomagent/ui";
 import { Navigate, useNavigate } from "@tanstack/react-router";
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { type AuthConfig, authConfig, startLogin } from "../lib/oidc";
 import { devSignIn, useSession } from "../lib/session";
 import { AuthLayout } from "./AuthLayout";
 
@@ -13,7 +14,24 @@ export function LoginScreen() {
   const [name, setName] = useState("");
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState(false);
+  const [cfg, setCfg] = useState<AuthConfig>();
+  useEffect(() => {
+    void authConfig().then(setCfg);
+  }, []);
   if (session) return <Navigate to="/start" />;
+  if (!cfg) return null;
+  if (cfg.mode === "oidc") {
+    return (
+      <AuthLayout title={t("login.title")} lead={t("login.lead")}>
+        <div className="flex flex-col gap-4 rounded-panel border border-line bg-surface p-6">
+          <Button onClick={() => void startLogin(cfg)} className="self-start">
+            {t("login.submit")}
+          </Button>
+          <p className="text-sm text-muted">{t("login.cloudNote")}</p>
+        </div>
+      </AuthLayout>
+    );
+  }
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();

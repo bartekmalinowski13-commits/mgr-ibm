@@ -20,7 +20,10 @@
     "email": "Email",
     "name": "Name",
     "submit": "Sign in",
-    "devNote": "Local environment: sign-in through the built-in test identity provider. In the cloud you sign in with Amazon Cognito or your organisation's SSO."
+    "devNote": "Local environment: sign-in through the built-in test identity provider. In the cloud you sign in with Amazon Cognito or your organisation's SSO.",
+    "cloudNote": "You sign in on the BOM Agent sign-in page (Amazon Cognito in an EU region). Your organisation may require two-factor authentication.",
+    "callbackError": "Sign-in could not be completed (the link expired or was already used).",
+    "retry": "Sign in again"
   },
   "onboarding": {
     "title": "Create an organisation",

@@ -11,6 +11,11 @@ import { Shell } from "./screens/Shell";
 
 const root = createRootRoute({ component: Outlet });
 const login = createRoute({ getParentRoute: () => root, path: "/login", component: LoginScreen });
+const callback = createRoute({
+  getParentRoute: () => root,
+  path: "/auth/callback",
+  component: lazyRouteComponent(() => import("./screens/AuthCallbackScreen"), "AuthCallbackScreen"),
+});
 const onboarding = createRoute({
   getParentRoute: () => root,
   path: "/onboarding",
@@ -75,6 +80,7 @@ const settings = createRoute({
 export const router = createRouter({
   routeTree: root.addChildren([
     login,
+    callback,
     onboarding,
     app.addChildren([
       index,

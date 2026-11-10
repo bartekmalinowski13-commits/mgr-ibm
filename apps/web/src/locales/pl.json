@@ -20,7 +20,10 @@
     "email": "E-mail",
     "name": "Imię",
     "submit": "Zaloguj się",
-    "devNote": "Środowisko lokalne: logowanie przez wbudowany testowy dostawca tożsamości. W chmurze logujesz się przez Amazon Cognito lub SSO organizacji."
+    "devNote": "Środowisko lokalne: logowanie przez wbudowany testowy dostawca tożsamości. W chmurze logujesz się przez Amazon Cognito lub SSO organizacji.",
+    "cloudNote": "Logowanie odbywa się na stronie logowania BOM Agent (Amazon Cognito w regionie UE). Twoja organizacja może wymagać uwierzytelniania dwuskładnikowego.",
+    "callbackError": "Nie udało się dokończyć logowania (link wygasł albo został już użyty).",
+    "retry": "Zaloguj się ponownie"
   },
   "onboarding": {
     "title": "Załóż organizację",
