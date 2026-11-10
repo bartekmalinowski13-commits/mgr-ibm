@@ -37,4 +37,4 @@ pnpm --filter @bomagent/web build:demo # samodzielna kopia demo (mock, routing w
 - Przełącznik organizacji działa w trybie mock; w trybie HTTP organizacja wynika z tokenu.
 - Komunikaty reguł walidacji są po angielsku (z backendu) – tłumaczenie po `rule_id` w kolejnym kroku.
 - Upload z przeglądarki prosto do S3 (presigned PUT) wymaga CORS na buckecie – M6 (CDK).
-- Bundle ~585 kB (mock i dane przykładowe w paczce) – podział na chunki przy M6.
+- Bundle produkcyjny ~585 kB (185 kB gzip; tryb mock jest wycinany w buildzie) – podział na chunki per ekran później.
