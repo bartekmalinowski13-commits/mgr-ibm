@@ -12,6 +12,8 @@ Every call emits an OTel span with GenAI semantic-convention attributes and retu
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
 import hashlib
 import json
 import time
@@ -133,6 +135,9 @@ def _usage(
     )
 
 
+RETRY_STATUS = frozenset({408, 409, 429, 500, 502, 503, 504})
+
+
 class GatewayChat:
     def __init__(
         self,
@@ -141,9 +146,36 @@ class GatewayChat:
         *,
         timeout: float = 120.0,
         client: httpx.AsyncClient | None = None,
+        max_retries: int = 2,
+        backoff_s: float = 1.0,
     ) -> None:
+        self._max_retries = max_retries
+        self._backoff = backoff_s
         self._headers = {"Authorization": f"Bearer {api_key}"}
         self._client = client or httpx.AsyncClient(base_url=base_url.rstrip("/"), timeout=timeout)
+
+    async def _post_with_retry(self, body: dict[str, Any], span: Any) -> httpx.Response:
+        """Retry transient failures (rate limits, 5xx, transport) with exponential backoff,
+        honouring ``Retry-After``."""
+        attempt = 0
+        while True:
+            retry_after = 0.0
+            try:
+                resp = await self._client.post(
+                    "/v1/chat/completions", json=body, headers=self._headers
+                )
+            except httpx.HTTPError as exc:
+                if attempt >= self._max_retries:
+                    span.set_status(trace.StatusCode.ERROR, type(exc).__name__)
+                    raise LlmError(f"gateway unreachable: {type(exc).__name__}") from exc
+            else:
+                if resp.status_code not in RETRY_STATUS or attempt >= self._max_retries:
+                    return resp
+                with contextlib.suppress(ValueError):
+                    retry_after = float(resp.headers.get("retry-after", "0"))
+            attempt += 1
+            span.add_event("retry", {"attempt": attempt})
+            await asyncio.sleep(min(max(self._backoff * 2 ** (attempt - 1), retry_after), 30.0))
 
     async def complete(self, request: ChatRequest) -> ChatResult:
         body = {
@@ -166,31 +198,32 @@ class GatewayChat:
         with tracer.start_as_current_span(
             f"chat {request.prompt_id}", attributes=_span_attrs(request)
         ) as span:
-            resp = await self._client.post("/v1/chat/completions", json=body, headers=self._headers)
+            resp = await self._post_with_retry(body, span)
             if resp.status_code >= 400:
+                span.set_status(trace.StatusCode.ERROR, str(resp.status_code))
                 raise LlmError(f"gateway returned {resp.status_code}")
-            payload = resp.json()
-            content = payload["choices"][0]["message"]["content"] or "{}"
-            usage = payload.get("usage", {})
+            try:
+                payload = resp.json()
+                content = payload["choices"][0]["message"]["content"] or "{}"
+            except (ValueError, KeyError, IndexError, TypeError) as exc:
+                span.set_status(trace.StatusCode.ERROR, "malformed response")
+                raise LlmError("malformed gateway response") from exc
+            usage = payload.get("usage") or {}
             span.set_attribute("gen_ai.usage.input_tokens", usage.get("prompt_tokens", 0))
             span.set_attribute("gen_ai.usage.output_tokens", usage.get("completion_tokens", 0))
             span.set_attribute("gen_ai.response.model", payload.get("model", ""))
+        call_usage = _usage(
+            request.model,
+            usage.get("prompt_tokens", 0),
+            usage.get("completion_tokens", 0),
+            time.perf_counter() - start,
+            (usage.get("prompt_tokens_details") or {}).get("cached_tokens", 0),
+        )
         try:
             data = json.loads(content)
         except json.JSONDecodeError as exc:
-            raise LlmError(f"{request.prompt_id}: non-JSON response") from exc
-        return ChatResult(
-            data=data,
-            usage=_usage(
-                request.model,
-                usage.get("prompt_tokens", 0),
-                usage.get("completion_tokens", 0),
-                time.perf_counter() - start,
-                (usage.get("prompt_tokens_details") or {}).get("cached_tokens", 0),
-            ),
-            model_id=request.model.id,
-            raw=content,
-        )
+            raise LlmError(f"{request.prompt_id}: non-JSON response", call_usage) from exc
+        return ChatResult(data=data, usage=call_usage, model_id=request.model.id, raw=content)
 
 
 Responder = Callable[[ChatRequest], dict[str, Any]]
@@ -206,11 +239,14 @@ class FakeChat:
     def __init__(self, responder: Responder, cassette_dir: str | Path | None = None) -> None:
         self._responder = responder
         self._cassettes: dict[str, dict[str, Any]] = {}
+        self._usage: dict[str, Usage] = {}
         self.calls: list[ChatRequest] = []
         if cassette_dir is not None and Path(cassette_dir).is_dir():
             for path in sorted(Path(cassette_dir).glob("*.json")):
                 entry = json.loads(path.read_text(encoding="utf-8"))
                 self._cassettes[entry["key"]] = entry["response"]
+                if entry.get("usage"):
+                    self._usage[entry["key"]] = Usage.model_validate(entry["usage"])
 
     async def complete(self, request: ChatRequest) -> ChatResult:
         self.calls.append(request)
@@ -221,25 +257,34 @@ class FakeChat:
             data = cached if cached is not None else self._responder(request)
         prompt_text = "".join(m.content for m in request.messages)
         out = json.dumps(data)
+        recorded = self._usage.get(request.cache_key()) if cached is not None else None
         return ChatResult(
             data=data,
-            usage=_usage(request.model, _estimate_tokens(prompt_text), _estimate_tokens(out), 0.0),
+            # usage recorded with the real call when replaying; otherwise an estimate
+            usage=recorded
+            or _usage(request.model, _estimate_tokens(prompt_text), _estimate_tokens(out), 0.0),
             model_id=request.model.id,
             raw=out,
         )
 
 
-def record_cassette(directory: str | Path, request: ChatRequest, response: dict[str, Any]) -> Path:
-    """Store a response for deterministic replay (used when recording with real models)."""
+def record_cassette(
+    directory: str | Path,
+    request: ChatRequest,
+    response: dict[str, Any],
+    usage: Usage | None = None,
+) -> Path:
+    """Store a response (and the real call's usage) for deterministic replay."""
     path = Path(directory) / f"{request.prompt_id}-{request.cache_key()[:16]}.json"
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        json.dumps(
-            {"key": request.cache_key(), "prompt_id": request.prompt_id, "response": response},
-            indent=2,
-            sort_keys=True,
-        )
-    )
+    entry: dict[str, Any] = {
+        "key": request.cache_key(),
+        "prompt_id": request.prompt_id,
+        "response": response,
+    }
+    if usage is not None:
+        entry["usage"] = usage.model_dump(mode="json")
+    path.write_text(json.dumps(entry, indent=2, sort_keys=True))
     return path
 
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import time
 from collections.abc import Awaitable, Callable
+from contextvars import ContextVar
 from dataclasses import dataclass, field
 from typing import Any, TypeVar
 
@@ -28,6 +29,9 @@ from bomagent_llm.catalog import Catalog, ModelSpec
 from bomagent_llm.chat import ChatClient, ChatRequest, LlmError, Message, structured
 
 tracer = trace.get_tracer("bomagent.agents")
+# calls made inside the current step; a ContextVar so concurrent fan-out branches
+# (separate asyncio tasks) do not count each other's calls
+_step_calls: ContextVar[list[int] | None] = ContextVar("bomagent_step_calls", default=None)
 T = TypeVar("T", bound=BaseModel)
 R = TypeVar("R")
 
@@ -153,25 +157,30 @@ class AgentContext:
             result, usage = await structured(self.chat, request, schema)
         except LlmError as exc:
             self.budget.charge(exc.usage)  # failed attempts are paid for too
+            counter = _step_calls.get()
+            if counter is not None:
+                counter[0] += exc.usage.llm_calls
             raise
         self.budget.charge(usage)
+        counter = _step_calls.get()
+        if counter is not None:
+            counter[0] += usage.llm_calls
         return result, prompt, model
 
     async def step(self, node: str, fn: Callable[[], Awaitable[R]]) -> R:
-        calls_before = self.budget.usage.llm_calls
+        counter = [0]
+        token = _step_calls.set(counter)
         start = time.perf_counter()
-        with tracer.start_as_current_span(
-            f"node {node}", attributes={"bomagent.node": node, "bomagent.run_id": self.run_id}
-        ):
-            out = await fn()
-        self.trace.append(
-            TraceStep(
-                node=node,
-                duration_s=time.perf_counter() - start,
-                llm_calls=self.budget.usage.llm_calls - calls_before,
+        try:
+            with tracer.start_as_current_span(
+                f"node {node}", attributes={"bomagent.node": node, "bomagent.run_id": self.run_id}
+            ):
+                return await fn()
+        finally:
+            _step_calls.reset(token)
+            self.trace.append(
+                TraceStep(node=node, duration_s=time.perf_counter() - start, llm_calls=counter[0])
             )
-        )
-        return out
 
 
 def agent_provenance(

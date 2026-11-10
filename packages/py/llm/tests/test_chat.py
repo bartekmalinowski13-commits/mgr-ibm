@@ -105,3 +105,67 @@ async def test_cassettes_take_precedence_and_keys_are_stable(tmp_path):
     assert (await chat.complete(req)).data == {"mpn": "RECORDED"}
     assert (await chat.complete(_request("other"))).data == {"mpn": "SCRIPTED"}
     assert resolve_model(load_catalog(), "fake-closed").id == "fake-closed"
+
+
+async def test_gateway_retries_rate_limits_then_succeeds():
+    calls = {"n": 0}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls["n"] += 1
+        if calls["n"] < 3:
+            return httpx.Response(429, headers={"retry-after": "0"})
+        return httpx.Response(
+            200,
+            json={
+                "choices": [{"message": {"content": '{"mpn": "R"}'}}],
+                "usage": {"prompt_tokens": 1, "completion_tokens": 1},
+            },
+        )
+
+    chat = GatewayChat(
+        "http://gw",
+        "k",
+        backoff_s=0.0,
+        client=httpx.AsyncClient(transport=httpx.MockTransport(handler), base_url="http://gw"),
+    )
+    assert (await chat.complete(_request())).data == {"mpn": "R"}
+    assert calls["n"] == 3
+
+
+async def test_gateway_gives_up_and_wraps_transport_errors():
+    def down(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("down")
+
+    chat = GatewayChat(
+        "http://gw",
+        "k",
+        backoff_s=0.0,
+        max_retries=1,
+        client=httpx.AsyncClient(transport=httpx.MockTransport(down), base_url="http://gw"),
+    )
+    with pytest.raises(LlmError, match="unreachable"):
+        await chat.complete(_request())
+    malformed = GatewayChat(
+        "http://gw",
+        "k",
+        client=httpx.AsyncClient(
+            transport=httpx.MockTransport(lambda r: httpx.Response(200, json={"x": 1})),
+            base_url="http://gw",
+        ),
+    )
+    with pytest.raises(LlmError, match="malformed"):
+        await malformed.complete(_request())
+
+
+async def test_cassette_replays_recorded_usage(tmp_path):
+    from bomagent_bom.model import Usage
+
+    req = _request("u")
+    record_cassette(
+        tmp_path,
+        req,
+        {"mpn": "X"},
+        Usage(llm_calls=1, input_tokens=1234, output_tokens=56, cost_eur=0.01),
+    )
+    result = await FakeChat(lambda r: {}, cassette_dir=tmp_path).complete(req)
+    assert (result.usage.input_tokens, result.usage.output_tokens) == (1234, 56)
