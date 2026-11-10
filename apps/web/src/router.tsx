@@ -2,27 +2,19 @@ import {
   createRootRoute,
   createRoute,
   createRouter,
+  lazyRouteComponent,
   Navigate,
   Outlet,
 } from "@tanstack/react-router";
-import { AuditScreen } from "./screens/AuditScreen";
-import { CompareScreen } from "./screens/CompareScreen";
 import { LoginScreen } from "./screens/LoginScreen";
-import { OnboardingScreen } from "./screens/OnboardingScreen";
-import { ProjectScreen } from "./screens/ProjectScreen";
-import { ProjectsScreen } from "./screens/ProjectsScreen";
-import { RunScreen } from "./screens/RunScreen";
-import { RunsScreen } from "./screens/RunsScreen";
-import { SettingsScreen } from "./screens/SettingsScreen";
 import { Shell } from "./screens/Shell";
-import { StartScreen } from "./screens/StartScreen";
 
 const root = createRootRoute({ component: Outlet });
 const login = createRoute({ getParentRoute: () => root, path: "/login", component: LoginScreen });
 const onboarding = createRoute({
   getParentRoute: () => root,
   path: "/onboarding",
-  component: OnboardingScreen,
+  component: lazyRouteComponent(() => import("./screens/OnboardingScreen"), "OnboardingScreen"),
 });
 const app = createRoute({ getParentRoute: () => root, id: "app", component: Shell });
 const index = createRoute({
@@ -30,37 +22,49 @@ const index = createRoute({
   path: "/",
   component: () => <Navigate to="/start" />,
 });
-const start = createRoute({ getParentRoute: () => app, path: "/start", component: StartScreen });
+const start = createRoute({
+  getParentRoute: () => app,
+  path: "/start",
+  component: lazyRouteComponent(() => import("./screens/StartScreen"), "StartScreen"),
+});
 const projects = createRoute({
   getParentRoute: () => app,
   path: "/projects",
-  component: ProjectsScreen,
+  component: lazyRouteComponent(() => import("./screens/ProjectsScreen"), "ProjectsScreen"),
 });
 export const projectRoute = createRoute({
   getParentRoute: () => app,
   path: "/projects/$projectId",
-  component: ProjectScreen,
+  component: lazyRouteComponent(() => import("./screens/ProjectScreen"), "ProjectScreen"),
 });
 export const compareRoute = createRoute({
   getParentRoute: () => app,
   path: "/projects/$projectId/compare",
-  component: CompareScreen,
+  component: lazyRouteComponent(() => import("./screens/CompareScreen"), "CompareScreen"),
   validateSearch: (search: Record<string, unknown>): { a?: string; b?: string } => ({
     a: typeof search.a === "string" ? search.a : undefined,
     b: typeof search.b === "string" ? search.b : undefined,
   }),
 });
-const runs = createRoute({ getParentRoute: () => app, path: "/runs", component: RunsScreen });
+const runs = createRoute({
+  getParentRoute: () => app,
+  path: "/runs",
+  component: lazyRouteComponent(() => import("./screens/RunsScreen"), "RunsScreen"),
+});
 export const runRoute = createRoute({
   getParentRoute: () => app,
   path: "/runs/$runId",
-  component: RunScreen,
+  component: lazyRouteComponent(() => import("./screens/RunScreen"), "RunScreen"),
 });
-const audit = createRoute({ getParentRoute: () => app, path: "/audit", component: AuditScreen });
+const audit = createRoute({
+  getParentRoute: () => app,
+  path: "/audit",
+  component: lazyRouteComponent(() => import("./screens/AuditScreen"), "AuditScreen"),
+});
 const settings = createRoute({
   getParentRoute: () => app,
   path: "/settings",
-  component: SettingsScreen,
+  component: lazyRouteComponent(() => import("./screens/SettingsScreen"), "SettingsScreen"),
 });
 
 export const router = createRouter({
