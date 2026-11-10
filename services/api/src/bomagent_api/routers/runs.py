@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import csv
 import json
 import math
 import uuid
@@ -307,7 +308,7 @@ async def evaluate_bom(
         )
     try:
         ref_items = load_reference_csv(raw.decode("utf-8-sig"))
-    except (UnicodeDecodeError, ValueError) as exc:
+    except (UnicodeDecodeError, ValueError, csv.Error) as exc:
         raise ProblemError(
             422,
             "Unprocessable Entity",

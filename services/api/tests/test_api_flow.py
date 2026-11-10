@@ -346,8 +346,9 @@ async def test_evaluation_against_a_reference_bom(env):
     assert set(report["fields"]) >= {"mpn", "value"}
     assert all({"refdes", "field", "predicted", "expected"} <= set(d) for d in report["diffs"])
 
-    bad = await c.post(url, headers=alice, files={"reference": ("ref.csv", b"just,some\nnoise")})
-    assert bad.status_code == 422
+    for junk in (b"just,some\nnoise", b"\r0", b"\xff\xfe", b'a,"b\rc'):
+        bad = await c.post(url, headers=alice, files={"reference": ("ref.csv", junk)})
+        assert bad.status_code == 422, (junk, bad.text)
     huge = await c.post(
         url, headers=alice, files={"reference": ("ref.csv", b"a" * (1024 * 1024 + 1))}
     )
