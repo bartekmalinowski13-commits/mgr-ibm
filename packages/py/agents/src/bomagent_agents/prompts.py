@@ -47,6 +47,7 @@ def load_prompt(prompt_id: str, version: str = "1") -> Prompt:
 
 
 def data_block(name: str, payload: str) -> str:
-    """Wrap untrusted content; the closing tag inside the payload is neutralised."""
-    safe = payload.replace("</data>", "<\\/data>")
+    """Wrap untrusted content. Every ``<`` and ``>`` in the payload is escaped (JSON
+    ``\\u003c``/``\\u003e``), so no tag - in any spelling - can close the block."""
+    safe = payload.replace("<", "\\u003c").replace(">", "\\u003e")
     return f'<data name="{name}">\n{safe}\n</data>'

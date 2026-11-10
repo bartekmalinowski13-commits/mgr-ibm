@@ -11,13 +11,21 @@ from typing import Any, TypeVar
 from opentelemetry import trace
 from pydantic import BaseModel
 
-from bomagent_agents.contracts import Budget, RunConfig, TraceStep
+from bomagent_agents.contracts import Budget, BudgetExceededError, RunConfig, TraceStep
 from bomagent_agents.prompts import Prompt, data_block, load_prompt
 from bomagent_agents.retrieval import Evidence, Retriever
 from bomagent_agents.schemas import schema_of
-from bomagent_bom.model import KbCitation, Provenance, ProvenanceKind, Requirements
+from bomagent_bom.model import (
+    BomItem,
+    Finding,
+    KbCitation,
+    Provenance,
+    ProvenanceKind,
+    Requirements,
+    Severity,
+)
 from bomagent_llm.catalog import Catalog, ModelSpec
-from bomagent_llm.chat import ChatClient, ChatRequest, Message, structured
+from bomagent_llm.chat import ChatClient, ChatRequest, LlmError, Message, structured
 
 tracer = trace.get_tracer("bomagent.agents")
 T = TypeVar("T", bound=BaseModel)
@@ -33,11 +41,67 @@ class AgentContext:
     requirements: Requirements
     run_id: str
     tenant_id: str = ""
+    design_mpns: set[str] = field(default_factory=set)
     budget: Budget = field(init=False)
     trace: list[TraceStep] = field(default_factory=list)
+    # MPNs seen as candidates in retrieved evidence during this run (guard + metrics)
+    evidence_mpns: set[str] = field(default_factory=set)
+    issues: list[Finding] = field(default_factory=list)
+    budget_hit: bool = False
+    failed: bool = False
 
     def __post_init__(self) -> None:
         self.budget = Budget(self.config)
+
+    @property
+    def status(self) -> str:
+        return "failed" if self.failed else "budget_exceeded" if self.budget_hit else "completed"
+
+    def mpn_allowed(self, mpn: str) -> bool:
+        """Evidence-only rule, identical for every variant and every step."""
+        norm = mpn.strip().upper()
+        return not norm or norm in self.evidence_mpns or norm in self.design_mpns
+
+    def guard_mpns(self, items: list[BomItem], step: str) -> list[BomItem]:
+        """Clear MPNs that are in no evidence and record the attempt (hallucination
+        attempts stay measurable instead of disappearing)."""
+        out: list[BomItem] = []
+        for original in items:
+            item = original
+            if item.mpn and not self.mpn_allowed(item.mpn):
+                self.issues.append(
+                    Finding(
+                        rule_id="agent.mpn_rejected",
+                        severity=Severity.WARNING,
+                        field="mpn",
+                        refdes=list(item.refdes),
+                        message=f"{step}: MPN {item.mpn!r} is in no "
+                        "retrieved evidence and was discarded",
+                    )
+                )
+                prov = {
+                    k: v for k, v in item.provenance.items() if k not in {"mpn", "manufacturer"}
+                }
+                item = item.model_copy(update={"mpn": "", "manufacturer": "", "provenance": prov})
+            out.append(item)
+        return out
+
+    async def guarded(self, node: str, fn: Callable[[], Awaitable[R]], default: R) -> R:
+        """Run an agent step; a budget stop or model failure becomes a finding and the
+        step's ``default`` (partial results are kept, the run is not aborted)."""
+        try:
+            return await self.step(node, fn)
+        except BudgetExceededError as exc:
+            self.budget_hit = True
+            self.issues.append(
+                Finding(rule_id="run.budget", severity=Severity.ERROR, message=f"{node}: {exc}")
+            )
+        except LlmError as exc:
+            self.failed = True
+            self.issues.append(
+                Finding(rule_id="run.llm_error", severity=Severity.ERROR, message=f"{node}: {exc}")
+            )
+        return default
 
     @property
     def model(self) -> ModelSpec:
@@ -55,6 +119,7 @@ class AgentContext:
         *,
         knowledge: Evidence | None = None,
         fast: bool = False,
+        max_tokens: int = 4096,
     ) -> tuple[T, Prompt, ModelSpec]:
         """One structured call; document text goes into <data> blocks, never the system
         prompt (prompt-injection boundary)."""
@@ -74,6 +139,7 @@ class AgentContext:
             ]
             parts.append(data_block("knowledge", json.dumps(excerpts, ensure_ascii=False)))
         request = ChatRequest(
+            max_tokens=max_tokens,
             prompt_id=prompt.id,
             prompt_version=prompt.full_version,
             model=model,
@@ -83,7 +149,11 @@ class AgentContext:
             metadata={"run_id": self.run_id, "tenant_id": self.tenant_id, "prompt_id": prompt.id},
         )
         self.budget.check()
-        result, usage = await structured(self.chat, request, schema)
+        try:
+            result, usage = await structured(self.chat, request, schema)
+        except LlmError as exc:
+            self.budget.charge(exc.usage)  # failed attempts are paid for too
+            raise
         self.budget.charge(usage)
         return result, prompt, model
 

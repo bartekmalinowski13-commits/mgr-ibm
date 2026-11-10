@@ -28,9 +28,9 @@ def scripted_query(submit: bool = True):
         tools = {t.name: t.handler for t in options["tools"]}
         comps = await tools["get_components"]({})
         assert '<data name="components">' in comps["content"][0]["text"]
-        found = json.loads(
-            (await tools["search_kb"]({"query": "100 nF 0603"}))["content"][0]["text"]
-        )
+        text = (await tools["search_kb"]({"query": "100 nF 0603"}))["content"][0]["text"]
+        assert text.startswith('<data name="knowledge">')
+        found = json.loads(text.split("\n", 1)[1].rsplit("\n", 1)[0])
         assert found["candidates"]
         if submit:
             await tools["submit_bom"](

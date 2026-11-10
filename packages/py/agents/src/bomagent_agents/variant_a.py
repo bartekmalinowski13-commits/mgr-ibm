@@ -5,29 +5,42 @@ Graph::
     extract_group (agent) -> select_mpn* (agent + RAG, fan-out, ALL lines)
         -> validate (agent) -> compose (agent) -> to BomVersion (structural only)
 
-The only code-side work is structural: converting the agents' JSON into ``BomItem``
-objects (with ``quantity`` exactly as the agent stated it) and recording provenance.
-The same retrieval, models and MPN prompt as variant B are used, so differences are
-attributable to the architecture (docs/thesis/ARCHITEKTURA_WARIANTOW.md).
+Code-side work is structural only: converting the agents' JSON into ``BomItem`` objects
+(quantity as the agent stated it; malformed lines are dropped and reported, not repaired).
+The same retrieval, models, MPN prompt, evidence-only MPN rule, budget and failure
+handling as variant B are used, so differences are attributable to the architecture
+(docs/thesis/ARCHITEKTURA_WARIANTOW.md). Input: the parser's component list (A's
+extraction agent reads parsed components rather than raw CAD files - DECISIONS_LOG).
 """
 
 from __future__ import annotations
 
 import operator
 import time
-from typing import Annotated, Any, Literal, TypedDict
+from typing import Annotated, Any, TypedDict
 
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import Send
 
-from bomagent_agents.contracts import BudgetExceededError, RunInput, RunOutput
+from bomagent_agents.contracts import RunInput, RunOutput
 from bomagent_agents.runtime_base import AgentContext, agent_provenance
 from bomagent_agents.schemas import GroupedLines, LineOut, ValidationOut
-from bomagent_agents.variant_b import apply_choice, choose_mpn
-from bomagent_bom.model import BomItem, BomVersion, Finding, Severity
+from bomagent_agents.variant_b import apply_choices, choose_mpn, finish, record_rejections
+from bomagent_bom.model import BomItem, Finding, Provenance, Severity
 from bomagent_bom.packages import package_from_footprint
 from bomagent_bom.refdes import kind_of
+
+LINE_KEYS = (
+    "refdes",
+    "quantity",
+    "value",
+    "footprint",
+    "mpn",
+    "manufacturer",
+    "dnp",
+    "description",
+)
 
 
 class AState(TypedDict, total=False):
@@ -36,24 +49,24 @@ class AState(TypedDict, total=False):
     findings: list[dict[str, Any]]
 
 
-def lines_to_items(lines: list[LineOut], provenance: Any) -> list[BomItem]:
+def lines_to_items(
+    ctx: AgentContext | None, lines: list[LineOut], provenance: Provenance, step: str
+) -> list[BomItem]:
     items: list[BomItem] = []
-    for n, line in enumerate(lines, start=1):
-        refs = [r for r in dict.fromkeys(line.refdes) if r]
-        if not refs:
-            continue
+    for line in lines:
         try:
             items.append(
                 BomItem(
-                    line=n,
-                    refdes=refs,
-                    quantity=max(1, line.quantity if line.quantity is not None else len(refs)),
-                    kind=kind_of(refs[0]),
+                    line=len(items) + 1,
+                    refdes=line.refdes,
+                    quantity=line.quantity if line.quantity is not None else len(line.refdes),
+                    kind=kind_of(line.refdes[0]) if line.refdes else "other",
                     value=line.value,
                     footprint=line.footprint,
                     package=package_from_footprint(line.footprint),
                     mpn=line.mpn,
                     manufacturer=line.manufacturer,
+                    description=line.description,
                     dnp=line.dnp,
                     provenance={
                         "item": provenance,
@@ -63,8 +76,16 @@ def lines_to_items(lines: list[LineOut], provenance: Any) -> list[BomItem]:
                     },
                 )
             )
-        except ValueError:
-            continue  # malformed agent output line (e.g. invalid designator) is dropped
+        except ValueError as exc:
+            if ctx is not None:
+                ctx.issues.append(
+                    Finding(
+                        rule_id="agent.malformed_line",
+                        severity=Severity.ERROR,
+                        refdes=[r for r in line.refdes if r][:20],
+                        message=f"{step}: line dropped ({type(exc).__name__})",
+                    )
+                )
     return items
 
 
@@ -77,11 +98,20 @@ class LangGraphVariantA:
     def _graph(self, ctx: AgentContext, run: RunInput) -> Any:
         async def extract_group(state: AState) -> AState:
             comps = [c.model_dump(mode="json") for c in run.design.components]
-            out, prompt, model = await ctx.step(
+            result = await ctx.guarded(
                 "extract_group",
-                lambda: ctx.ask("extract_group", {"components": comps}, GroupedLines),
+                lambda: ctx.ask(
+                    "extract_group", {"components": comps}, GroupedLines, max_tokens=16_000
+                ),
+                None,
             )
-            items = lines_to_items(out.lines, agent_provenance("extract_group", prompt, model))
+            if result is None:
+                return {"items": []}
+            out, prompt, model = result
+            items = lines_to_items(
+                ctx, out.lines, agent_provenance("extract_group", prompt, model), "extract_group"
+            )
+            items = ctx.guard_mpns(items, "extract_group")
             return {"items": [i.model_dump(mode="json") for i in items]}
 
         def fan_out(state: AState) -> list[Send] | str:
@@ -90,86 +120,78 @@ class LangGraphVariantA:
 
         async def select_mpn(payload: dict[str, Any]) -> AState:
             item = BomItem.model_validate(payload["item"])
-            choice = await ctx.step(f"select_mpn:{item.refdes[0]}", lambda: choose_mpn(ctx, item))
-            return {"choices": [choice]}
+            choice = await ctx.guarded(
+                f"select_mpn:{item.refdes[0]}", lambda: choose_mpn(ctx, item), None
+            )
+            return {"choices": [choice] if choice else []}
 
         async def validate_node(state: AState) -> AState:
-            by_line = {c["line"]: c for c in state.get("choices", [])}
-            items = [
-                apply_choice(BomItem.model_validate(i), by_line[i["line"]])
-                if i["line"] in by_line
-                else BomItem.model_validate(i)
-                for i in state["items"]
-            ]
-            lines = [
-                {
-                    "line": i.line,
-                    "refdes": i.refdes,
-                    "quantity": i.quantity,
-                    "value": i.value,
-                    "footprint": i.footprint,
-                    "mpn": i.mpn,
-                    "manufacturer": i.manufacturer,
-                    "dnp": i.dnp,
-                }
-                for i in items
-            ]
-            out, _, _ = await ctx.step(
+            record_rejections(ctx, state.get("choices", []))
+            items = apply_choices(state["items"], state.get("choices", []))
+            lines = [{k: getattr(i, k) for k in LINE_KEYS} | {"line": i.line} for i in items]
+            result = await ctx.guarded(
                 "validate",
                 lambda: ctx.ask(
                     "validate",
                     {"lines": lines, "requirements": run.requirements.model_dump(mode="json")},
                     ValidationOut,
+                    max_tokens=8_000,
                 ),
+                None,
             )
-            findings = [
-                Finding(
-                    rule_id="agent.validate",
-                    severity=Severity(f.severity),
-                    message=f.message,
-                    refdes=f.refdes,
-                    field=f.field,
-                )
-                for f in out.findings
-            ]
+            findings = (
+                []
+                if result is None
+                else [
+                    Finding(
+                        rule_id="agent.validate",
+                        severity=Severity(f.severity),
+                        message=f.message,
+                        refdes=f.refdes,
+                        field=f.field,
+                    )
+                    for f in result[0].findings
+                ]
+            )
             return {
                 "items": [i.model_dump(mode="json") for i in items],
+                "choices": [],
                 "findings": [f.model_dump(mode="json") for f in findings],
             }
 
         async def compose(state: AState) -> AState:
-            lines = [
-                {
-                    k: i[k]
-                    for k in (
-                        "refdes",
-                        "quantity",
-                        "value",
-                        "footprint",
-                        "mpn",
-                        "manufacturer",
-                        "dnp",
-                    )
-                }
-                for i in state["items"]
-            ]
-            out, prompt, model = await ctx.step(
+            if ctx.status != "completed":
+                return {}
+            lines = [{k: i[k] for k in LINE_KEYS} for i in state["items"]]
+            result = await ctx.guarded(
                 "compose",
                 lambda: ctx.ask(
-                    "compose", {"lines": lines, "findings": state["findings"]}, GroupedLines
+                    "compose",
+                    {"lines": lines, "findings": state["findings"]},
+                    GroupedLines,
+                    max_tokens=16_000,
                 ),
+                None,
             )
+            if result is None:
+                return {}  # keep the validated items
+            out, prompt, model = result
             prov = agent_provenance("compose", prompt, model)
             previous = {tuple(i["refdes"]): BomItem.model_validate(i) for i in state["items"]}
-            items = []
-            for composed in lines_to_items(out.lines, prov):
+            items: list[BomItem] = []
+            for composed in ctx.guard_mpns(
+                lines_to_items(ctx, out.lines, prov, "compose"), "compose"
+            ):
+                before = previous.get(tuple(composed.refdes))
+                keep = (
+                    before is not None and composed.mpn == before.mpn and "mpn" in before.provenance
+                )
                 item = composed
-                before = previous.get(tuple(item.refdes))
-                if before is not None and "mpn" in before.provenance:  # keep MPN citations
-                    item = item.model_copy(
+                if keep and before is not None:  # MPN unchanged: keep its citations
+                    item = composed.model_copy(
                         update={
                             "provenance": {
-                                **item.provenance,
+                                **composed.provenance,
                                 "mpn": before.provenance["mpn"],
                                 "manufacturer": before.provenance["mpn"],
                             }
@@ -192,38 +214,12 @@ class LangGraphVariantA:
 
     async def run(self, run: RunInput) -> RunOutput:
         ctx: AgentContext = self._ctx_factory(run)
-        graph = self._graph(ctx, run)
         start = time.perf_counter()
-        status: Literal["completed", "budget_exceeded", "failed"] = "completed"
-        config = {
-            "configurable": {"thread_id": str(run.run_id)},
-            "max_concurrency": run.config.concurrency,
-        }
-        try:
-            state = await graph.ainvoke({}, config=config)
-        except BudgetExceededError as exc:
-            status = "budget_exceeded"
-            state = dict(graph.get_state(config).values or {})
-            state.setdefault("findings", []).append(
-                Finding(rule_id="run.budget", severity=Severity.ERROR, message=str(exc)).model_dump(
-                    mode="json"
-                )
-            )
-        usage = ctx.budget.usage.model_copy(update={"wall_time_s": time.perf_counter() - start})
-        bom = BomVersion(
-            id=run.run_id,
-            design_name=run.design.design_name,
-            variant="A",
-            items=[BomItem.model_validate(i) for i in state.get("items", [])],
-            findings=[Finding.model_validate(f) for f in state.get("findings", [])],
-            usage=usage,
-            kb_snapshot_id=run.config.kb_snapshot_id,
+        state = await self._graph(ctx, run).ainvoke(
+            {},
+            config={
+                "configurable": {"thread_id": str(run.run_id)},
+                "max_concurrency": run.config.concurrency,
+            },
         )
-        return RunOutput(
-            run_id=run.run_id,
-            runtime=self.name,
-            bom=bom,
-            trace=ctx.trace,
-            usage=usage,
-            status=status,
-        )
+        return finish(ctx, run, state, self.name, "A", start)

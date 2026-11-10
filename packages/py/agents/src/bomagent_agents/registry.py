@@ -21,7 +21,12 @@ def context_factory(
     cat = catalog or load_catalog()
 
     def make(run: RunInput) -> AgentContext:
+        design_mpns = {
+            c.field("MPN", "Manufacturer Part Number").strip().upper()
+            for c in run.design.components
+        } - {""}
         return AgentContext(
+            design_mpns=design_mpns,
             chat=chat,
             catalog=cat,
             retriever=retriever,

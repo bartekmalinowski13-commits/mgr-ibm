@@ -26,6 +26,7 @@ class LineOut(_S):
     footprint: str = ""
     mpn: str = ""
     manufacturer: str = ""
+    description: str = ""
     dnp: bool = False
 
 

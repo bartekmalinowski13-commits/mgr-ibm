@@ -13,7 +13,8 @@ from typing import Any
 
 from fastapi import FastAPI
 
-from bomagent_agents.fake_responder import heuristic_responder
+from bomagent_agents.fake_responder import HANDLERS, heuristic_responder
+from bomagent_agents.prompts import load_prompt
 from bomagent_llm.catalog import load_catalog
 from bomagent_llm.chat import ChatRequest, FakeChat, Message
 from bomagent_llm.embeddings import HashingEmbeddings
@@ -34,6 +35,13 @@ def create_app(cassette_dir: str | None = None) -> FastAPI:
     @app.post("/v1/chat/completions")
     async def completions(body: dict[str, Any]) -> dict[str, Any]:
         meta = body.get("metadata") or {}
+        # LiteLLM may not forward metadata upstream: identify the prompt by its text
+        system = next((m["content"] for m in body["messages"] if m["role"] == "system"), "")
+        prompt_id = str(
+            meta.get("prompt_id")
+            or next((pid for pid in HANDLERS if load_prompt(pid).text == system), "")
+        )
+        schema = (body.get("response_format") or {}).get("json_schema") or {}
         model = next(
             (
                 m
@@ -43,12 +51,14 @@ def create_app(cassette_dir: str | None = None) -> FastAPI:
             catalog.get("fake-closed"),
         )
         request = ChatRequest(
-            prompt_id=str(meta.get("prompt_id", "")),
+            prompt_id=prompt_id,
             prompt_version="?",
             model=model,
             messages=[Message(m["role"], m["content"]) for m in body["messages"]],
-            schema_name="",
-            json_schema={},
+            schema_name=str(schema.get("name", "")),
+            json_schema=schema.get("schema") or {},
+            temperature=float(body.get("temperature", 0.0)),
+            max_tokens=int(body.get("max_tokens", 4096)),
         )
         result = await chat.complete(request)
         return {

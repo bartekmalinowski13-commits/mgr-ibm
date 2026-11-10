@@ -32,7 +32,13 @@ T = TypeVar("T", bound=BaseModel)
 
 
 class LlmError(RuntimeError):
-    """Gateway failure or a response that does not match the requested schema."""
+    """Gateway failure or a response that does not match the requested schema.
+
+    ``usage`` carries what the failed attempts still cost (thesis cost metric)."""
+
+    def __init__(self, message: str, usage: Usage | None = None) -> None:
+        super().__init__(message)
+        self.usage = usage or Usage()
 
 
 @dataclass(frozen=True)
@@ -59,6 +65,9 @@ class ChatRequest:
                 "model": self.model.gateway_model,
                 "messages": [[m.role, m.content] for m in self.messages],
                 "schema": self.schema_name,
+                "schema_body": self.json_schema,
+                "temperature": self.temperature,
+                "max_tokens": self.max_tokens,
             },
             sort_keys=True,
         )
@@ -83,13 +92,18 @@ async def structured[T: BaseModel](
     """Run ``request`` and validate the JSON against ``schema`` (one retry on mismatch)."""
     total = Usage()
     for attempt in range(2):
-        result = await client.complete(request)
+        try:
+            result = await client.complete(request)
+        except LlmError as exc:
+            raise LlmError(str(exc), total + exc.usage) from exc
         total = total + result.usage
         try:
             return schema.model_validate(result.data), total
         except ValidationError as exc:
             if attempt == 1:
-                raise LlmError(f"{request.prompt_id}: response does not match schema") from exc
+                raise LlmError(
+                    f"{request.prompt_id}: response does not match schema", total
+                ) from exc
     raise AssertionError("unreachable")  # pragma: no cover
 
 
@@ -203,7 +217,8 @@ class FakeChat:
         with tracer.start_as_current_span(
             f"chat {request.prompt_id}", attributes=_span_attrs(request)
         ):
-            data = self._cassettes.get(request.cache_key()) or self._responder(request)
+            cached = self._cassettes.get(request.cache_key())
+            data = cached if cached is not None else self._responder(request)
         prompt_text = "".join(m.content for m in request.messages)
         out = json.dumps(data)
         return ChatResult(

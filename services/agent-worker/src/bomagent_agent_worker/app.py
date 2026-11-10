@@ -45,8 +45,10 @@ def build_handler(settings: Settings) -> Handler:
         embedder = GatewayEmbeddings(
             settings.llm_gateway_url, settings.llm_gateway_key, settings.embedding_model
         )
-    else:  # local/test only: no gateway configured
+    elif settings.environment in {"local", "test"}:  # never in dev/staging/prod
         chat, embedder = FakeChat(heuristic_responder), HashingEmbeddings()
+    else:
+        raise RuntimeError("BOMAGENT_LLM_GATEWAY_URL/KEY are required outside local/test")
     worker = RunWorker(
         engine=make_engine(settings.database_url),
         store=S3ObjectStore(

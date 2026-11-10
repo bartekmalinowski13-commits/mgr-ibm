@@ -32,6 +32,7 @@ from bomagent_llm.chat import ChatClient
 
 log = get_logger(__name__)
 RUN_REQUESTED = "run.requested"
+RUNTIME_VARIANT = {"langgraph_a": "A", "claude_agent_sdk_a": "A", "langgraph_b": "B"}
 
 
 class RejectedRunError(ValueError):
@@ -60,6 +61,9 @@ class RunWorker:
     async def execute(self, message: Message) -> RunOutput:
         p = message.payload
         run_id = uuid.UUID(p["run_id"])
+        runtime = p.get("runtime")
+        if runtime is not None and RUNTIME_VARIANT.get(runtime) != p["variant"]:
+            raise RejectedRunError(f"runtime {runtime!r} does not implement variant {p['variant']}")
         keys = [str(k) for k in p["object_keys"]]
         if not keys or not all(key_belongs_to(message.tenant_id, k) for k in keys):
             raise RejectedRunError("design files must be under the tenant prefix")
@@ -81,7 +85,7 @@ class RunWorker:
             self._retriever(message.tenant_id, config.kb_snapshot_id),
             tenant_id=str(message.tenant_id),
         )
-        result = await runtime_for(config.variant, factory, runtime=p.get("runtime")).run(run)
+        result = await runtime_for(config.variant, factory, runtime=runtime).run(run)
         base = (message.tenant_id, "runs", str(run_id))
         await self.store.put(
             tenant_key(*base, "bom.json"), result.bom.model_dump_json().encode(), "application/json"
@@ -95,7 +99,7 @@ class RunWorker:
             await emit_audit(
                 conn,
                 AuditEvent(
-                    action="run.completed",
+                    action=f"run.{result.status}",
                     object_type="run",
                     object_id=str(run_id),
                     after={

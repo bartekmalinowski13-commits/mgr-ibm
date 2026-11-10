@@ -13,7 +13,7 @@ _Aktualizuje Claude Code po każdym kamieniu milowym (patrz `docs/prompts/CLAUDE
 | M0 | monorepo (uv 15 pakietów + pnpm/biome), justfile, pre-commit, ruff/mypy --strict/import-linter, `platform-common` (kontekst tenanta, RLS, audyt z łańcuchem skrótów, OTel, structlog z redakcją, problem+json, kolejki SQS z kontekstem tenanta/śladu, magazyn S3 z prefiksem tenanta), migracja 0001 (role bez BYPASSRLS, tenants, audit), szkielety 4 serwisów z `/healthz` `/readyz`, `deploy/compose` (Postgres+pgvector, moto, LiteLLM + fake LLM, otel-lgtm, Langfuse, Ollama), GitHub Actions (przypięte SHA), Dependabot, szablony | `88211a8`, poprawki po review `158a34c` | ✅ (ścieżka dockerowa nieuruchomiona lokalnie – patrz niżej) |
 | M1 | `bom-core` (model z pochodzeniem per pole, normalizacja wartości/jednostek, obudowy, grupowanie, eksport CSV/JSON, JSON Schema), `cad-parsers` (KiCad 6–9 + CSV BOM, podpowiedzi dla formatów nieobsługiwanych), `rules` core@1.0.0 (w tym flagi IEC 60601), `eval` (P/R/F1, dokładność pól, pokrycie i halucynacje MPN, wstrzykiwanie błędów, powtarzalność), CLI `bomagent parse|bom|eval`, 3 fixture'y KiCad (CC0) | `1d5d335`, poprawki po review `06f838f` | ✅ |
 | M2 | `llm` (katalog modeli EU closed/open-weight z bramką weryfikacji, embeddingi gateway/hashing), migracja 0002 (`kb.*` z RLS global/tenant), `kb` (ekstrakcja PDF, chunking, hybryda pgvector+FTS+RRF+reranker, snapshoty, korekty jako wiedza tenanta, flagowanie prompt injection), `kb-indexer` (handler SQS), 18 syntetycznych datasheetów + zestaw zapytań | `4e21c4d` | ✅ |
-| M3 | `llm.chat` (gateway z structured output, fałszywy dostawca z kasetami), `agents`: wersjonowane prompty, kontrakt `VariantRuntime`, budżety, `langgraph_b` (hybryda: reguły + agent MPN z RAG tylko dla nierozstrzygniętych + pętla naprawy), `langgraph_a` (100 % LLM), adapter `claude_agent_sdk_a`, MPN tylko z dowodów KB; `fake_server` do compose; CLI `bomagent run --variant A\|B`; `agent-worker` (SQS → wynik w S3 + audyt) | `6c8b783`, `f3ef61d` | ✅ (review subagentem w toku) |
+| M3 | `llm.chat` (gateway z structured output, fałszywy dostawca z kasetami), `agents`: wersjonowane prompty, kontrakt `VariantRuntime`, budżety, `langgraph_b` (hybryda: reguły + agent MPN z RAG tylko dla nierozstrzygniętych + pętla naprawy), `langgraph_a` (100 % LLM), adapter `claude_agent_sdk_a`, MPN tylko z dowodów KB; `fake_server` do compose; CLI `bomagent run --variant A\|B`; `agent-worker` (SQS → wynik w S3 + audyt) | `6c8b783`, `f3ef61d`, poprawki po review w commicie „fix(agents)” | ✅ |
 | M4–M8 | API SaaS, frontend, CDK, formaty, eksperyment | – | ❌ nie rozpoczęte |
 
 Plany i brainstorming: `docs/plans/M0-foundation.md`, `M1-domain-core.md`, `M2-knowledge-base.md`.
@@ -36,13 +36,13 @@ just up && just smoke                # pełny stos dockerowy (niezweryfikowane l
 ```
 
 ### Wyniki testów (2026-11-10, lokalnie, Python 3.13, PostgreSQL 16.15 + pgvector 0.6)
-- **364 testy zielone** (unit + integracyjne + izolacji), 6 pominiętych z założenia (smoke/e2e – wymagają działającego stosu).
-- Pokrycie: `packages/py/*` **96,4 %** (próg 85 %), serwisy **86,6 %** (próg 75 %).
+- **377 testów zielonych** (unit + integracyjne + izolacji), 6 pominiętych z założenia (smoke/e2e – wymagają działającego stosu).
+- Pokrycie: `packages/py/*` **97,1 %** (próg 85 %), serwisy **86,5 %** (próg 75 %).
 - ruff, ruff format, mypy --strict (83 pliki), import-linter (2 kontrakty) – czyste.
 - M3 z fałszywym LLM (hydraulika, nie wynik naukowy): B na eeg-2ch – 4 wywołania LLM, pokrycie MPN 100 %; A – ok. 4× więcej wywołań (ekstrakcja, MPN dla wszystkich pozycji, walidacja, kompozycja).
 - Retrieval (M2) na syntetycznym korpusie: recall@5 = 1,00, recall@1 = 0,89 (18 zapytań).
 - Smoke natywnie (serwisy uruchomione bez Dockera): `/healthz` + `/readyz` z bazą dla 4 serwisów – zielone.
-- Review subagentem po M0 i M1 – wszystkie uwagi wysokiej wagi naprawione (commity `158a34c`, `06f838f`).
+- Review subagentem po M0, M1 i M3 – wszystkie uwagi wysokiej wagi naprawione (commity `158a34c`, `06f838f` i „fix(agents): address M3 review”).
 
 ### Czego nie zrobiono / znane ograniczenia
 - **Docker niedostępny w sesji:** `just up`, `just smoke` (trace w Tempo), Testcontainers i obrazy nie zostały uruchomione lokalnie – sprawdzi je CI (`pr.yml`, job `stack-smoke`). Serwis `fake-llm` w compose powstaje w M3 – do tego czasu `stack-smoke` w CI będzie czerwony.
@@ -70,7 +70,7 @@ just up && just smoke                # pełny stos dockerowy (niezweryfikowane l
 5. **Do wystawienia aplikacji pod linkiem (M4–M6):** konto AWS z dostępem do Bedrock w regionie UE, domena (Route 53 lub dostęp do DNS), rola IAM dla GitHub OIDC (przygotuję szablon), weryfikacja domeny w Amazon SES (maile), decyzja: konta lokalne (e-mail + hasło, Cognito) czy od razu SSO. Hostowanie: AWS `eu-central-1` – SPA na S3 + CloudFront + WAF, API/workery na ECS Fargate, Aurora PostgreSQL, logowanie Amazon Cognito. Wdrożenie uruchamiasz Ty z pipeline'u (ja nie tworzę zasobów w chmurze). Pierwszy admin powstanie przy wdrożeniu – hasło ustawiasz z maila, nie przekazujesz mi go.
 
 ### Następne kroki (dla kolejnej sesji: „kontynuuj”)
-1. Domknąć uwagi z review M3 (jeśli są otwarte) i zielone CI na GitHubie (Testcontainers, compose `stack-smoke`).
+1. Zielone CI na GitHubie: sprawdzić joby `python-tests` (Testcontainers) i `stack-smoke` (compose) – lokalnie niesprawdzalne bez Dockera. Otwarte uwagi średniej wagi z review M3: liczenie `llm_calls` per krok przy równoległych gałęziach, prawdziwe `usage` w kasetach, retry 429/5xx w `GatewayChat`, budżet i snapshot KB w adapterze Agent SDK.
 2. Checkpointy LangGraph w Postgresie z tabelami tenantowymi (RLS) + test izolacji.
 3. M4: API (tenancy, OIDC + lokalny mock IdP, RBAC, projekty, przebiegi + SSE, BOM, audyt), OpenAPI 3.1 + klient TS, testy kontraktowe.
 4. M5: frontend wg `docs/design/UX_GUIDELINES.md`.

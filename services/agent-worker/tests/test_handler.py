@@ -76,6 +76,19 @@ async def test_foreign_keys_are_rejected_and_other_messages_ignored(app_engine, 
                 },
             )
         )
+    with pytest.raises(RejectedRunError, match="does not implement"):
+        await worker.execute(
+            Message.create(
+                RUN_REQUESTED,
+                a,
+                {
+                    "run_id": str(uuid.uuid4()),
+                    "variant": "B",
+                    "runtime": "langgraph_a",
+                    "object_keys": [tenant_key(a.tenant_id, "x.kicad_sch")],
+                },
+            )
+        )
     await worker.handle(Message.create("other.type", a))
 
 

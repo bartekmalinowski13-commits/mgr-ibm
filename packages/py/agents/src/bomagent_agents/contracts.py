@@ -66,12 +66,12 @@ class Budget:
 
     def charge(self, usage: Usage) -> None:
         self.usage = self.usage + usage
-        self.check()
 
     def check(self) -> None:
+        """Called *before* each model call: refuses the call that would exceed a limit."""
         c = self.config
-        if self.usage.llm_calls > c.max_llm_calls:
-            raise BudgetExceededError(f"more than {c.max_llm_calls} LLM calls")
+        if self.usage.llm_calls >= c.max_llm_calls:
+            raise BudgetExceededError(f"limit of {c.max_llm_calls} LLM calls reached")
         if self.usage.input_tokens + self.usage.output_tokens > c.max_total_tokens:
             raise BudgetExceededError(f"more than {c.max_total_tokens} tokens")
         if time.monotonic() - self.started > c.timeout_s:
