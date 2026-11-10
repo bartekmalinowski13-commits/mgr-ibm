@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="722" height="472" viewBox="0 0 722 472" role="img" font-family="Inter, 'Helvetica Neue', Arial, sans-serif">
+<title>BOM quality per variant - fake-open-weight</title>
+<desc>line_f1: A 0.976, B 0.976; line_precision: A 0.955, B 0.955; line_recall: A 1.000, B 1.000; designator_f1: A 1.000, B 1.000; acc_mpn: A 0.778, B 0.858; acc_value: A 1.000, B 1.000; mpn_coverage: A 0.963, B 1.000; mpn_hallucination_rate (lower): A 0.000, B 0.000</desc>
+<rect width="722" height="472" fill="#fcfcfb"/>
+<text x="16" y="26" font-size="15" font-weight="600" fill="#0b0b0b">BOM quality per variant - fake-open-weight</text>
+<circle cx="21" cy="44" r="5" fill="#2a78d6"/>
+<text x="31" y="48" font-size="12" fill="#52514e"><tspan font-weight="600" fill="#0b0b0b">A</tspan> - LLM only</text>
+<circle cx="135" cy="44" r="5" fill="#eb6834"/>
+<text x="145" y="48" font-size="12" fill="#52514e"><tspan font-weight="600" fill="#0b0b0b">B</tspan> - hybrid</text>
+<line x1="210.0" y1="64" x2="210.0" y2="416" stroke="#e4e3df"/>
+<text x="210.0" y="432" font-size="11" fill="#52514e" text-anchor="middle">0.00</text>
+<line x1="320.0" y1="64" x2="320.0" y2="416" stroke="#e4e3df"/>
+<text x="320.0" y="432" font-size="11" fill="#52514e" text-anchor="middle">0.25</text>
+<line x1="430.0" y1="64" x2="430.0" y2="416" stroke="#e4e3df"/>
+<text x="430.0" y="432" font-size="11" fill="#52514e" text-anchor="middle">0.50</text>
+<line x1="540.0" y1="64" x2="540.0" y2="416" stroke="#e4e3df"/>
+<text x="540.0" y="432" font-size="11" fill="#52514e" text-anchor="middle">0.75</text>
+<line x1="650.0" y1="64" x2="650.0" y2="416" stroke="#e4e3df"/>
+<text x="650.0" y="432" font-size="11" fill="#52514e" text-anchor="middle">1.00</text>
+<text x="198" y="90.0" font-size="12" fill="#0b0b0b" text-anchor="end">line_f1</text>
+<line x1="633.8" y1="78" x2="645.4" y2="78" stroke="#2a78d6" stroke-width="2" stroke-linecap="round"/>
+<circle cx="639.6" cy="78" r="5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<text x="658" y="82" font-size="11" fill="#52514e"><tspan font-weight="600" fill="#0b0b0b">A</tspan> 0.976</text>
+<line x1="633.8" y1="94" x2="645.4" y2="94" stroke="#eb6834" stroke-width="2" stroke-linecap="round"/>
+<circle cx="639.6" cy="94" r="5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<text x="658" y="98" font-size="11" fill="#52514e"><tspan font-weight="600" fill="#0b0b0b">B</tspan> 0.976</text>
+<text x="198" y="134.0" font-size="12" fill="#0b0b0b" text-anchor="end">line_precision</text>
+<line x1="618.9" y1="122" x2="641.1" y2="122" stroke="#2a78d6" stroke-width="2" stroke-linecap="round"/>
+<circle cx="630.0" cy="122" r="5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<text x="658" y="126" font-size="11" fill="#52514e"><tspan font-weight="600" fill="#0b0b0b">A</tspan> 0.955</text>
+<line x1="618.9" y1="138" x2="641.1" y2="138" stroke="#eb6834" stroke-width="2" stroke-linecap="round"/>
+<circle cx="630.0" cy="138" r="5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<text x="658" y="142" font-size="11" fill="#52514e"><tspan font-weight="600" fill="#0b0b0b">B</tspan> 0.955</text>
+<text x="198" y="178.0" font-size="12" fill="#0b0b0b" text-anchor="end">line_recall</text>
+<circle cx="650.0" cy="166" r="5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<text x="658" y="170" font-size="11" fill="#52514e"><tspan font-weight="600" fill="#0b0b0b">A</tspan> 1.000</text>
+<circle cx="650.0" cy="182" r="5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<text x="658" y="186" font-size="11" fill="#52514e"><tspan font-weight="600" fill="#0b0b0b">B</tspan> 1.000</text>
+<text x="198" y="222.0" font-size="12" fill="#0b0b0b" text-anchor="end">designator_f1</text>
+<circle cx="650.0" cy="210" r="5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<text x="658" y="214" font-size="11" fill="#52514e"><tspan font-weight="600" fill="#0b0b0b">A</tspan> 1.000</text>
+<circle cx="650.0" cy="226" r="5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<text x="658" y="230" font-size="11" fill="#52514e"><tspan font-weight="600" fill="#0b0b0b">B</tspan> 1.000</text>
+<text x="198" y="266.0" font-size="12" fill="#0b0b0b" text-anchor="end">acc_mpn</text>
+<line x1="529.3" y1="254" x2="575.7" y2="254" stroke="#2a78d6" stroke-width="2" stroke-linecap="round"/>
+<circle cx="552.3" cy="254" r="5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<text x="658" y="258" font-size="11" fill="#52514e"><tspan font-weight="600" fill="#0b0b0b">A</tspan> 0.778</text>
+<line x1="574.4" y1="270" x2="601.5" y2="270" stroke="#eb6834" stroke-width="2" stroke-linecap="round"/>
+<circle cx="587.6" cy="270" r="5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<text x="658" y="274" font-size="11" fill="#52514e"><tspan font-weight="600" fill="#0b0b0b">B</tspan> 0.858</text>
+<text x="198" y="310.0" font-size="12" fill="#0b0b0b" text-anchor="end">acc_value</text>
+<circle cx="650.0" cy="298" r="5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<text x="658" y="302" font-size="11" fill="#52514e"><tspan font-weight="600" fill="#0b0b0b">A</tspan> 1.000</text>
+<circle cx="650.0" cy="314" r="5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<text x="658" y="318" font-size="11" fill="#52514e"><tspan font-weight="600" fill="#0b0b0b">B</tspan> 1.000</text>
+<text x="198" y="354.0" font-size="12" fill="#0b0b0b" text-anchor="end">mpn_coverage</text>
+<line x1="617.4" y1="342" x2="650.0" y2="342" stroke="#2a78d6" stroke-width="2" stroke-linecap="round"/>
+<circle cx="633.7" cy="342" r="5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<text x="658" y="346" font-size="11" fill="#52514e"><tspan font-weight="600" fill="#0b0b0b">A</tspan> 0.963</text>
+<circle cx="650.0" cy="358" r="5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<text x="658" y="362" font-size="11" fill="#52514e"><tspan font-weight="600" fill="#0b0b0b">B</tspan> 1.000</text>
+<text x="198" y="398.0" font-size="12" fill="#0b0b0b" text-anchor="end">mpn_hallucination_rate (lower)</text>
+<circle cx="210.0" cy="386" r="5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<text x="658" y="390" font-size="11" fill="#52514e"><tspan font-weight="600" fill="#0b0b0b">A</tspan> 0.000</text>
+<circle cx="210.0" cy="402" r="5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<text x="658" y="406" font-size="11" fill="#52514e"><tspan font-weight="600" fill="#0b0b0b">B</tspan> 0.000</text>
+<text x="16" y="458" font-size="11" fill="#52514e">Mean with 95 % bootstrap interval; higher is better unless marked (lower).</text>
+</svg>

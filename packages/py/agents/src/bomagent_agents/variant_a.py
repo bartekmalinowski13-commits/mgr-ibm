@@ -27,7 +27,7 @@ from bomagent_agents.contracts import RunInput, RunOutput
 from bomagent_agents.runtime_base import AgentContext, agent_provenance
 from bomagent_agents.schemas import GroupedLines, LineOut, ValidationOut
 from bomagent_agents.variant_b import apply_choices, choose_mpn, finish, record_rejections
-from bomagent_bom.model import BomItem, Finding, Provenance, Severity
+from bomagent_bom.model import BomItem, Finding, Provenance, Requirements, Severity
 from bomagent_bom.packages import package_from_footprint
 from bomagent_bom.refdes import kind_of
 
@@ -41,6 +41,35 @@ LINE_KEYS = (
     "dnp",
     "description",
 )
+
+
+async def llm_validate(
+    ctx: AgentContext, items: list[BomItem], requirements: Requirements
+) -> list[Finding]:
+    """Variant A's validation: the validator agent reviews every line (no rule pack)."""
+    lines = [{k: getattr(i, k) for k in LINE_KEYS} | {"line": i.line} for i in items]
+    result = await ctx.guarded(
+        "validate",
+        lambda: ctx.ask(
+            "validate",
+            {"lines": lines, "requirements": requirements.model_dump(mode="json")},
+            ValidationOut,
+            max_tokens=8_000,
+        ),
+        None,
+    )
+    if result is None:
+        return []
+    return [
+        Finding(
+            rule_id="agent.validate",
+            severity=Severity(f.severity),
+            message=f.message,
+            refdes=f.refdes,
+            field=f.field,
+        )
+        for f in result[0].findings
+    ]
 
 
 class AState(TypedDict, total=False):
@@ -128,31 +157,7 @@ class LangGraphVariantA:
         async def validate_node(state: AState) -> AState:
             record_rejections(ctx, state.get("choices", []))
             items = apply_choices(state["items"], state.get("choices", []))
-            lines = [{k: getattr(i, k) for k in LINE_KEYS} | {"line": i.line} for i in items]
-            result = await ctx.guarded(
-                "validate",
-                lambda: ctx.ask(
-                    "validate",
-                    {"lines": lines, "requirements": run.requirements.model_dump(mode="json")},
-                    ValidationOut,
-                    max_tokens=8_000,
-                ),
-                None,
-            )
-            findings = (
-                []
-                if result is None
-                else [
-                    Finding(
-                        rule_id="agent.validate",
-                        severity=Severity(f.severity),
-                        message=f.message,
-                        refdes=f.refdes,
-                        field=f.field,
-                    )
-                    for f in result[0].findings
-                ]
-            )
+            findings = await llm_validate(ctx, items, run.requirements)
             return {
                 "items": [i.model_dump(mode="json") for i in items],
                 "choices": [],

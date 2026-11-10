@@ -188,6 +188,8 @@ def test_detection_is_variant_neutral_and_needs_new_findings():
     noise = Finding(rule_id="x", severity=Severity.WARNING, message="?", refdes=["ZZ1"])
     rep = detection_report(errors, [llm_finding, noise])
     assert (rep.false_alarms, rep.new_findings) == (1, 2)
+    assert rep.by_kind == {"drop_footprint": (1, 1)}
+    assert detection_report(errors, [noise]).by_kind == {"drop_footprint": (1, 0)}
     with pytest.raises(ValueError, match="at least one"):
         detection_rate([], [])
 

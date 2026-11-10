@@ -37,6 +37,7 @@ import yaml
 from pydantic import BaseModel, Field
 
 from bomagent_cad import parse_files
+from bomagent_cli.experiment_figures import Estimate, bar_panels, dot_interval_chart, slope_chart
 from bomagent_eval.experiment_stats import PairedComparison, bootstrap_ci, compare_paired
 from bomagent_eval.metrics import evaluate
 from bomagent_eval.reference import load_reference
@@ -66,6 +67,16 @@ KEY_METRICS: dict[str, int] = {
 
 
 Variant = Literal["A", "B"]
+#: validation metrics on injected errors; direction as in KEY_METRICS
+INJECTION_METRICS: dict[str, int] = {"detection_rate": 1, "false_alarm_rate": -1}
+
+
+class InjectionConfig(BaseModel):
+    """Validation effectiveness: known errors injected into each reference BOM."""
+
+    errors: int = Field(default=5, ge=1, le=20)
+    #: different mutations per design (0 switches the measurement off)
+    trials: int = Field(default=3, ge=0, le=50)
 
 
 class ExperimentConfig(BaseModel):
@@ -78,6 +89,7 @@ class ExperimentConfig(BaseModel):
     cassettes: Path | None = None
     seed: int = 0
     runtimes: dict[Variant, str] = Field(default_factory=dict)
+    injection: InjectionConfig = Field(default_factory=InjectionConfig)
 
     @classmethod
     def from_file(cls, path: Path) -> ExperimentConfig:
@@ -100,6 +112,8 @@ class ExperimentResult:
     cells: dict[tuple[str, str], Cell]
     comparisons: dict[str, dict[str, PairedComparison]]
     repeatability: dict[tuple[str, str], float]
+    injection_records: list[dict[str, Any]] = field(default_factory=list)
+    injection_comparisons: dict[str, dict[str, PairedComparison]] = field(default_factory=dict)
 
 
 def _commit() -> str:
@@ -155,12 +169,63 @@ async def _run_one(
     return result, await retriever.known_mpns()
 
 
+async def _inject_one(
+    design: str, reference: list[Any], variant: Variant, model: str, config: ExperimentConfig
+) -> list[dict[str, Any]]:
+    """Validator of ``variant`` on ``trials`` mutated copies of the reference BOM.
+
+    The mutation of trial ``t`` depends only on the seed and ``t``, so A and B review
+    exactly the same faulty BOMs (paired). New findings are counted against the
+    validator's own findings on the clean reference (baseline)."""
+    from bomagent_agents.contracts import RunConfig
+    from bomagent_agents.retrieval import InMemoryRetriever
+    from bomagent_agents.validation import validate_bom, validation_context
+    from bomagent_bom.model import Requirements
+    from bomagent_cli.main import build_chat
+    from bomagent_eval.injection import detection_report, inject_errors
+
+    retriever = await InMemoryRetriever.from_directory(config.kb_dir)
+    ctx = validation_context(
+        build_chat(model, config.cassettes),
+        retriever,
+        RunConfig(variant=variant, model_id=model),
+        Requirements(),
+    )
+    baseline = await validate_bom(variant, ctx, reference)
+    out = []
+    for trial in range(config.injection.trials):
+        mutated, errors = inject_errors(
+            reference, n=config.injection.errors, seed=config.seed * 1009 + trial
+        )
+        if not errors:
+            continue
+        report = detection_report(errors, await validate_bom(variant, ctx, mutated), baseline)
+        out.append(
+            {
+                "design": design,
+                "variant": variant,
+                "model": model,
+                "trial": trial,
+                "errors": [{"kind": e.kind, "line": e.line, "refdes": e.refdes} for e in errors],
+                "injected": report.injected,
+                "detected": report.detected,
+                "new_findings": report.new_findings,
+                "false_alarms": report.false_alarms,
+                "detection_rate": report.detection_rate,
+                "false_alarm_rate": report.false_alarm_rate,
+                "by_kind": {k: list(v) for k, v in report.by_kind.items()},
+            }
+        )
+    return out
+
+
 def run_experiment(config: ExperimentConfig, out_root: Path) -> ExperimentResult:
     from bomagent_cli.main import collect_files
 
     out = out_root / config.name
     out.mkdir(parents=True, exist_ok=True)
     records: list[dict[str, Any]] = []
+    injection_records: list[dict[str, Any]] = []
     boms: dict[tuple[str, str, str], list[Any]] = defaultdict(list)
     for design_dir in config.designs:
         design = parse_files(collect_files([design_dir]))
@@ -168,6 +233,10 @@ def run_experiment(config: ExperimentConfig, out_root: Path) -> ExperimentResult
         design_mpns = {c.field("MPN") for c in design.components} - {""}
         for model in config.models:
             for variant in config.variants:
+                if config.injection.trials:
+                    injection_records += asyncio.run(
+                        _inject_one(design.design_name, reference, variant, model, config)
+                    )
                 for rep in range(config.repeats):
                     result, known = asyncio.run(_run_one(design, variant, model, config))
                     report = evaluate(
@@ -219,7 +288,27 @@ def run_experiment(config: ExperimentConfig, out_root: Path) -> ExperimentResult
         )
         for (v, m) in cells
     }
-    result = ExperimentResult(out, records, dict(cells), comparisons, repeatability)
+    injection_comparisons: dict[str, dict[str, PairedComparison]] = {}
+    if injection_records and {"A", "B"} <= set(config.variants):
+        for model in config.models:
+            designs = sorted({r["design"] for r in injection_records if r["model"] == model})
+            injection_comparisons[model] = {
+                metric: compare_paired(
+                    [_injection_mean(injection_records, d, "A", model, metric) for d in designs],
+                    [_injection_mean(injection_records, d, "B", model, metric) for d in designs],
+                    seed=config.seed,
+                )
+                for metric in INJECTION_METRICS
+            }
+    result = ExperimentResult(
+        out,
+        records,
+        dict(cells),
+        comparisons,
+        repeatability,
+        injection_records,
+        injection_comparisons,
+    )
     _write(result, config)
     return result
 
@@ -233,6 +322,17 @@ def _design_mean(
         for r in records
         if (r["design"], r["variant"], r["model"]) == (design, variant, model)
         and r["metrics"].get(metric) is not None
+    ]
+    return statistics.fmean(values) if values else math.nan
+
+
+def _injection_mean(
+    records: list[dict[str, Any]], design: str, variant: str, model: str, metric: str
+) -> float:
+    values = [
+        float(r[metric])
+        for r in records
+        if (r["design"], r["variant"], r["model"]) == (design, variant, model)
     ]
     return statistics.fmean(values) if values else math.nan
 
@@ -268,7 +368,215 @@ def _write(result: ExperimentResult, config: ExperimentConfig) -> None:
     (out / "manifest.json").write_text(
         json.dumps(_manifest(config), indent=2, ensure_ascii=False) + "\n"
     )
+    if result.injection_records:
+        with (out / "injection.jsonl").open("w", encoding="utf-8") as f:
+            for r in result.injection_records:
+                f.write(json.dumps(r, ensure_ascii=False) + "\n")
+    _write_tables(result, config)
+    _write_figures(result, config)
     (out / "report.md").write_text(_report(result, config), encoding="utf-8")
+
+
+QUALITY_FIGURE = [
+    "line_f1",
+    "line_precision",
+    "line_recall",
+    "designator_f1",
+    "acc_mpn",
+    "acc_value",
+    "mpn_coverage",
+    "mpn_hallucination_rate",
+]
+
+
+def _estimate(data: list[float], seed: int) -> Estimate:
+    values = [v for v in data if not math.isnan(v)]
+    if not values:
+        return Estimate(math.nan, math.nan, math.nan)
+    lo, hi = bootstrap_ci(values, seed=seed)
+    return Estimate(statistics.fmean(values), lo, hi)
+
+
+def _injection_cells(result: ExperimentResult) -> dict[tuple[str, str], dict[str, list[float]]]:
+    cells: dict[tuple[str, str], dict[str, list[float]]] = defaultdict(lambda: defaultdict(list))
+    for r in result.injection_records:
+        for metric in INJECTION_METRICS:
+            cells[(r["variant"], r["model"])][metric].append(float(r[metric]))
+    return cells
+
+
+def _by_kind(result: ExperimentResult) -> dict[tuple[str, str, str], list[int]]:
+    totals: dict[tuple[str, str, str], list[int]] = defaultdict(lambda: [0, 0])
+    for r in result.injection_records:
+        for kind, (injected, detected) in r["by_kind"].items():
+            t = totals[(r["variant"], r["model"], kind)]
+            t[0] += injected
+            t[1] += detected
+    return totals
+
+
+def _write_tables(result: ExperimentResult, config: ExperimentConfig) -> None:
+    """CSV tables for the thesis (imported into the DOCX, not retyped)."""
+    tables = result.out_dir / "tables"
+    tables.mkdir(exist_ok=True)
+    injection = _injection_cells(result)
+    with (tables / "variants.csv").open("w", encoding="utf-8", newline="") as f:
+        w = csv.writer(f)
+        w.writerow(["variant", "model", "metric", "better", "n", "mean", "ci_low", "ci_high"])
+        for (variant, model), cell in sorted(result.cells.items()):
+            sources = [(m, cell.metrics.get(m, []), d) for m, d in KEY_METRICS.items()] + [
+                (m, injection[(variant, model)][m], d)
+                for m, d in INJECTION_METRICS.items()
+                if (variant, model) in injection
+            ]
+            for metric, data, direction in sources:
+                est = _estimate(data, config.seed)
+                n = sum(1 for v in data if not math.isnan(v))
+                w.writerow(
+                    [
+                        variant,
+                        model,
+                        metric,
+                        "higher" if direction > 0 else "lower",
+                        n,
+                        est.mean,
+                        est.low,
+                        est.high,
+                    ]
+                )
+    with (tables / "paired.csv").open("w", encoding="utf-8", newline="") as f:
+        w = csv.writer(f)
+        w.writerow(
+            [
+                "model",
+                "metric",
+                "better",
+                "n",
+                "mean_a",
+                "mean_b",
+                "diff",
+                "ci_low",
+                "ci_high",
+                "p_value",
+                "b_better",
+                "a_better",
+                "ties",
+            ]
+        )
+        for model in config.models:
+            comps = {
+                **result.comparisons.get(model, {}),
+                **result.injection_comparisons.get(model, {}),
+            }
+            for metric, c in comps.items():
+                direction = {**KEY_METRICS, **INJECTION_METRICS}[metric]
+                b_better, a_better = (c.wins_b, c.wins_a) if direction > 0 else (c.wins_a, c.wins_b)
+                w.writerow(
+                    [
+                        model,
+                        metric,
+                        "higher" if direction > 0 else "lower",
+                        c.n,
+                        c.mean_a,
+                        c.mean_b,
+                        c.mean_diff,
+                        c.ci_low,
+                        c.ci_high,
+                        c.p_value,
+                        b_better,
+                        a_better,
+                        c.ties,
+                    ]
+                )
+    with (tables / "detection_by_kind.csv").open("w", encoding="utf-8", newline="") as f:
+        w = csv.writer(f)
+        w.writerow(["variant", "model", "kind", "injected", "detected", "rate"])
+        for (variant, model, kind), (injected, detected) in sorted(_by_kind(result).items()):
+            w.writerow([variant, model, kind, injected, detected, detected / injected])
+
+
+def _write_figures(result: ExperimentResult, config: ExperimentConfig) -> None:
+    """SVG figures for chapter 7, one set per model."""
+    figures = result.out_dir / "figures"
+    figures.mkdir(exist_ok=True)
+    injection = _injection_cells(result)
+    kinds = _by_kind(result)
+
+    def label(metric: str, direction: int) -> str:
+        return metric if direction > 0 else f"{metric} (lower)"
+
+    for model in config.models:
+        cells = {v: c for (v, m), c in result.cells.items() if m == model}
+        rows = [
+            (
+                label(metric, KEY_METRICS[metric]),
+                {v: _estimate(c.metrics.get(metric, []), config.seed) for v, c in cells.items()},
+            )
+            for metric in QUALITY_FIGURE
+        ]
+        (figures / f"quality-{model}.svg").write_text(
+            dot_interval_chart(f"BOM quality per variant - {model}", rows), encoding="utf-8"
+        )
+        designs = sorted({r["design"] for r in result.records if r["model"] == model})
+        pairs = [
+            (
+                d,
+                _design_mean(result.records, d, "A", model, "line_f1"),
+                _design_mean(result.records, d, "B", model, "line_f1"),
+            )
+            for d in designs
+        ]
+        (figures / f"paired-line_f1-{model}.svg").write_text(
+            slope_chart(f"Line F1, A vs B per design - {model}", "line_f1", pairs),
+            encoding="utf-8",
+        )
+
+        def mean(variant: str, metric: str, cells: dict[str, Cell] = cells) -> float:
+            cell = cells.get(variant)
+            return _estimate(cell.metrics.get(metric, []) if cell else [], config.seed).mean
+
+        panels = [
+            ("LLM calls per run", {v: mean(v, "llm_calls") for v in cells}),
+            (
+                "tokens per run",
+                {v: mean(v, "input_tokens") + mean(v, "output_tokens") for v in cells},
+            ),
+            ("cost per run [EUR]", {v: mean(v, "cost_eur") for v in cells}),
+        ]
+        (figures / f"cost-{model}.svg").write_text(
+            bar_panels(f"Cost of a run per variant - {model}", panels), encoding="utf-8"
+        )
+        if any(m == model for (_, m) in injection):
+            det_rows: list[tuple[str, dict[str, Estimate]]] = [
+                (
+                    label(metric, direction),
+                    {
+                        v: _estimate(data[metric], config.seed)
+                        for (v, m), data in injection.items()
+                        if m == model
+                    },
+                )
+                for metric, direction in INJECTION_METRICS.items()
+            ]
+            for kind in sorted({k for (_, m, k) in kinds if m == model}):
+                det_rows.append(
+                    (
+                        f"detected: {kind}",
+                        {
+                            v: Estimate(t[1] / t[0], math.nan, math.nan)
+                            for (v, m, k), t in kinds.items()
+                            if m == model and k == kind
+                        },
+                    )
+                )
+            (figures / f"detection-{model}.svg").write_text(
+                dot_interval_chart(
+                    f"Validation on injected errors - {model}",
+                    det_rows,
+                    note="Rates over trials (95 % bootstrap interval); per kind: share detected.",
+                ),
+                encoding="utf-8",
+            )
 
 
 def _report(result: ExperimentResult, config: ExperimentConfig) -> str:
@@ -332,7 +640,55 @@ def _report(result: ExperimentResult, config: ExperimentConfig) -> str:
                 f"{_fmt(c.mean_b, metric)} | {diff} | {p} | {wins_b} / {wins_a} / {c.ties} |"
             )
         lines.append("")
+    if result.injection_records:
+        lines += [
+            "## Validation effectiveness (error injection)",
+            "",
+            f"{config.injection.errors} errors injected into each reference BOM, "
+            f"{config.injection.trials} different mutations per design; A and B review the same"
+            " faulty BOMs. Detected = a new finding on the affected line naming the field or a"
+            " matching rule (variant-neutral); false alarm = a new finding matching no error.",
+            "",
+            "| variant | model | trials | injected | detected | detection rate [95 % CI] |"
+            " false alarm rate |",
+            "|---|---|---|---|---|---|---|",
+        ]
+        for (variant, model), inj in sorted(_injection_cells(result).items()):
+            trials = [
+                r
+                for r in result.injection_records
+                if (r["variant"], r["model"]) == (variant, model)
+            ]
+            det = _estimate(inj["detection_rate"], config.seed)
+            fa = _estimate(inj["false_alarm_rate"], config.seed)
+            lines.append(
+                f"| {variant} | {model} | {len(trials)} | {sum(t['injected'] for t in trials)} | "
+                f"{sum(t['detected'] for t in trials)} | {det.mean:.3f} "
+                f"[{det.low:.3f}; {det.high:.3f}] | {fa.mean:.3f} |"
+            )
+        lines += [
+            "",
+            "| variant | model | error kind | injected | detected |",
+            "|---|---|---|---|---|",
+        ]
+        for (variant, model, kind), (injected, detected) in sorted(_by_kind(result).items()):
+            lines.append(f"| {variant} | {model} | {kind} | {injected} | {detected} |")
+        for model, comps in result.injection_comparisons.items():
+            lines += ["", f"Paired (designs), {model}:", ""]
+            for metric, c in comps.items():
+                p = MISSING if math.isnan(c.p_value) else f"{c.p_value:.4f}"
+                lines.append(
+                    f"- {metric}: A {c.mean_a:.3f}, B {c.mean_b:.3f}, B - A {c.mean_diff:.3f}"
+                    f" [{c.ci_low:.3f}; {c.ci_high:.3f}], p {p}, n {c.n}"
+                )
+        lines.append("")
     lines += [
+        "## Figures and tables",
+        "",
+        "`figures/*.svg` (quality with intervals, paired line F1 per design, cost, validation"
+        " on injected errors) and `tables/*.csv` (per-variant estimates, paired tests,"
+        " detection per error kind) are generated from the same records.",
+        "",
         "## Repeatability",
         "",
         "Mean pairwise agreement of decisions (value, MPN per designator) between repetitions.",

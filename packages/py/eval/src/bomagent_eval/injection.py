@@ -11,7 +11,7 @@ on the mutated BOM that match no injected error are false alarms.
 from __future__ import annotations
 
 import random
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from bomagent_bom.model import BomItem, Finding, Severity
 from bomagent_bom.packages import package_from_part_number
@@ -48,6 +48,8 @@ class DetectionReport:
     detected: int
     new_findings: int
     false_alarms: int
+    #: error kind -> (injected, detected)
+    by_kind: dict[str, tuple[int, int]] = field(default_factory=dict)
 
     @property
     def detection_rate(self) -> float:
@@ -138,9 +140,13 @@ def detection_report(
         raise ValueError("detection needs at least one injected error")
     known = {_key(f) for f in baseline or []}
     new = [f for f in findings if f.severity in _ACTIONABLE and _key(f) not in known]
-    detected = sum(1 for e in errors if any(_matches(e, f) for f in new))
+    hits = [any(_matches(e, f) for f in new) for e in errors]
     false_alarms = sum(1 for f in new if not any(_matches(e, f) for e in errors))
-    return DetectionReport(len(errors), detected, len(new), false_alarms)
+    by_kind: dict[str, tuple[int, int]] = {}
+    for error, hit in zip(errors, hits, strict=True):
+        injected, detected = by_kind.get(error.kind, (0, 0))
+        by_kind[error.kind] = (injected + 1, detected + int(hit))
+    return DetectionReport(len(errors), sum(hits), len(new), false_alarms, by_kind)
 
 
 def detection_rate(
