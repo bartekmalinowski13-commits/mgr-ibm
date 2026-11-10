@@ -422,6 +422,7 @@ name = "bomagent-llm"
 version = "0.1.0"
 source = { editable = "packages/py/llm" }
 dependencies = [
+    { name = "bomagent-bom-core" },
     { name = "bomagent-platform-common" },
     { name = "httpx" },
     { name = "opentelemetry-api" },
@@ -431,6 +432,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
+    { name = "bomagent-bom-core", editable = "packages/py/bom-core" },
     { name = "bomagent-platform-common", editable = "packages/py/platform-common" },
     { name = "httpx", specifier = ">=0.28" },
     { name = "opentelemetry-api", specifier = ">=1.28" },
