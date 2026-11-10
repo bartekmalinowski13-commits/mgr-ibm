@@ -29,7 +29,8 @@ export interface Api {
   listRuns(): Promise<Page<Run>>;
   getRun(runId: string): Promise<Run>;
   createRun(body: RunIn, idempotencyKey: string): Promise<Run>;
-  getBom(runId: string): Promise<BomVersion>;
+  /** `original` is always the agents' output; `latest` includes a reviewer's corrections. */
+  getBom(runId: string, version?: "latest" | "original"): Promise<BomVersion>;
   getTrace(runId: string): Promise<RunTrace>;
   watchRun(runId: string, onUpdate: (run: Run) => void): () => void;
   auditEvents(): Promise<Page<AuditEntry>>;
@@ -141,8 +142,8 @@ export class HttpApi implements Api {
       headers: { "Idempotency-Key": idempotencyKey },
     });
   }
-  getBom(runId: string) {
-    return request<BomVersion>(`/v1/runs/${runId}/bom`);
+  getBom(runId: string, version: "latest" | "original" = "latest") {
+    return request<BomVersion>(`/v1/runs/${runId}/bom?version=${version}`);
   }
   getTrace(runId: string) {
     return request<RunTrace>(`/v1/runs/${runId}/trace`);

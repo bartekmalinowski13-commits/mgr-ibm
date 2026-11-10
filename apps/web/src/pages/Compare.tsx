@@ -73,7 +73,8 @@ export function ComparePage() {
       if (!pair) throw new Error("no pair");
       const load = async (run: Run): Promise<Side> => ({
         run,
-        bom: await api.getBom(run.id),
+        // the comparison is about the architectures: never include a reviewer's corrections
+        bom: await api.getBom(run.id, "original"),
         trace: await api.getTrace(run.id),
       });
       const [sa, sb] = await Promise.all([load(pair[0]), load(pair[1])]);

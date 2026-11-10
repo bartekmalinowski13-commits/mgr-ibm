@@ -65,6 +65,8 @@ describe("app (mock API)", () => {
       const bom = await api.getBom(runB?.id ?? "");
       expect(bom.items.find((i) => i.line === 9)?.provenance.mpn?.kind).toBe("user");
     });
+    const original = await api.getBom(runB?.id ?? "", "original");
+    expect(original.items.find((i) => i.line === 9)?.mpn).toBe("22-23-2031");
     expect(await screen.findByText("Po przeglądzie · 1 poprawka")).toBeInTheDocument();
   });
 

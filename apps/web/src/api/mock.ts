@@ -36,6 +36,7 @@ interface OrgState {
   designs: Design[];
   runs: Run[];
   boms: Record<string, BomVersion>;
+  reviewed: Record<string, BomVersion>;
   traces: Record<string, RunTrace>;
   audit: AuditEntry[];
   kb: KbDocument[];
@@ -84,6 +85,7 @@ function seed(): OrgState {
       run(runA, "A", resultA as unknown as RunTrace),
     ],
     boms: { [runA]: bomA as unknown as BomVersion, [runB]: bomB as unknown as BomVersion },
+    reviewed: {},
     traces: { [runA]: resultA as unknown as RunTrace, [runB]: resultB as unknown as RunTrace },
     audit: [],
     kb: [
@@ -246,10 +248,10 @@ export class MockApi implements Api {
     });
     return { ...r };
   }
-  async getBom(runId: string) {
+  async getBom(runId: string, version: "latest" | "original" = "latest") {
     const run = await this.getRun(runId);
     if (run.status !== "completed") throw new ApiError(409, "Conflict", "BOM is not available yet");
-    const bom = this.s.boms[runId];
+    const bom = (version === "latest" && this.s.reviewed[runId]) || this.s.boms[runId];
     if (!bom) throw new ApiError(404, "Not Found");
     return bom;
   }
@@ -283,7 +285,7 @@ export class MockApi implements Api {
     }
     // deterministic re-check of the edited line: an agent's finding about the old choice goes
     reviewed.findings = reviewed.findings.filter((f) => f.line !== line || f.rule_pack === "core");
-    this.s.boms[runId] = reviewed;
+    this.s.reviewed[runId] = reviewed;
     run.review_edits = (run.review_edits ?? 0) + 1;
     run.reviewed_at = now();
     this.audit("bom.item.edit", "run", runId);
@@ -343,6 +345,7 @@ function emptyState(): OrgState {
     designs: [],
     runs: [],
     boms: {},
+    reviewed: {},
     traces: {},
     audit: [],
     kb: GLOBAL_KB(now()),
