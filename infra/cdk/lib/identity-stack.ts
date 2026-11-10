@@ -20,7 +20,9 @@ export class IdentityStack extends BaseStack {
   constructor(scope: Construct, id: string, props: BaseStackProps) {
     super(scope, id, props);
     const { config } = props;
-    const appOrigin = config.domainName ? `https://${config.domainName}` : "https://localhost:5173";
+    // first deployment without a custom domain: the CloudFront URL is known only afterwards;
+    // tools/deploy.sh then redeploys this stack with -c bomagent:appUrl=<url>
+    const appOrigin = config.appUrl ?? "https://localhost:5173";
 
     this.userPool = new cognito.UserPool(this, "Users", {
       userPoolName: `bomagent-${config.name}`,

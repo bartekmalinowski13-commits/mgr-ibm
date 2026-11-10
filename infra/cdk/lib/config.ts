@@ -27,6 +27,8 @@ export interface EnvConfig {
   readonly imageTag: string;
   /** Optional custom domain: certificate for CloudFront must live in us-east-1. */
   readonly domainName?: string;
+  /** Public URL of the app (Cognito callback); defaults to the custom domain. */
+  readonly appUrl?: string;
   readonly cloudFrontCertificateArn?: string;
   readonly albCertificateArn?: string;
   readonly alarmEmail?: string;
@@ -108,6 +110,7 @@ export function loadConfig(get: (key: string) => unknown): EnvConfig {
       str("imageRegistry") ?? `${PLACEHOLDER_ACCOUNT}.dkr.ecr.eu-central-1.amazonaws.com`,
     imageTag: str("imageTag") ?? DEFAULTS[name].imageTag,
     domainName: str("domainName"),
+    appUrl: str("appUrl") ?? (str("domainName") ? `https://${str("domainName")}` : undefined),
     cloudFrontCertificateArn: str("cloudFrontCertificateArn"),
     albCertificateArn: str("albCertificateArn"),
     alarmEmail: str("alarmEmail"),
