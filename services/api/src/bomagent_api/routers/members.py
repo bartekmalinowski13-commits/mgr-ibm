@@ -35,7 +35,7 @@ from bomagent_api.schemas import (
 from bomagent_common.audit import AuditEvent, emit_audit
 from bomagent_common.db import tenant_transaction
 from bomagent_common.problems import ProblemError
-from bomagent_common.tenancy import TenantContext
+from bomagent_common.tenancy import TenantContext, require_tenant
 
 router = APIRouter(
     prefix="/v1", tags=["members"], responses=problem_responses(400, 401, 403, 404, 409, 422, 429)
@@ -59,6 +59,27 @@ def _forbid_owner_change(ctx: TenantContext) -> None:
         raise ProblemError(
             403, "Forbidden", "only owners can grant or change the owner role", slug="owner-only"
         )
+
+
+async def _lock_members(conn: AsyncConnection) -> None:
+    """Serialise membership changes of one tenant (owners demoting each other would
+    otherwise deadlock on row locks taken in different orders)."""
+    await conn.execute(
+        text("SELECT pg_advisory_xact_lock(hashtextextended('members:' || :t, 0))"),
+        {"t": str(require_tenant().tenant_id)},
+    )
+
+
+async def _revoke_keys_of(conn: AsyncConnection, sub: str) -> int:
+    """API keys a person created stop working when they lose admin rights."""
+    revoked = await conn.execute(
+        text(
+            "UPDATE tenancy.api_keys SET revoked_at = now() WHERE created_by = :s"
+            " AND revoked_at IS NULL AND tenant_id = app.current_tenant_id()"
+        ),
+        {"s": sub},
+    )
+    return revoked.rowcount
 
 
 async def _member(conn: AsyncConnection, sub: str, *, lock: bool = False) -> dict[str, Any]:
@@ -117,6 +138,7 @@ async def update_member(
     require(ctx, "member.manage")
     roles = canonical(list(body.roles))
     async with tenant_transaction(request.app.state.engine) as conn:
+        await _lock_members(conn)
         before = await _member(conn, user_sub, lock=True)
         was_owner = "owner" in before["roles"]
         if was_owner or "owner" in roles:
@@ -130,6 +152,9 @@ async def update_member(
             ),
             {"r": roles, "s": user_sub},
         )
+        revoked = 0
+        if not {"owner", "admin"} & set(roles):
+            revoked = await _revoke_keys_of(conn, user_sub)
         await emit_audit(
             conn,
             AuditEvent(
@@ -137,7 +162,7 @@ async def update_member(
                 object_type="member",
                 object_id=user_sub,
                 before={"roles": list(before["roles"])},
-                after={"roles": roles},
+                after={"roles": roles, "api_keys_revoked": revoked},
             ),
         )
         return Member(**(before | {"roles": roles}))
@@ -147,6 +172,7 @@ async def update_member(
 async def remove_member(request: Request, ctx: OrgContext, user_sub: str) -> Response:
     require(ctx, "member.manage")
     async with tenant_transaction(request.app.state.engine) as conn:
+        await _lock_members(conn)
         before = await _member(conn, user_sub, lock=True)
         if "owner" in before["roles"]:
             _forbid_owner_change(ctx)
@@ -158,6 +184,7 @@ async def remove_member(request: Request, ctx: OrgContext, user_sub: str) -> Res
             ),
             {"s": user_sub},
         )
+        revoked = await _revoke_keys_of(conn, user_sub)
         await emit_audit(
             conn,
             AuditEvent(
@@ -165,6 +192,7 @@ async def remove_member(request: Request, ctx: OrgContext, user_sub: str) -> Res
                 object_type="member",
                 object_id=user_sub,
                 before={"roles": list(before["roles"]), "email": before["email"]},
+                after={"api_keys_revoked": revoked},
             ),
         )
     return Response(status_code=204)
@@ -216,6 +244,14 @@ async def create_invitation(
         ).first()
         if existing is not None:
             raise ProblemError(409, "Conflict", "already a member", slug="already-member")
+        await conn.execute(  # an expired invitation must not block a new one
+            text(
+                "UPDATE tenancy.invitations SET status = 'revoked' WHERE email = :e"
+                " AND status = 'pending' AND expires_at <= now()"
+                " AND tenant_id = app.current_tenant_id()"
+            ),
+            {"e": email},
+        )
         row = (
             await conn.execute(
                 text(

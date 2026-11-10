@@ -23,12 +23,12 @@ from dataclasses import dataclass
 from typing import Any
 
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncEngine
+from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
 from bomagent_agents.contracts import RunConfig, RunInput, RunOutput
 from bomagent_agents.registry import context_factory, runtime_for
 from bomagent_agents.retrieval import KbRetriever, Retriever
-from bomagent_bom.model import Requirements
+from bomagent_bom.model import Requirements, Usage
 from bomagent_cad import FileRef, parse_files
 from bomagent_common.audit import AuditEvent, emit_audit
 from bomagent_common.db import tenant_transaction
@@ -87,7 +87,7 @@ class RunWorker:
                     await conn.execute(
                         text(
                             "SELECT object_key FROM projects.files"
-                            " WHERE project_id = :p ORDER BY name"
+                            " WHERE project_id = :p AND status = 'parsed' ORDER BY name"
                         ),
                         {"p": row.project_id},
                     )
@@ -112,17 +112,22 @@ class RunWorker:
             raise RejectedRunError("unknown run (no runs.runs row in this tenant)")
         return dict(message.payload) | {"registered": False}
 
-    async def _fail(self, message: Message, run_id: uuid.UUID, exc: BaseException) -> None:
+    async def _fail(
+        self, message: Message, run_id: uuid.UUID, exc: BaseException, usage: Usage | None
+    ) -> None:
         error = f"{type(exc).__name__}: run failed"  # no exception text: it may echo file content
         async with tenant_transaction(self.engine, message.tenant_id) as conn:
-            await conn.execute(
+            updated = await conn.execute(
                 text(
                     "UPDATE runs.runs SET status = 'failed', finished_at = now(), error = :e"
                     " WHERE id = :i AND status = 'running'"
                 ),
                 {"e": error, "i": run_id},
             )
-            await record_usage(conn, runs=1)
+            # LLM spend counts against the budget even when the run failed afterwards
+            await _meter(conn, usage, runs=1 if updated.rowcount else 0)
+            if not updated.rowcount:  # already failed (e.g. by the reaper): nothing to report
+                return
             await emit_audit(
                 conn,
                 AuditEvent(
@@ -138,14 +143,17 @@ class RunWorker:
         p = await self._claim(message, run_id)
         if p is None:
             return None
+        spent: dict[str, Usage] = {}
         try:
-            return await self._run(message, run_id, p)
+            return await self._run(message, run_id, p, spent)
         except Exception as exc:
             if p["registered"]:
-                await self._fail(message, run_id, exc)
+                await self._fail(message, run_id, exc, spent.get("usage"))
             raise
 
-    async def _run(self, message: Message, run_id: uuid.UUID, p: dict[str, Any]) -> RunOutput:
+    async def _run(
+        self, message: Message, run_id: uuid.UUID, p: dict[str, Any], spent: dict[str, Usage]
+    ) -> RunOutput:
         runtime = p.get("runtime")
         if runtime is not None and RUNTIME_VARIANT.get(runtime) != p["variant"]:
             raise RejectedRunError(f"runtime {runtime!r} does not implement variant {p['variant']}")
@@ -171,6 +179,7 @@ class RunWorker:
             tenant_id=str(message.tenant_id),
         )
         result = await runtime_for(config.variant, factory, runtime=runtime).run(run)
+        spent["usage"] = result.usage
         base = (message.tenant_id, "runs", str(run_id))
         await self.store.put(
             tenant_key(*base, "bom.json"), result.bom.model_dump_json().encode(), "application/json"
@@ -195,15 +204,21 @@ class RunWorker:
                     "i": run_id,
                 },
             )
-            u = result.usage
-            await record_usage(
-                conn,
-                runs=1,
-                llm_calls=u.llm_calls,
-                input_tokens=u.input_tokens,
-                output_tokens=u.output_tokens,
-                cost_eur=u.cost_eur,
-            )
+            if p["registered"] and not updated.rowcount:
+                # the reaper failed the run meanwhile: keep the row as it is, meter the spend
+                await _meter(conn, result.usage, runs=0)
+                await emit_audit(
+                    conn,
+                    AuditEvent(
+                        action="run.result_discarded",
+                        object_type="run",
+                        object_id=str(run_id),
+                        after={"status": result.status, "reason": "run no longer running"},
+                    ),
+                )
+                log.warning("run_result_discarded", run_id=str(run_id))
+                return result
+            await _meter(conn, result.usage, runs=1)
             if updated.rowcount:  # runs started through the API have a row; CLI runs do not
                 await conn.execute(
                     text(
@@ -241,3 +256,15 @@ class RunWorker:
             llm_calls=result.usage.llm_calls,
         )
         return result
+
+
+async def _meter(conn: AsyncConnection, usage: Usage | None, *, runs: int) -> None:
+    u = usage or Usage()
+    await record_usage(
+        conn,
+        runs=runs,
+        llm_calls=u.llm_calls,
+        input_tokens=u.input_tokens,
+        output_tokens=u.output_tokens,
+        cost_eur=u.cost_eur,
+    )

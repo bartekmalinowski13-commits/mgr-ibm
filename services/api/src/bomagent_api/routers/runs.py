@@ -97,7 +97,8 @@ async def create_run(
             (
                 await conn.execute(
                     text(
-                        "SELECT object_key FROM projects.files WHERE project_id = :p ORDER BY name"
+                        "SELECT object_key FROM projects.files WHERE project_id = :p"
+                        " AND status = 'parsed' ORDER BY name"
                     ),
                     {"p": body.project_id},
                 )
@@ -107,7 +108,10 @@ async def create_run(
         )
         if not keys:
             raise ProblemError(
-                409, "Conflict", "upload design files before starting a run", slug="no-files"
+                409,
+                "Conflict",
+                "upload design files and wait until they are checked before starting a run",
+                slug="no-files",
             )
         rid = uuid.uuid4()
         await conn.execute(

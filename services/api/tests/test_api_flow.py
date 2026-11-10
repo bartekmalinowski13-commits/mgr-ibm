@@ -18,6 +18,7 @@ from bomagent_common.messaging import InMemoryQueue, process_one
 from bomagent_common.storage import InMemoryObjectStore
 from bomagent_ingest.handler import IngestWorker
 from bomagent_llm.chat import FakeChat
+from bomagent_testing.api import mark_files_parsed
 from bomagent_testing.data import FIXTURES, KICAD_FIXTURES
 from bomagent_testing.kb import make_kb
 
@@ -281,6 +282,7 @@ async def test_concurrent_idempotent_posts_and_bom_edits(env):
             headers=alice,
             files={"file": (path.name, path.read_bytes())},
         )
+    await mark_files_parsed(env.engine, alice["X-Org-Id"])
     run_id = (
         await c.post("/v1/runs", headers=alice, json={"project_id": pid, "variant": "B"})
     ).json()["id"]

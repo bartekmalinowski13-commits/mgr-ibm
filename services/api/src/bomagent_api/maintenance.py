@@ -29,7 +29,9 @@ OUTBOX_GRACE_S = 30.0  # requests deliver their own messages first
 
 
 async def reap_stuck_runs(engine: AsyncEngine, tenant_id: uuid.UUID, timeout_s: float) -> int:
-    """Runs left ``running`` past the timeout (worker crashed) become ``failed``."""
+    """Runs left ``running`` past the timeout (worker crashed), or ``queued`` past it (the
+    message went to the dead-letter queue), become ``failed`` - otherwise they would hold
+    the tenant's concurrent-run quota for good."""
     ctx = TenantContext(tenant_id=tenant_id, actor_id="maintenance", actor_type="system")
     async with tenant_transaction(engine, tenant_id) as conn:
         reaped = (
@@ -38,8 +40,11 @@ async def reap_stuck_runs(engine: AsyncEngine, tenant_id: uuid.UUID, timeout_s: 
                     text(
                         "UPDATE runs.runs SET status = 'failed', finished_at = now(),"
                         " error = 'TimeoutError: run did not finish in time'"
-                        " WHERE status = 'running'"
-                        " AND started_at < now() - make_interval(secs => :t) RETURNING id"
+                        " WHERE (status = 'running'"
+                        " AND started_at < now() - make_interval(secs => :t))"
+                        " OR (status = 'queued'"
+                        " AND created_at < now() - make_interval(secs => :t))"
+                        " RETURNING id"
                     ),
                     {"t": timeout_s},
                 )

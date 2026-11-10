@@ -127,8 +127,8 @@ async def _registered_run(app_engine, store, tenant, *, missing_object: bool = F
             await conn.execute(
                 text(
                     "INSERT INTO projects.files (id, tenant_id, project_id, name, object_key,"
-                    " sha256, size_bytes, created_by) VALUES (:i, :t, :p, :n, :k,"
-                    " repeat('a', 64), 1, 'u')"
+                    " sha256, size_bytes, created_by, status) VALUES (:i, :t, :p, :n, :k,"
+                    " repeat('a', 64), 1, 'u', 'parsed')"
                 ),
                 {"i": uuid.uuid4(), "t": tenant.tenant_id, "p": pid, "n": path.name, "k": key},
             )
@@ -205,3 +205,51 @@ async def test_failed_run_is_marked_failed_and_unknown_runs_rejected(app_engine,
     assert await worker.execute(msg) is None
     with pytest.raises(RejectedRunError, match="unknown run"):
         await worker.execute(Message.create(RUN_REQUESTED, tenant, {"run_id": str(uuid.uuid4())}))
+
+
+async def test_result_of_a_reaped_run_is_discarded_and_failed_spend_is_metered(
+    app_engine, make_tenant
+):
+    tenant = await make_tenant()
+    store = InMemoryObjectStore(enforce_tenant=False)
+    rid = await _registered_run(app_engine, store, tenant)
+    worker = await _worker(app_engine, store)
+    worker.allow_unregistered = False
+    real_put = store.put
+
+    async def reaped_meanwhile(key, data, content_type="application/octet-stream"):
+        async with tenant_transaction(app_engine, tenant.tenant_id) as conn:
+            await conn.execute(
+                text("UPDATE runs.runs SET status = 'failed' WHERE id = :i"), {"i": rid}
+            )
+        await real_put(key, data, content_type)
+
+    store.put = reaped_meanwhile  # type: ignore[method-assign]
+    with tenant_scope(tenant):
+        result = await worker.execute(Message.create(RUN_REQUESTED, tenant, {"run_id": str(rid)}))
+    assert result is not None
+    status, _, actions, versions = await _state(app_engine, tenant, rid)
+    assert (status, versions) == ("failed", 0)
+    assert actions == ["run.result_discarded"]
+    async with tenant_transaction(app_engine, tenant.tenant_id) as conn:
+        runs, calls = (
+            await conn.execute(text("SELECT runs, llm_calls FROM metering.usage_daily"))
+        ).one()
+    assert runs == 0
+    assert calls == result.usage.llm_calls > 0
+
+    # a failure after the LLM work still meters what was spent
+    rid2 = await _registered_run(app_engine, store, tenant)
+
+    async def broken_put(key, data, content_type="application/octet-stream"):
+        raise OSError("object store unavailable")
+
+    store.put = broken_put  # type: ignore[method-assign]
+    with tenant_scope(tenant), pytest.raises(OSError, match="unavailable"):
+        await worker.execute(Message.create(RUN_REQUESTED, tenant, {"run_id": str(rid2)}))
+    async with tenant_transaction(app_engine, tenant.tenant_id) as conn:
+        runs, calls = (
+            await conn.execute(text("SELECT runs, llm_calls FROM metering.usage_daily"))
+        ).one()
+    assert runs == 1
+    assert calls == 2 * result.usage.llm_calls

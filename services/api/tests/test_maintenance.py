@@ -13,6 +13,7 @@ from bomagent_api.maintenance import sweep
 from bomagent_common.db import tenant_transaction
 from bomagent_common.messaging import InMemoryQueue, Message
 from bomagent_common.storage import InMemoryObjectStore
+from bomagent_testing.api import mark_files_parsed
 from bomagent_testing.kb import make_kb
 
 pytestmark = pytest.mark.integration
@@ -50,6 +51,7 @@ async def test_queue_outage_is_bridged_by_the_outbox(app_engine, platform_engine
         f"/v1/projects/{pid}/files", headers=owner, files={"file": ("a.kicad_sch", b"x")}
     )
     assert up.status_code == 201  # committed although the queue is down
+    await mark_files_parsed(app_engine, owner["X-Org-Id"])
     run = await c.post("/v1/runs", headers=owner, json={"project_id": pid, "variant": "B"})
     assert run.status_code == 202
     assert len(queues["ingest"]) == len(queues["runs"]) == 0
@@ -96,3 +98,30 @@ async def test_stuck_runs_are_reaped(app_engine, platform_engine, make_tenant):
         actions = (await conn.execute(text("SELECT action FROM audit.events"))).scalars().all()
     assert states == {stuck: "failed", fresh: "running"}
     assert actions == ["run.failed"]
+
+
+async def test_stale_queued_runs_are_reaped(app_engine, platform_engine, make_tenant):
+    tenant = await make_tenant()
+    pid, rid = uuid.uuid4(), uuid.uuid4()
+    async with tenant_transaction(app_engine, tenant.tenant_id) as conn:
+        await conn.execute(
+            text(
+                "INSERT INTO projects.projects (id, tenant_id, name, created_by)"
+                " VALUES (:i, :t, 'p', 'u')"
+            ),
+            {"i": pid, "t": tenant.tenant_id},
+        )
+        await conn.execute(
+            text(
+                "INSERT INTO runs.runs (id, tenant_id, project_id, variant, runtime, model_id,"
+                " created_by, created_at) VALUES (:r, :t, :p, 'B', 'langgraph_b',"
+                " 'fake-closed', 'u', now() - interval '3 days')"
+            ),
+            {"r": rid, "t": tenant.tenant_id, "p": pid},
+        )
+    await sweep(app_engine, platform_engine, {}, run_timeout_s=3600)
+    async with tenant_transaction(app_engine, tenant.tenant_id) as conn:
+        status = (
+            await conn.execute(text("SELECT status FROM runs.runs WHERE id = :i"), {"i": rid})
+        ).scalar()
+    assert status == "failed"

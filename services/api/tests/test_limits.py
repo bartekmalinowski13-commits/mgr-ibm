@@ -11,6 +11,7 @@ from bomagent_api import plans
 from bomagent_api.app import Settings, create_app
 from bomagent_common.messaging import InMemoryQueue
 from bomagent_common.storage import InMemoryObjectStore
+from bomagent_testing.api import mark_files_parsed
 from bomagent_testing.kb import make_kb
 
 pytestmark = pytest.mark.integration
@@ -59,7 +60,7 @@ async def test_rate_limit_per_subject(client, monkeypatch):
     assert (await client.get("/v1/projects", headers=bob)).status_code == 200
 
 
-async def test_project_run_and_org_quotas_and_usage(client, monkeypatch):
+async def test_project_run_and_org_quotas_and_usage(client, monkeypatch, app_engine):
     _tight(monkeypatch, max_projects=1, max_concurrent_runs=1)
     s = uuid.uuid4().hex[:6]
     auth = await _login(client, f"q-{s}")
@@ -73,6 +74,7 @@ async def test_project_run_and_org_quotas_and_usage(client, monkeypatch):
         f"/v1/projects/{pid}/files", headers=owner, files={"file": ("a.kicad_sch", b"12345")}
     )
     assert upload.status_code == 201
+    await mark_files_parsed(app_engine, owner["X-Org-Id"])
     run = await client.post("/v1/runs", headers=owner, json={"project_id": pid, "variant": "B"})
     assert run.status_code == 202
     again = await client.post("/v1/runs", headers=owner, json={"project_id": pid, "variant": "B"})
@@ -103,6 +105,7 @@ async def test_monthly_llm_budget_blocks_new_runs(client, monkeypatch, app_engin
     )
     async with tenant_transaction(app_engine, uuid.UUID(owner["X-Org-Id"])) as conn:
         await record_usage(conn, cost_eur=plans.PLANS["pilot"].llm_budget_eur_per_month)
+    await mark_files_parsed(app_engine, owner["X-Org-Id"])
     blocked = await client.post("/v1/runs", headers=owner, json={"project_id": pid, "variant": "B"})
     assert blocked.status_code == 429
     assert "budget" in blocked.json()["detail"]

@@ -11,6 +11,7 @@ from sqlalchemy import text
 from bomagent_api.app import Settings, create_app
 from bomagent_common.db import tenant_transaction
 from bomagent_common.storage import InMemoryObjectStore
+from bomagent_testing.api import mark_files_parsed
 from bomagent_testing.kb import make_kb
 
 pytestmark = pytest.mark.integration
@@ -265,6 +266,7 @@ async def test_event_stream_ends_when_membership_is_removed(env, monkeypatch):
     await env.c.post(
         f"/v1/projects/{pid}/files", headers=owner, files={"file": ("a.kicad_sch", b"x")}
     )
+    await mark_files_parsed(env.app.state.engine, owner["X-Org-Id"])
     run_id = (
         await env.c.post("/v1/runs", headers=owner, json={"project_id": pid, "variant": "B"})
     ).json()["id"]  # stays queued: no worker runs
@@ -284,3 +286,52 @@ async def test_models_lists_only_allowed_chat_models(env):
     assert {"fake-closed", "fake-open-weight"} <= ids
     assert "fake-embedding" not in ids  # not a chat model
     assert "claude-sonnet-eu" not in ids  # unverified in the EU region
+
+
+async def test_nul_in_url_is_a_400(env):
+    s = uuid.uuid4().hex[:6]
+    owner = await env.org(await env.login(f"o-{s}"), f"nul-{s}")
+    for url in ("/v1/audit-events?actor_id=%00", "/v1/members/a%00b"):
+        resp = await env.c.get(url, headers=owner)
+        assert resp.status_code == 400, url
+
+
+async def test_review_fixes_members_keys_and_invites(env):
+    """Owners demoting each other concurrently -> no 500; removal revokes the member's
+    API keys; an expired invitation does not block a new one."""
+    import asyncio
+
+    s = uuid.uuid4().hex[:6]
+    a = await env.org(await env.login(f"a-{s}"), f"rv-{s}")
+    b = await env.join(a, f"b-{s}", ["owner"])
+    c = await env.join(a, f"c-{s}", ["owner"])
+    results = await asyncio.gather(
+        env.c.patch(f"/v1/members/b-{s}", headers=a, json={"roles": ["admin"]}),
+        env.c.patch(f"/v1/members/c-{s}", headers=b, json={"roles": ["admin"]}),
+        env.c.patch(f"/v1/members/a-{s}", headers=c, json={"roles": ["admin"]}),
+    )
+    assert all(r.status_code in (200, 403, 409) for r in results), [r.text for r in results]
+    members = (await env.c.get("/v1/members", headers=a)).json()["items"]
+    if not any("owner" in m["roles"] for m in members):
+        pytest.fail("an organisation lost its last owner")
+
+    admin = await env.join(a, f"k-{s}", ["admin"])
+    key = (
+        await env.c.post("/v1/api-keys", headers=admin, json={"name": "ci", "roles": ["viewer"]})
+    ).json()["key"]
+    owner = next(
+        h
+        for h, m in ((a, f"a-{s}"), (b, f"b-{s}"), (c, f"c-{s}"))
+        if any(x["user_sub"] == m and "owner" in x["roles"] for x in members)
+    )
+    assert (await env.c.delete(f"/v1/members/k-{s}", headers=owner)).status_code == 204
+    gone = await env.c.get("/v1/projects", headers={"Authorization": f"Bearer {key}"})
+    assert gone.status_code == 401
+
+    first = (await env.invite(owner, f"late-{s}@x.eu", ["viewer"])).json()
+    async with tenant_transaction(env.app.state.engine, uuid.UUID(a["X-Org-Id"])) as conn:
+        await conn.execute(
+            text("UPDATE tenancy.invitations SET expires_at = now() WHERE id = :i"),
+            {"i": first["id"]},
+        )
+    assert (await env.invite(owner, f"late-{s}@x.eu", ["viewer"])).status_code == 201

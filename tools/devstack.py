@@ -124,7 +124,7 @@ def main() -> None:
     if not admin:
         raise SystemExit("set BOMAGENT_DEV_ADMIN_URL (PostgreSQL admin URL)")
     name, urls, admin_url = create_database(admin)
-    print(f"devstack: database {name}, API on http://127.0.0.1:{args.port}", flush=True)  # noqa: T201
+    print(f"devstack: database {name}, API on http://127.0.0.1:{args.port}", flush=True)
     try:
         asyncio.run(serve(urls, args.port))
     finally:

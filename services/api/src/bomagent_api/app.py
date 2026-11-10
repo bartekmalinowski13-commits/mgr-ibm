@@ -147,7 +147,12 @@ def create_app(
     async def upload_size_guard(
         request: Request, call_next: Callable[[Request], Awaitable[Response]]
     ) -> Response:
-        """Reject oversized uploads before the multipart body is spooled to disk."""
+        """Reject NUL bytes in the URL (PostgreSQL text cannot store them) and oversized
+        uploads before the multipart body is spooled to disk."""
+        raw = request.scope.get("raw_path", b"") + b"?" + request.scope.get("query_string", b"")
+        if b"%00" in raw.lower() or b"\x00" in raw or "\x00" in request.url.path:
+            err = ProblemError(400, "Bad Request", "NUL characters are not allowed in the URL")
+            return problem_response(err.problem, request)
         if request.method == "POST" and request.url.path.endswith("/files"):
             length = request.headers.get("content-length")
             if length is None or not length.isdigit():
