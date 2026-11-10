@@ -297,6 +297,7 @@ dependencies = [
     { name = "defusedxml" },
     { name = "ezdxf" },
     { name = "pydantic" },
+    { name = "pypdf" },
 ]
 
 [package.metadata]
@@ -305,6 +306,7 @@ requires-dist = [
     { name = "defusedxml", specifier = ">=0.7" },
     { name = "ezdxf", specifier = ">=1.4" },
     { name = "pydantic", specifier = ">=2.9" },
+    { name = "pypdf", specifier = ">=5.1" },
 ]
 
 [[package]]

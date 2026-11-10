@@ -285,6 +285,68 @@ def _dxf_text(doc: object) -> str:
     return "\n".join(out) + "\n"
 
 
+PDF_COLUMNS = (
+    ("Designator", 40),
+    ("Qty", 150),
+    ("Value", 180),
+    ("Footprint", 230),
+    ("Manufacturer", 410),
+    ("MPN", 520),
+    ("DNP", 640),
+)
+
+
+def _pdf_escape(text: str) -> str:
+    return text.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
+
+
+def pdf_bom(reference_csv: Path, title: str) -> bytes:
+    """A one-table PDF BOM (Helvetica text, landscape A4) as BOM exports print it."""
+    import csv
+
+    rows = list(csv.DictReader(reference_csv.open(encoding="utf-8")))
+    ops = ["BT /F1 12 Tf 40 560 Td (" + _pdf_escape(f"Bill of materials - {title}") + ") Tj ET"]
+    y = 530
+    for header, x in PDF_COLUMNS:
+        ops.append(f"BT /F2 8 Tf {x} {y} Td ({header}) Tj ET")
+    for row in rows:
+        y -= 14
+        cells = {
+            "Designator": row["Reference"].replace(" ", ", "),
+            "Qty": row["Qty"],
+            "Value": row["Value"],
+            "Footprint": row["Footprint"].split(":")[-1],
+            "Manufacturer": row["Manufacturer"],
+            "MPN": row["MPN"],
+            "DNP": "DNP" if row["DNP"].strip() else "",
+        }
+        for header, x in PDF_COLUMNS:
+            if cells[header]:
+                ops.append(f"BT /F1 8 Tf {x} {y} Td ({_pdf_escape(cells[header])}) Tj ET")
+    content = "\n".join(ops).encode("latin-1")
+    objects = [
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 842 595] /Contents 4 0 R"
+        b" /Resources << /Font << /F1 5 0 R /F2 6 0 R >> >> >>",
+        b"<< /Length " + str(len(content)).encode() + b" >>\nstream\n" + content + b"\nendstream",
+        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>",
+        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>",
+    ]
+    out = bytearray(b"%PDF-1.4\n")
+    offsets = []
+    for n, body in enumerate(objects, start=1):
+        offsets.append(len(out))
+        out += f"{n} 0 obj\n".encode() + body + b"\nendobj\n"
+    xref = len(out)
+    out += f"xref\n0 {len(objects) + 1}\n0000000000 65535 f \n".encode()
+    out += b"".join(f"{o:010d} 00000 n \n".encode() for o in offsets)
+    out += (
+        f"trailer\n<< /Size {len(objects) + 1} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n"
+    ).encode()
+    return bytes(out)
+
+
 def main() -> None:
     for name in DESIGNS:
         design = kicad_design(name)
@@ -296,6 +358,11 @@ def main() -> None:
         target = ROOT / "evals" / "fixtures" / "odbpp" / f"{name}.tgz"
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes(odbpp(design))
+        print(target.relative_to(ROOT))
+    for name in DESIGNS:
+        target = ROOT / "evals" / "fixtures" / "pdf-bom" / f"{name}.pdf"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(pdf_bom(KICAD / name / "reference_bom.csv", name))
         print(target.relative_to(ROOT))
     for name, render_dxf in (("enclosure-attribs", dxf_attribs), ("enclosure-table", dxf_table)):
         target = ROOT / "evals" / "fixtures" / "dxf" / f"{name}.dxf"

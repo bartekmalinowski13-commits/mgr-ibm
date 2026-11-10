@@ -29,7 +29,8 @@ Założenie interpretacyjne: „Guidance” z wymagań = **Cadence** (OrCAD Capt
 | EDIF 2.0.0 | done (M7) | `bomagent_cad.edif` |
 | ODB++ (`.tgz`, `.zip`) | done (M7) | `bomagent_cad.odbpp` |
 | DXF parts lists (block attributes, exploded tables) | done (M7) | `bomagent_cad.dxf` |
-| PDF BOM | planned (M7, `docs/plans/M7-formats.md`) | - |
+| PDF BOM tables (text layer) | done (M7) | `bomagent_cad.pdf_bom` |
+| PDF schematics, scanned PDFs (OCR / vision model) | planned after v1 | - |
 | Altium, OrCAD native, Allegro `.brd`, DWG, XLSX | not parsed - the upload returns an export hint | - |
 
 ## Kontrakt wtyczki

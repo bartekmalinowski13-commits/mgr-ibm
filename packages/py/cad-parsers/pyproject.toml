@@ -8,6 +8,7 @@ license = "LicenseRef-Proprietary"
 dependencies = [
     "pydantic>=2.9",
     "defusedxml>=0.7",
+    "pypdf>=5.1",
     "bomagent-bom-core",
     "ezdxf>=1.4",
 ]

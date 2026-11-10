@@ -12,7 +12,7 @@ returns `confidence` and `limitations`, and the UI shows them.
 | 1 | EDIF 2.0 (`.edf`, `.edif`, `.edn`) | existing bounded S-expression reader; instances with `rename`, properties (value, footprint, MPN, manufacturer), nets from `joined/portRef` | done |
 | 2 | ODB++ (`.tgz`, `.zip`) | archive read in memory with limits (entries, total size, ratio - zip bomb), no extraction to disk, path traversal rejected; `steps/*/layers/comp_+_top|bot/components` | done |
 | 2 | DXF (`.dxf`) | `ezdxf` (MIT): BOM tables (TABLE entities, text grids) and block attributes (mechanical BOM) | done (block attributes + exploded text tables; ACAD_TABLE not read) |
-| 3 | PDF BOM (`.pdf`) | table extraction (pypdf text layout first; Docling optional in the kb-indexer image) - low confidence, items flagged for review | later |
+| 3 | PDF BOM (`.pdf`) | table extraction (pypdf text layout first; Docling optional in the kb-indexer image) - low confidence, items flagged for review | done (pypdf text fragments with positions; scans reported) |
 
 Not in M7: Altium/OrCAD native binaries and DWG (licence and maturity spikes, ADR first) -
 the registry keeps returning an honest "export IPC-2581 / EDIF / CSV" hint for them.
