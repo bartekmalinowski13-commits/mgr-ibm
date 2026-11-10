@@ -1,0 +1,28 @@
+{
+  "name": "@bomagent/ui",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "BOM Agent component base (shadcn/ui-style, Radix primitives, Tailwind tokens)",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "lint": "biome check src"
+  },
+  "dependencies": {
+    "@radix-ui/react-dialog": "1.3.1",
+    "@radix-ui/react-dropdown-menu": "2.2.1",
+    "clsx": "2.1.1",
+    "lucide-react": "1.71.0"
+  },
+  "peerDependencies": {
+    "react": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "react": "19.3.1",
+    "typescript": "~5.9.3"
+  }
+}

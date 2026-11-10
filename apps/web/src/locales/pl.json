@@ -1,0 +1,259 @@
+{
+  "app": { "name": "BOM Agent" },
+  "common": {
+    "cancel": "Anuluj",
+    "close": "Zamknij",
+    "save": "Zapisz",
+    "loading": "Wczytywanie…",
+    "retry": "Spróbuj ponownie",
+    "copy": "Kopiuj",
+    "copied": "Skopiowano",
+    "remove": "Usuń",
+    "never": "nigdy",
+    "unknownError": "Coś poszło nie tak. Spróbuj ponownie za chwilę."
+  },
+  "login": {
+    "title": "Zaloguj się do BOM Agent",
+    "lead": "Zestawienia materiałowe z plików projektowych, z pochodzeniem każdej decyzji.",
+    "email": "E-mail",
+    "name": "Imię",
+    "submit": "Zaloguj się",
+    "devNote": "Środowisko lokalne: logowanie przez wbudowany testowy dostawca tożsamości. W chmurze logujesz się przez Amazon Cognito lub SSO organizacji."
+  },
+  "onboarding": {
+    "title": "Załóż organizację",
+    "lead": "Organizacja to wspólna przestrzeń zespołu: projekty, przebiegi, baza wiedzy i log audytu. Dane organizacji są oddzielone od innych.",
+    "name": "Nazwa organizacji",
+    "slug": "Adres",
+    "slugHint": "Małe litery, cyfry i myślniki, np. medtech-krakow.",
+    "create": "Utwórz organizację",
+    "inviteTitle": "Masz zaproszenie?",
+    "inviteLead": "Wklej kod z zaproszenia, które dostałeś od administratora organizacji.",
+    "token": "Kod zaproszenia",
+    "join": "Dołącz do organizacji",
+    "joined": "Dołączono do organizacji {{name}}"
+  },
+  "nav": {
+    "label": "Nawigacja główna",
+    "start": "Start",
+    "newRun": "Nowy przebieg",
+    "projects": "Projekty",
+    "runs": "Przebiegi",
+    "audit": "Log audytu",
+    "settings": "Ustawienia",
+    "recent": "Ostatnie projekty",
+    "switchOrg": "Przełącz organizację",
+    "newOrg": "Załóż nową organizację",
+    "signOut": "Wyloguj",
+    "language": "English"
+  },
+  "plan": {
+    "pill": "Plan {{plan}}",
+    "budget": "LLM w tym miesiącu: {{used}} z {{limit}}"
+  },
+  "start": {
+    "greeting": "Cześć, {{name}}",
+    "newRunTitle": "Nowy przebieg BOM",
+    "newRunLead": "Zacznij od pustego projektu albo od szablonu urządzenia – szablon wypełni wymagania (część aplikacyjna, zasilanie).",
+    "blank": "Pusty projekt",
+    "blankHint": "Własne pliki KiCad",
+    "stats": {
+      "activeRuns": "Aktywne przebiegi",
+      "activeRunsEmpty": "Nic się teraz nie liczy. Uruchom przebieg dla projektu.",
+      "projects": "Projekty",
+      "projectsEmpty": "Nie masz jeszcze projektu. Załóż pierwszy i wgraj pliki.",
+      "completed": "Gotowe zestawienia",
+      "completedEmpty": "Tu pojawią się zestawienia do przeglądu."
+    },
+    "templates": {
+      "ecg": { "title": "EKG noszony", "hint": "Część BF, bateria" },
+      "pulseox": { "title": "Pulsoksymetr", "hint": "Część BF, USB" },
+      "eeg": { "title": "Wzmacniacz EEG", "hint": "Część CF, bateria" },
+      "infusion": { "title": "Pompa infuzyjna", "hint": "Część CF, sieć" }
+    }
+  },
+  "projects": {
+    "title": "Projekty",
+    "new": "Nowy projekt",
+    "name": "Nazwa projektu",
+    "description": "Opis",
+    "create": "Utwórz projekt",
+    "created": "Utworzono projekt",
+    "empty": "Projekt to zestaw plików jednego urządzenia. Utwórz pierwszy projekt, a potem wgraj pliki KiCad.",
+    "files": "Pliki projektowe",
+    "drop": "Przeciągnij tutaj pliki projektu (.kicad_sch, .kicad_pro, .kicad_pcb, CSV BOM) albo",
+    "browse": "wybierz z dysku",
+    "dropHint": "Do 64 MB na plik. Pliki są sprawdzane w izolowanym środowisku przed użyciem.",
+    "uploaded": "Wgrano {{count}} plików",
+    "noFiles": "Brak plików. Wgraj schemat KiCad, żeby uruchomić przebieg.",
+    "runs": "Przebiegi projektu",
+    "noRuns": "Ten projekt nie ma jeszcze przebiegu.",
+    "startRun": "Uruchom przebieg",
+    "components": "{{count}} komponentów",
+    "fileStatus": { "uploaded": "Sprawdzanie", "parsed": "Gotowy", "failed": "Odrzucony" }
+  },
+  "newRun": {
+    "title": "Nowy przebieg",
+    "lead": "Wybierz projekt, wariant systemu i model. Wynik zobaczysz na żywo.",
+    "project": "Projekt",
+    "pickProject": "Wybierz projekt",
+    "noProjects": "Najpierw utwórz projekt i wgraj pliki.",
+    "variant": "Wariant",
+    "variantA": "A – tylko LLM",
+    "variantAHint": "Agenci LLM wykonują wszystkie kroki.",
+    "variantB": "B – hybryda",
+    "variantBHint": "Reguły rozstrzygają, co się da; LLM tylko resztę.",
+    "variantBoth": "Oba i porównanie",
+    "variantBothHint": "Dwa przebiegi na tych samych plikach.",
+    "model": "Model",
+    "closed": "zamknięty",
+    "openWeight": "otwarte wagi",
+    "device": "Nazwa urządzenia",
+    "appliedPart": "Część aplikacyjna",
+    "appliedParts": { "none": "Brak", "B": "Typ B", "BF": "Typ BF", "CF": "Typ CF" },
+    "power": "Zasilanie",
+    "powers": {
+      "battery": "Bateria",
+      "usb": "USB",
+      "mains": "Sieć",
+      "external_psu": "Zasilacz zewnętrzny"
+    },
+    "defib": "Odporność na defibrylację",
+    "submit": "Uruchom przebieg",
+    "started": "Uruchomiono przebieg"
+  },
+  "run": {
+    "title": "Przebieg",
+    "variant": "Wariant {{variant}}",
+    "status": {
+      "queued": "W kolejce",
+      "running": "W toku",
+      "completed": "Gotowy",
+      "failed": "Nieudany",
+      "budget_exceeded": "Przekroczony budżet"
+    },
+    "steps": "Kroki agentów",
+    "llmCalls": "Wywołania LLM",
+    "tokens": "Tokeny",
+    "cost": "Koszt",
+    "time": "Czas",
+    "waiting": "Przebieg czeka na wolnego agenta.",
+    "failedHelp": "Przebieg się nie udał: {{error}}. Sprawdź pliki projektu i uruchom go ponownie.",
+    "export": "Eksportuj CSV",
+    "exported": "Wyeksportowano CSV",
+    "version": "Wersja {{version}}",
+    "findings": "{{count}} uwag walidacji"
+  },
+  "bom": {
+    "title": "Zestawienie BOM",
+    "onlyFindings": "Tylko z uwagami",
+    "origin": "Kto zdecydował",
+    "columns": {
+      "line": "Poz.",
+      "refdes": "Oznaczenia",
+      "qty": "Ilość",
+      "value": "Wartość",
+      "footprint": "Obudowa",
+      "manufacturer": "Producent",
+      "mpn": "MPN",
+      "notes": "Uwagi"
+    },
+    "provenance": {
+      "agent": "Agent LLM",
+      "rule": "Reguła",
+      "parser": "Plik projektu",
+      "user": "Użytkownik"
+    },
+    "dnp": "Nie montować",
+    "empty": "To zestawienie nie ma pozycji.",
+    "noMatches": "Żadna pozycja nie ma uwag."
+  },
+  "panel": {
+    "title": "Pozycja {{line}}",
+    "fields": "Pochodzenie pól",
+    "rationale": "Uzasadnienie",
+    "citations": "Źródła z bazy wiedzy",
+    "page": "str. {{page}}",
+    "findings": "Uwagi walidacji",
+    "noFindings": "Reguły nie zgłosiły uwag do tej pozycji.",
+    "edit": "Popraw pozycję",
+    "editLead": "Poprawka tworzy nową wersję zestawienia i trafia do wiedzy Twojej organizacji (nigdy do innych).",
+    "reason": "Powód zmiany",
+    "reasonHint": "Np. „Zamiennik z magazynu, zatwierdzony przez dział jakości”.",
+    "saveFix": "Zapisz poprawkę",
+    "saved": "Zapisano poprawkę jako wersję {{version}}",
+    "rule": "Reguła {{rule}} ({{pack}} {{version}})",
+    "agent": "{{agent}} · model {{model}}",
+    "parser": "Odczytane z pliku ({{parser}})",
+    "user": "Zmienione przez {{user}}"
+  },
+  "runs": {
+    "title": "Przebiegi",
+    "empty": "Nie ma jeszcze przebiegów. Uruchom pierwszy z ekranu Start."
+  },
+  "audit": {
+    "title": "Log audytu",
+    "objectType": "Obiekt",
+    "actor": "Kto",
+    "all": "Wszystkie",
+    "when": "Kiedy",
+    "action": "Zdarzenie",
+    "verify": "Sprawdź integralność",
+    "verifyOk": "Łańcuch audytu jest nienaruszony ({{count}} zdarzeń).",
+    "verifyBroken": "Łańcuch audytu jest przerwany od zdarzenia #{{seq}}. Zgłoś to administratorowi bezpieczeństwa.",
+    "more": "Pokaż starsze",
+    "empty": "Brak zdarzeń dla tych filtrów."
+  },
+  "settings": {
+    "title": "Ustawienia organizacji",
+    "tabs": {
+      "members": "Członkowie",
+      "keys": "Klucze API",
+      "usage": "Zużycie i limity",
+      "sso": "SSO"
+    },
+    "members": "Członkowie",
+    "role": "Rola",
+    "roles": {
+      "owner": "Właściciel",
+      "admin": "Administrator",
+      "engineer": "Inżynier",
+      "reviewer": "Recenzent",
+      "viewer": "Podgląd"
+    },
+    "invite": "Zaproś osobę",
+    "inviteEmail": "E-mail",
+    "sendInvite": "Utwórz zaproszenie",
+    "invited": "Utworzono zaproszenie. Przekaż ten kod osobie zapraszanej – pokazujemy go tylko raz:",
+    "pending": "Oczekujące zaproszenia",
+    "noPending": "Brak oczekujących zaproszeń.",
+    "revoke": "Unieważnij",
+    "expires": "ważne do {{date}}",
+    "removeMember": "Usuń z organizacji",
+    "removed": "Usunięto członka",
+    "rolesChanged": "Zmieniono rolę",
+    "keys": "Klucze API",
+    "keysLead": "Klucze dla integracji (CI, PLM). Klucz działa tylko w tej organizacji i nie może zarządzać członkami.",
+    "keyName": "Nazwa klucza",
+    "createKey": "Utwórz klucz",
+    "keyCreated": "Utworzono klucz. Skopiuj go teraz – nie pokażemy go ponownie:",
+    "rotate": "Wymień",
+    "rotated": "Wymieniono klucz",
+    "lastUsed": "ostatnio użyty: {{date}}",
+    "noKeys": "Brak kluczy API.",
+    "usage": "Zużycie w tym miesiącu",
+    "usageItems": {
+      "runs": "Przebiegi",
+      "llm_calls": "Wywołania LLM",
+      "cost_eur": "Koszt LLM",
+      "files_uploaded": "Wgrane pliki"
+    },
+    "of": "z {{limit}}",
+    "sso": "Logowanie jednokrotne (SSO)",
+    "ssoLead": "Konfiguracja SAML 2.0 / OIDC dla organizacji pojawi się po uruchomieniu Amazon Cognito w środowisku chmurowym. Do tego czasu członkowie logują się kontem e-mail."
+  },
+  "errors": {
+    "notMember": "Nie masz dostępu do tej organizacji. Wybierz inną organizację.",
+    "notFound": "Nie znaleziono tego elementu. Mógł zostać usunięty albo należy do innej organizacji."
+  }
+}
