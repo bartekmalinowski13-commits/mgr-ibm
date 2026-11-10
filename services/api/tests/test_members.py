@@ -347,3 +347,13 @@ async def test_content_length_must_be_ascii_digits(env):
         "/v1/kb/documents", headers=owner | {"Content-Length": str(40 * 1024 * 1024)}, content=b"x"
     )
     assert big.status_code == 413
+
+
+def test_platform_url_composed_from_parts(monkeypatch):
+    monkeypatch.setenv("BOMAGENT_DATABASE_HOST", "db.example")
+    monkeypatch.setenv("BOMAGENT_PLATFORM_DATABASE_PASSWORD", "x y")
+    s = Settings()
+    assert s.platform_database_url == (
+        "postgresql+psycopg://bomagent_platform:x%20y@db.example:5432/bomagent?sslmode=require"
+    )
+    assert s.database_url is None  # app password not set: no app URL

@@ -71,3 +71,25 @@ describe("network and data security properties", () => {
     });
   });
 });
+
+describe("identity", () => {
+  const identity = Template.fromStack(synthEnv("prod").stacks.identity);
+
+  it("SPA client is public, code flow with PKCE, no implicit flow", () => {
+    identity.hasResourceProperties("AWS::Cognito::UserPoolClient", {
+      GenerateSecret: false,
+      AllowedOAuthFlows: ["code"],
+      PreventUserExistenceErrors: "ENABLED",
+      EnableTokenRevocation: true,
+    });
+  });
+
+  it("pool verifies e-mail, has a strong password policy and threat protection", () => {
+    identity.hasResourceProperties("AWS::Cognito::UserPool", {
+      AutoVerifiedAttributes: ["email"],
+      Policies: { PasswordPolicy: { MinimumLength: 12, RequireSymbols: true } },
+      UserPoolTier: "PLUS",
+      DeletionProtection: "ACTIVE",
+    });
+  });
+});

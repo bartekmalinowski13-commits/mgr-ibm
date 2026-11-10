@@ -7,7 +7,7 @@ from typing import Any, Literal
 
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import Field
+from pydantic import Field, model_validator
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from bomagent_api import __version__, maintenance
@@ -17,7 +17,7 @@ from bomagent_api.routers import kb as kb_routes
 from bomagent_api.routers.kb import MAX_DOCUMENT
 from bomagent_api.routers.projects import MAX_UPLOAD
 from bomagent_api.routers.runs import MAX_REFERENCE
-from bomagent_common.config import ServiceSettings
+from bomagent_common.config import ServiceSettings, postgres_url
 from bomagent_common.db import make_engine, ping
 from bomagent_common.health import ReadinessCheck
 from bomagent_common.messaging import InMemoryQueue, Queue, SqsQueue
@@ -47,6 +47,25 @@ def _upload_limit(method: str, path: str) -> int | None:
 class Settings(ServiceSettings):
     service_name: str = "bomagent-api"
     platform_database_url: str | None = None
+    platform_database_password: str | None = Field(default=None, repr=False)
+
+    @model_validator(mode="after")
+    def _compose_platform_url(self) -> Settings:
+        """Platform role (tenant onboarding only) on the same cluster as the app role."""
+        if (
+            self.platform_database_url is None
+            and self.database_host
+            and self.platform_database_password
+        ):
+            self.platform_database_url = postgres_url(
+                "bomagent_platform",
+                self.platform_database_password,
+                self.database_host,
+                self.database_port,
+                self.database_name,
+            )
+        return self
+
     auth_mode: Literal["local", "oidc"] = "oidc"
     oidc_issuer: str = ""
     oidc_audience: str = "bomagent-api"
