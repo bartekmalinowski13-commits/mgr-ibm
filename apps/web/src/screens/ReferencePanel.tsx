@@ -98,7 +98,12 @@ export function ReferencePanel({ runId }: { runId: string }) {
           </dl>
           <h3 className="font-medium">{t("reference.diffs", { count: result.diffs.length })}</h3>
           {result.diffs.length ? (
-            <div className="max-h-80 overflow-auto rounded-card border border-line">
+            <section
+              // biome-ignore lint/a11y/noNoninteractiveTabindex: scrollable region must be reachable by keyboard (WCAG 2.1.1)
+              tabIndex={0}
+              aria-label={t("reference.diffs", { count: result.diffs.length })}
+              className="max-h-80 overflow-auto rounded-card border border-line focus-visible:outline-2 focus-visible:outline-focus"
+            >
               <table className="w-full min-w-[560px] text-left text-[14px]">
                 <thead className="sticky top-0 border-b border-line bg-surface text-[13px] text-muted">
                   <tr>
@@ -130,7 +135,7 @@ export function ReferencePanel({ runId }: { runId: string }) {
                   ))}
                 </tbody>
               </table>
-            </div>
+            </section>
           ) : null}
         </>
       ) : null}

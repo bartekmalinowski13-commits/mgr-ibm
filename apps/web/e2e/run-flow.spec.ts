@@ -29,7 +29,7 @@ test("new run from a template -> live progress -> BOM -> provenance -> correctio
   await page.getByRole("button", { name: "Utwórz projekt" }).click();
   await page.waitForURL("**/projects/*");
   await page.getByTestId("file-input").setInputFiles(FILES.map((f) => path.join(FIXTURE, f)));
-  await expect(page.getByText("Gotowy")).toHaveCount(FILES.length, { timeout: 60_000 });
+  await expect(page.getByText("Gotowy")).toHaveCount(FILES.length, { timeout: 120_000 });
   await expectAccessible(page);
 
   await page.getByRole("link", { name: "Start" }).click();

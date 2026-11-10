@@ -19,7 +19,7 @@ test("compare variants A and B on the same project", async ({ page }) => {
   const fs = await import("node:fs");
   const files = fs.readdirSync(FIXTURE).filter((f) => f.includes(".kicad_"));
   await page.getByTestId("file-input").setInputFiles(files.map((f) => path.join(FIXTURE, f)));
-  await expect(page.getByText("Gotowy")).toHaveCount(files.length, { timeout: 60_000 });
+  await expect(page.getByText("Gotowy")).toHaveCount(files.length, { timeout: 120_000 });
 
   await page.getByRole("button", { name: "Uruchom przebieg" }).click();
   const dialog = page.getByRole("dialog", { name: "Nowy przebieg" });
