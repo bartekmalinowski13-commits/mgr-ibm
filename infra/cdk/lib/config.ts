@@ -31,17 +31,26 @@ export interface EnvConfig {
   readonly appUrl?: string;
   readonly cloudFrontCertificateArn?: string;
   readonly albCertificateArn?: string;
+  /** Output WebAclArn of the WAF stack (us-east-1), passed by tools/deploy.sh. */
+  readonly webAclArn?: string;
   readonly alarmEmail?: string;
   readonly githubRepository: string;
+  /** Existing GitHub OIDC provider of the account (only one per account is allowed). */
+  readonly githubOidcProviderArn?: string;
   /** True when an organisation trail exists (log-archive account); else an account trail. */
   readonly organizationTrail: boolean;
+  /**
+   * True when GuardDuty and Security Hub are enabled by the organisation's delegated
+   * administrator: the account then must not create its own detector or hub (it fails).
+   */
+  readonly organizationSecurityServices: boolean;
 }
 
-const PLACEHOLDER_ACCOUNT = "000000000000";
+export const PLACEHOLDER_ACCOUNT = "000000000000";
 
 const DEFAULTS: Record<
   EnvName,
-  Omit<EnvConfig, "account" | "imageRegistry" | "githubRepository">
+  Omit<EnvConfig, "account" | "imageRegistry" | "githubRepository" | "organizationSecurityServices">
 > = {
   dev: {
     name: "dev",
@@ -93,6 +102,21 @@ const DEFAULTS: Record<
   },
 };
 
+/**
+ * The repository trusted by the deploy role. Required for real accounts: a default could
+ * trust somebody else's repository. Placeholder synth uses a neutral example value.
+ */
+function githubRepository(value: string | undefined, account: string): string {
+  if (value) {
+    if (!/^[\w.-]+\/[\w.-]+$/.test(value))
+      throw new Error("bomagent:githubRepository must be <owner>/<repository>");
+    return value;
+  }
+  if (account !== PLACEHOLDER_ACCOUNT)
+    throw new Error("bomagent:githubRepository is required for a real account");
+  return "example-owner/example-repository";
+}
+
 export function loadConfig(get: (key: string) => unknown): EnvConfig {
   const name = String(get("bomagent:env") ?? "dev") as EnvName;
   if (!(name in DEFAULTS)) throw new Error(`unknown environment ${name}`);
@@ -113,7 +137,10 @@ export function loadConfig(get: (key: string) => unknown): EnvConfig {
     appUrl: str("appUrl") ?? (str("domainName") ? `https://${str("domainName")}` : undefined),
     cloudFrontCertificateArn: str("cloudFrontCertificateArn"),
     albCertificateArn: str("albCertificateArn"),
+    webAclArn: str("webAclArn"),
+    organizationSecurityServices: str("organizationSecurityServices") === "true",
     alarmEmail: str("alarmEmail"),
-    githubRepository: str("githubRepository") ?? "bomagent/mgr-ibm",
+    githubRepository: githubRepository(str("githubRepository"), account),
+    githubOidcProviderArn: str("githubOidcProviderArn"),
   };
 }

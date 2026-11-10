@@ -11,6 +11,7 @@
         "support:*",
         "budgets:*",
         "ce:*",
+        "cloudformation:*",
         "cloudfront:*",
         "wafv2:*",
         "route53:*",
@@ -30,7 +31,35 @@
       "Resource": "*",
       "Condition": {
         "StringNotEquals": {
-          "aws:RequestedRegion": ["eu-central-1", "eu-west-1", "eu-west-3", "eu-north-1"]
+          "aws:RequestedRegion": [
+            "eu-central-1",
+            "eu-west-1",
+            "eu-west-3",
+            "eu-north-1",
+            "eu-south-1",
+            "eu-south-2"
+          ]
+        }
+      }
+    },
+    {
+      "Sid": "CloudFormationOutsideEuOnlyForTheWafStacks",
+      "Effect": "Deny",
+      "Action": "cloudformation:*",
+      "NotResource": [
+        "arn:aws:cloudformation:us-east-1:*:stack/BomAgent-*-Waf/*",
+        "arn:aws:cloudformation:us-east-1:*:changeSet/cdk-deploy-change-set/*"
+      ],
+      "Condition": {
+        "StringNotEquals": {
+          "aws:RequestedRegion": [
+            "eu-central-1",
+            "eu-west-1",
+            "eu-west-3",
+            "eu-north-1",
+            "eu-south-1",
+            "eu-south-2"
+          ]
         }
       }
     },
@@ -46,6 +75,8 @@
             "eu-west-1",
             "eu-west-3",
             "eu-north-1",
+            "eu-south-1",
+            "eu-south-2",
             "us-east-1"
           ]
         }

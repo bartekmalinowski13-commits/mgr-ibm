@@ -17,6 +17,7 @@ import type { Construct } from "constructs";
 import { BaseStack, type BaseStackProps } from "./base-stack";
 import type { ComputeStack } from "./compute-stack";
 import { type DataStack, filesBucketName } from "./data-stack";
+import { siteBucketName } from "./edge-stack";
 import { acknowledge } from "./nag";
 
 // ------------------------------------------------------------------ observability
@@ -140,20 +141,9 @@ export class SecurityBaselineStack extends BaseStack {
     const { config, data } = props;
     const removal = config.production ? RemovalPolicy.RETAIN : RemovalPolicy.DESTROY;
 
-    new guardduty.CfnDetector(this, "GuardDuty", {
-      enable: true,
-      findingPublishingFrequency: "FIFTEEN_MINUTES",
-      features: [
-        { name: "S3_DATA_EVENTS", status: "ENABLED" },
-        { name: "RDS_LOGIN_EVENTS", status: "ENABLED" },
-        { name: "EBS_MALWARE_PROTECTION", status: "ENABLED" },
-        {
-          name: "RUNTIME_MONITORING",
-          status: "ENABLED",
-          additionalConfiguration: [{ name: "ECS_FARGATE_AGENT_MANAGEMENT", status: "ENABLED" }],
-        },
-      ],
-    });
+    if (!config.organizationSecurityServices) {
+      this.enableThreatDetection();
+    }
 
     // Malware Protection for S3: uploads are scanned and tagged before parsing
     const bucket = filesBucketName(config);
@@ -231,20 +221,8 @@ export class SecurityBaselineStack extends BaseStack {
       actions: { tagging: { status: "ENABLED" } },
     });
 
-    const hub = new securityhub.CfnHub(this, "SecurityHub", { enableDefaultStandards: false });
-    for (const [id, arn] of [
-      [
-        "Fsbp",
-        `arn:aws:securityhub:${config.region}::standards/aws-foundational-security-best-practices/v/1.0.0`,
-      ],
-      [
-        "Cis",
-        `arn:aws:securityhub:${config.region}::standards/cis-aws-foundations-benchmark/v/3.0.0`,
-      ],
-    ]) {
-      new securityhub.CfnStandard(this, id as string, {
-        standardsArn: arn as string,
-      }).addDependency(hub);
+    if (!config.organizationSecurityServices) {
+      this.enableSecurityHub();
     }
     new accessanalyzer.CfnAnalyzer(this, "AccessAnalyzer", {
       type: "ACCOUNT",
@@ -325,34 +303,73 @@ export class SecurityBaselineStack extends BaseStack {
       );
     }
   }
+  /** Account-level GuardDuty detector (skipped when the organisation manages it). */
+  private enableThreatDetection(): void {
+    new guardduty.CfnDetector(this, "GuardDuty", {
+      enable: true,
+      findingPublishingFrequency: "FIFTEEN_MINUTES",
+      features: [
+        { name: "S3_DATA_EVENTS", status: "ENABLED" },
+        { name: "RDS_LOGIN_EVENTS", status: "ENABLED" },
+        { name: "EBS_MALWARE_PROTECTION", status: "ENABLED" },
+        {
+          name: "RUNTIME_MONITORING",
+          status: "ENABLED",
+          additionalConfiguration: [{ name: "ECS_FARGATE_AGENT_MANAGEMENT", status: "ENABLED" }],
+        },
+      ],
+    });
+  }
+
+  /** Security Hub with FSBP and CIS (skipped when the organisation manages it). */
+  private enableSecurityHub(): void {
+    const { region } = this.config;
+    const hub = new securityhub.CfnHub(this, "SecurityHub", { enableDefaultStandards: false });
+    for (const [id, arn] of [
+      [
+        "Fsbp",
+        `arn:aws:securityhub:${region}::standards/aws-foundational-security-best-practices/v/1.0.0`,
+      ],
+      ["Cis", `arn:aws:securityhub:${region}::standards/cis-aws-foundations-benchmark/v/3.0.0`],
+    ]) {
+      new securityhub.CfnStandard(this, id as string, {
+        standardsArn: arn as string,
+      }).node.addDependency(hub);
+    }
+  }
 }
 
 // ------------------------------------------------------------------ CI/CD
 /**
- * GitHub Actions deploy role via OIDC (no long-lived keys, ADR-0012). It may only assume
- * the CDK bootstrap roles of this account, only from the repository's matching
- * GitHub environment.
+ * GitHub Actions deploy role via OIDC (no long-lived keys, ADR-0012). Trusted only from
+ * the repository's matching GitHub environment (protect it with a deployment branch rule:
+ * main only). It may assume the CDK bootstrap roles of this account and make exactly the
+ * calls tools/deploy.sh makes after `cdk deploy`, scoped to this environment.
  */
 export class CicdStack extends BaseStack {
   constructor(scope: Construct, id: string, props: BaseStackProps) {
     super(scope, id, props);
     const { config } = props;
-    const provider = new iam.CfnOIDCProvider(this, "GitHub", {
-      url: "https://token.actions.githubusercontent.com",
-      clientIdList: ["sts.amazonaws.com"],
-    });
+    const { account, region } = config;
+    const providerArn =
+      config.githubOidcProviderArn ??
+      new iam.CfnOIDCProvider(this, "GitHub", {
+        url: "https://token.actions.githubusercontent.com",
+        clientIdList: ["sts.amazonaws.com"],
+      }).attrArn;
     const role = new iam.Role(this, "Deploy", {
       roleName: `bomagent-${config.name}-github-deploy`,
-      description: "Assumed by GitHub Actions (environment-scoped) to run cdk deploy",
-      maxSessionDuration: Duration.hours(1),
-      assumedBy: new iam.WebIdentityPrincipal(provider.attrArn, {
+      description: "Assumed by GitHub Actions (environment-scoped) to run tools/deploy.sh",
+      // a first deployment (Aurora, CloudFront) takes longer than an hour
+      maxSessionDuration: Duration.hours(3),
+      assumedBy: new iam.WebIdentityPrincipal(providerArn, {
         StringEquals: {
           "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
           "token.actions.githubusercontent.com:sub": `repo:${config.githubRepository}:environment:${config.name}`,
         },
       }),
     });
-    const bootstrapRoles = `arn:aws:iam::${config.account}:role/cdk-hnb659fds-*-role-${config.account}-*`;
+    const bootstrapRoles = `arn:aws:iam::${account}:role/cdk-hnb659fds-*-role-${account}-*`;
     role.addToPolicy(
       new iam.PolicyStatement({
         sid: "AssumeCdkBootstrapRoles",
@@ -360,11 +377,133 @@ export class CicdStack extends BaseStack {
         resources: [bootstrapRoles],
       }),
     );
-    acknowledge(
-      role,
-      `AwsSolutions-IAM5[Resource::${bootstrapRoles}]`,
-      "The CDK bootstrap roles (deploy, file/image publishing, lookup) share this naming pattern; nothing else matches it.",
+    // ---- calls of tools/deploy.sh (outputs, one-off tasks, web app upload, invalidation)
+    const prefix = `BomAgent-${config.name}`;
+    const stacks = [region, "us-east-1"].map(
+      (r) => `arn:aws:cloudformation:${r}:${account}:stack/${prefix}-*/*`,
     );
+    const cluster = `arn:aws:ecs:${region}:${account}:cluster/bomagent-${config.name}`;
+    const taskDefs = `arn:aws:ecs:${region}:${account}:task-definition/BomAgent${config.name}Compute*`;
+    const tasks = `arn:aws:ecs:${region}:${account}:task/bomagent-${config.name}/*`;
+    const taskRoles = `arn:aws:iam::${account}:role/${prefix}-Compute-*`;
+    const site = `arn:aws:s3:::${siteBucketName(config)}`;
+    const distributions = `arn:aws:cloudfront::${account}:distribution/*`;
+    // the WAF stack (us-east-1, no CDK bootstrap there) is deployed with these credentials
+    const wafStack = `arn:aws:cloudformation:us-east-1:${account}:stack/${prefix}-Waf/*`;
+    const wafChangeSets = `arn:aws:cloudformation:us-east-1:${account}:changeSet/cdk-deploy-change-set/*`;
+    const webAcls = `arn:aws:wafv2:us-east-1:${account}:global/*`;
+    role.addToPolicy(
+      new iam.PolicyStatement({
+        sid: "DeployWafStack",
+        actions: [
+          "cloudformation:CreateChangeSet",
+          "cloudformation:DescribeChangeSet",
+          "cloudformation:ExecuteChangeSet",
+          "cloudformation:DeleteChangeSet",
+          "cloudformation:DescribeStackEvents",
+          "cloudformation:GetTemplate",
+          "cloudformation:GetTemplateSummary",
+        ],
+        resources: [wafStack, wafChangeSets],
+      }),
+    );
+    role.addToPolicy(
+      new iam.PolicyStatement({
+        sid: "ManageWebAcl",
+        actions: [
+          "wafv2:CreateWebACL",
+          "wafv2:UpdateWebACL",
+          "wafv2:DeleteWebACL",
+          "wafv2:GetWebACL",
+          "wafv2:ListTagsForResource",
+          "wafv2:TagResource",
+          "wafv2:UntagResource",
+        ],
+        resources: [webAcls],
+      }),
+    );
+    role.addToPolicy(
+      new iam.PolicyStatement({
+        sid: "ReadStackOutputs",
+        actions: ["cloudformation:DescribeStacks"],
+        resources: stacks,
+      }),
+    );
+    role.addToPolicy(
+      new iam.PolicyStatement({
+        sid: "FindSubnets", // Describe* calls support no resource-level permissions
+        actions: ["ec2:DescribeSubnets"],
+        resources: ["*"],
+        conditions: { StringEquals: { "aws:RequestedRegion": region } },
+      }),
+    );
+    role.addToPolicy(
+      new iam.PolicyStatement({
+        sid: "RunOneOffTasks",
+        actions: ["ecs:RunTask"],
+        resources: [taskDefs],
+        conditions: { ArnEquals: { "ecs:cluster": cluster } },
+      }),
+    );
+    role.addToPolicy(
+      new iam.PolicyStatement({
+        sid: "WatchOneOffTasks",
+        actions: ["ecs:DescribeTasks"],
+        resources: [tasks],
+      }),
+    );
+    role.addToPolicy(
+      new iam.PolicyStatement({
+        sid: "PassTaskRoles",
+        actions: ["iam:PassRole"],
+        resources: [taskRoles],
+        conditions: { StringEquals: { "iam:PassedToService": "ecs-tasks.amazonaws.com" } },
+      }),
+    );
+    role.addToPolicy(
+      new iam.PolicyStatement({
+        sid: "PublishWebApp",
+        actions: ["s3:ListBucket", "s3:GetObject", "s3:PutObject", "s3:DeleteObject"],
+        resources: [site, `${site}/*`],
+      }),
+    );
+    role.addToPolicy(
+      new iam.PolicyStatement({
+        sid: "InvalidateWebApp",
+        actions: ["cloudfront:CreateInvalidation"],
+        resources: [distributions],
+      }),
+    );
+    for (const [resource, reason] of [
+      [
+        bootstrapRoles,
+        "The CDK bootstrap roles (deploy, file/image publishing, lookup) share this naming pattern; nothing else matches it.",
+      ],
+      ...stacks.map((s) => [s, "Only this environment's stacks (name prefix); read-only."]),
+      ["*", "ec2:DescribeSubnets has no resource-level permissions; read-only, one region."],
+      [
+        taskDefs,
+        "Task definition revisions of this environment's compute stack; RunTask is also bound to this environment's cluster.",
+      ],
+      [tasks, "Tasks of this environment's cluster only."],
+      [
+        taskRoles,
+        "Task and execution roles of this environment's compute stack, passable only to ECS tasks.",
+      ],
+      [`${site}/*`, "Objects of this environment's web app bucket (public static assets)."],
+      [wafStack, "The WAF stack of this environment (stack ids are generated)."],
+      [
+        wafChangeSets,
+        "Change set ids are generated by the CDK CLI; only in us-east-1 and paired with the WAF stack.",
+      ],
+      [
+        webAcls,
+        "Web ACL and managed rule group ids are generated; CLOUDFRONT scope in us-east-1 only.",
+      ],
+      [distributions, "Distribution ids are generated; CreateInvalidation only clears caches."],
+    ]) {
+      acknowledge(role, `AwsSolutions-IAM5[Resource::${resource}]`, reason as string);
+    }
     new CfnOutput(this, "DeployRoleArn", { value: role.roleArn });
   }
 }

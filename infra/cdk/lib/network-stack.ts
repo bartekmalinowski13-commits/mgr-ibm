@@ -83,13 +83,32 @@ export class NetworkStack extends BaseStack {
       "CloudFormation-Validate::W3010",
       "Availability zones are fixed on purpose: synth runs without AWS credentials (no lookups); eu-central-1a/b/c exist in every account.",
     );
-    this.vpc.addGatewayEndpoint("S3", {
+    const s3Endpoint = this.vpc.addGatewayEndpoint("S3", {
       service: ec2.GatewayVpcEndpointAwsService.S3,
       subnets: [
         { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
         { subnetType: ec2.SubnetType.PRIVATE_ISOLATED },
       ],
     });
+    // S3 from the VPC reaches only this account's buckets and the ECR image layers: a
+    // compromised parser cannot copy files to a bucket of somebody else (exfiltration)
+    s3Endpoint.addToPolicy(
+      new iam.PolicyStatement({
+        sid: "OwnAccountBuckets",
+        principals: [new iam.AnyPrincipal()],
+        actions: ["s3:*"],
+        resources: ["*"],
+        conditions: { StringEquals: { "aws:ResourceAccount": props.config.account } },
+      }),
+    );
+    s3Endpoint.addToPolicy(
+      new iam.PolicyStatement({
+        sid: "EcrImageLayers",
+        principals: [new iam.AnyPrincipal()],
+        actions: ["s3:GetObject"],
+        resources: [`arn:aws:s3:::prod-${props.config.region}-starport-layer-bucket/*`],
+      }),
+    );
     this.endpointsSecurityGroup = new ec2.SecurityGroup(this, "EndpointsSg", {
       vpc: this.vpc,
       description: "Interface VPC endpoints: HTTPS from inside the VPC only",

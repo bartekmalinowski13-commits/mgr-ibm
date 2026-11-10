@@ -23,7 +23,15 @@ export interface ComputeStackProps extends BaseStackProps {
 }
 
 /** EU regions where Bedrock may be called (EU cross-region inference profiles). */
-export const BEDROCK_REGIONS = ["eu-central-1", "eu-west-1", "eu-west-3", "eu-north-1"];
+// regions an EU cross-region inference profile may route to (all EU, ADR-0002)
+export const BEDROCK_REGIONS = [
+  "eu-central-1",
+  "eu-west-1",
+  "eu-west-3",
+  "eu-north-1",
+  "eu-south-1",
+  "eu-south-2",
+];
 const GATEWAY_PORT = 4000;
 const API_PORT = 8000;
 
@@ -60,15 +68,19 @@ export class ComputeStack extends BaseStack {
     const { config, vpc, data, identity, logsKey } = props;
     const removal = config.production ? RemovalPolicy.RETAIN : RemovalPolicy.DESTROY;
     const registryAccount = config.imageRegistry.split(".")[0] ?? config.account;
-    const image = (name: string) =>
-      ecs.ContainerImage.fromEcrRepository(
-        ecr.Repository.fromRepositoryArn(
+    const repos = new Map<string, ecr.IRepository>();
+    const image = (name: string) => {
+      let repo = repos.get(name);
+      if (!repo) {
+        repo = ecr.Repository.fromRepositoryArn(
           this,
           `${name}Repo`,
           `arn:aws:ecr:${config.region}:${registryAccount}:repository/${name}`,
-        ),
-        config.imageTag,
-      );
+        );
+        repos.set(name, repo);
+      }
+      return ecs.ContainerImage.fromEcrRepository(repo, config.imageTag);
+    };
 
     this.cluster = new ecs.Cluster(this, "Cluster", {
       vpc,
@@ -225,7 +237,12 @@ export class ComputeStack extends BaseStack {
       image: "bomagent-llm-gateway",
       cpu: 512,
       memory: 1024,
-      env: { AWS_REGION: config.region, LITELLM_LOG: "ERROR" },
+      env: {
+        AWS_REGION: config.region,
+        LITELLM_LOG: "ERROR",
+        // use the price map bundled with the pinned version: no fetch from GitHub at start
+        LITELLM_LOCAL_MODEL_COST_MAP: "True",
+      },
       secrets: { LITELLM_MASTER_KEY: ecs.Secret.fromSecretsManager(gatewayKey) },
       port: GATEWAY_PORT,
     });
@@ -254,6 +271,7 @@ export class ComputeStack extends BaseStack {
       cluster: this.cluster,
       taskDefinition: gatewayTask,
       desiredCount: config.production ? 2 : 1,
+      minHealthyPercent: 100,
       vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
       securityGroups: [gatewaySg],
       circuitBreaker: { rollback: true },
@@ -423,10 +441,22 @@ export class ComputeStack extends BaseStack {
     ];
     for (const spec of workerSpecs) {
       const queue = data.queues[spec.queue];
+      const isolated = spec.subnets === ec2.SubnetType.PRIVATE_ISOLATED;
       const sg = new ec2.SecurityGroup(this, `${spec.name}Sg`, {
         vpc,
         description: `${spec.name} worker (no inbound)`,
+        // isolated subnets route only to the VPC, the S3 gateway endpoint (own account)
+        // and the interface endpoints: HTTPS and PostgreSQL are all a parser may use
+        allowAllOutbound: !isolated,
       });
+      if (isolated) {
+        sg.addEgressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(443), "VPC endpoints and S3 (HTTPS)");
+        sg.addEgressRule(
+          ec2.Peer.securityGroupId(data.databaseSecurityGroup.securityGroupId),
+          ec2.Port.tcp(5432),
+          "PostgreSQL",
+        );
+      }
       const task = taskDefinition(spec.name, {
         image: spec.image,
         module: spec.module,
@@ -447,6 +477,7 @@ export class ComputeStack extends BaseStack {
         cluster: this.cluster,
         taskDefinition: task,
         desiredCount: 1,
+        minHealthyPercent: 100, // a draining worker finishes its message first
         vpcSubnets: { subnetType: spec.subnets },
         securityGroups: [sg],
         circuitBreaker: { rollback: true },
@@ -470,16 +501,35 @@ export class ComputeStack extends BaseStack {
     }
 
     // ---------------------------------------------------------------- migrations
-    const migrate = taskDefinition("migrate", {
+    // 1) dbbootstrap: the only task with the Aurora master secret. Creates the roles, sets
+    //    their passwords from their secrets, installs pgvector and hands the database to
+    //    the migrator (bomagent-migrate bootstrap; idempotent, re-run to rotate passwords).
+    const adminSecret = secrets.Secret.fromSecretCompleteArn(
+      this,
+      "DbAdminRef",
+      data.cluster.secret?.secretArn ?? "",
+    );
+    const dbBootstrap = taskDefinition("dbbootstrap", {
       image: "bomagent-migrate",
       cpu: 256,
       memory: 512,
       env: { ...commonEnv },
       secrets: {
-        MIGRATOR_PASSWORD: migratorDbPassword,
+        BOMAGENT_ADMIN_USER: ecs.Secret.fromSecretsManager(adminSecret, "username"),
+        BOMAGENT_ADMIN_PASSWORD: ecs.Secret.fromSecretsManager(adminSecret, "password"),
+        BOMAGENT_MIGRATOR_PASSWORD: migratorDbPassword,
         BOMAGENT_APP_PASSWORD: appDbPassword,
         BOMAGENT_PLATFORM_PASSWORD: platformDbPassword,
       },
+      command: ["bomagent-migrate", "bootstrap"],
+    });
+    // 2) migrate: schema migrations as the migrator (owner of all objects), nothing else
+    const migrate = taskDefinition("migrate", {
+      image: "bomagent-migrate",
+      cpu: 256,
+      memory: 512,
+      env: { ...commonEnv },
+      secrets: { MIGRATOR_PASSWORD: migratorDbPassword },
       // passwords are alphanumeric (generated without punctuation): safe inside the URL
       command: [
         "sh",
@@ -515,6 +565,7 @@ export class ComputeStack extends BaseStack {
       }
     }
 
+    new CfnOutput(this, "DbBootstrapTaskDefinition", { value: dbBootstrap.taskDefinitionArn });
     new CfnOutput(this, "MigrationTaskDefinition", { value: migrate.taskDefinitionArn });
     new CfnOutput(this, "MigrationSecurityGroup", { value: migrateSg.securityGroupId });
     new CfnOutput(this, "ApiLoadBalancer", { value: this.loadBalancer.loadBalancerDnsName });

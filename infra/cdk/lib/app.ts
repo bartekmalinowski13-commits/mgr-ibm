@@ -1,7 +1,8 @@
 import { type App, Tags, Validations } from "aws-cdk-lib";
 import { AwsSolutionsChecks } from "cdk-nag";
 import { ComputeStack } from "./compute-stack";
-import { type EnvConfig, loadConfig } from "./config";
+import { type EnvConfig, loadConfig, PLACEHOLDER_ACCOUNT } from "./config";
+
 import { DataStack } from "./data-stack";
 import { EdgeStack, WafStack } from "./edge-stack";
 import { IdentityStack } from "./identity-stack";
@@ -12,6 +13,9 @@ import {
   ObservabilityStack,
   SecurityBaselineStack,
 } from "./operations-stacks";
+
+/** Synth without an AWS account: stands in for the WAF stack output. */
+const PLACEHOLDER_WEB_ACL = `arn:aws:wafv2:us-east-1:${PLACEHOLDER_ACCOUNT}:global/webacl/placeholder/00000000-0000-0000-0000-000000000000`;
 
 export interface BomAgentStacks {
   network: NetworkStack;
@@ -50,17 +54,16 @@ export function buildApp(app: App, config?: EnvConfig): BomAgentStacks {
   Validations.of(app).addPlugins(new AwsSolutionsChecks(app, { verbose: true }));
   const waf = new WafStack(app, `${prefix}-Waf`, {
     env: { account: cfg.account, region: "us-east-1" },
-    crossRegionReferences: true,
     config: cfg,
   });
   const edge = new EdgeStack(app, `${prefix}-Edge`, {
     env,
-    crossRegionReferences: true,
     config: cfg,
     loadBalancer: compute.loadBalancer,
     albHttps: !!cfg.albCertificateArn,
     originSecret: compute.originSecret,
-    webAclArn: waf.webAclArn,
+    webAclArn:
+      cfg.webAclArn ?? (cfg.account === PLACEHOLDER_ACCOUNT ? PLACEHOLDER_WEB_ACL : undefined),
   });
   const observability = new ObservabilityStack(app, `${prefix}-Observability`, {
     env,

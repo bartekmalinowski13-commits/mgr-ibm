@@ -1,4 +1,10 @@
-import { CfnOutput, Duration, RemovalPolicy } from "aws-cdk-lib";
+import {
+  Annotations,
+  BootstraplessSynthesizer,
+  CfnOutput,
+  Duration,
+  RemovalPolicy,
+} from "aws-cdk-lib";
 import * as acm from "aws-cdk-lib/aws-certificatemanager";
 import * as cloudfront from "aws-cdk-lib/aws-cloudfront";
 import * as origins from "aws-cdk-lib/aws-cloudfront-origins";
@@ -8,63 +14,130 @@ import type * as secrets from "aws-cdk-lib/aws-secretsmanager";
 import * as wafv2 from "aws-cdk-lib/aws-wafv2";
 import type { Construct } from "constructs";
 import { BaseStack, type BaseStackProps } from "./base-stack";
+import { type EnvConfig, PLACEHOLDER_ACCOUNT } from "./config";
 import { acknowledge } from "./nag";
+
+/** Upload endpoints of the API (bomagent_api.app._upload_limit): binary bodies. */
+const UPLOAD_PATHS: [string, "ENDS_WITH" | "EXACTLY"][] = [
+  ["/files", "ENDS_WITH"],
+  ["/evaluation", "ENDS_WITH"],
+  ["/v1/kb/documents", "EXACTLY"],
+];
+/** Rules of the common rule set that inspect bodies: CAD/PDF files trip them by design. */
+const BODY_RULES = [
+  "SizeRestrictions_BODY",
+  "CrossSiteScripting_BODY",
+  "GenericLFI_BODY",
+  "GenericRFI_BODY",
+  "EC2MetaDataSSRF_BODY",
+];
 
 /**
  * WAF for CloudFront. CloudFront is a global service and its web ACL must be created
  * in us-east-1 (the exception for global services in ADR-0002); it stores no tenant data.
+ * The stack needs no CDK bootstrap there (no assets): it is deployed with the CI
+ * credentials and its ARN is handed to the edge stack as context (bomagent:webAclArn),
+ * so nothing else has to run in us-east-1 (no cross-region reference machinery).
  */
 export class WafStack extends BaseStack {
   readonly webAclArn: string;
 
   constructor(scope: Construct, id: string, props: BaseStackProps) {
-    super(scope, id, props);
-    const managed = (name: string, priority: number) => ({
-      name,
+    super(scope, id, { ...props, synthesizer: new BootstraplessSynthesizer() });
+    const visibility = (metricName: string) => ({
+      cloudWatchMetricsEnabled: true,
+      metricName,
+      // sampled requests would keep request details (headers, client IPs) in us-east-1
+      sampledRequestsEnabled: false,
+    });
+    const upload: wafv2.CfnWebACL.StatementProperty = {
+      andStatement: {
+        statements: [
+          {
+            byteMatchStatement: {
+              fieldToMatch: { method: {} },
+              positionalConstraint: "EXACTLY",
+              searchString: "POST",
+              textTransformations: [{ priority: 0, type: "NONE" }],
+            },
+          },
+          {
+            orStatement: {
+              statements: UPLOAD_PATHS.map(([path, constraint]) => ({
+                byteMatchStatement: {
+                  fieldToMatch: { uriPath: {} },
+                  positionalConstraint: constraint,
+                  searchString: path,
+                  textTransformations: [{ priority: 0, type: "NONE" }],
+                },
+              })),
+            },
+          },
+        ],
+      },
+    };
+    const managed = (
+      name: string,
+      priority: number,
+      extra: Partial<wafv2.CfnWebACL.ManagedRuleGroupStatementProperty> = {},
+      ruleName = name,
+    ): wafv2.CfnWebACL.RuleProperty => ({
+      name: ruleName,
       priority,
       overrideAction: { none: {} },
-      statement: { managedRuleGroupStatement: { vendorName: "AWS", name } },
-      visibilityConfig: {
-        cloudWatchMetricsEnabled: true,
-        metricName: name,
-        sampledRequestsEnabled: true,
-      },
+      statement: { managedRuleGroupStatement: { vendorName: "AWS", name, ...extra } },
+      visibilityConfig: visibility(ruleName),
     });
     const acl = new wafv2.CfnWebACL(this, "WebAcl", {
       scope: "CLOUDFRONT",
       defaultAction: { allow: {} },
-      visibilityConfig: {
-        cloudWatchMetricsEnabled: true,
-        metricName: `bomagent-${props.config.name}`,
-        sampledRequestsEnabled: true,
-      },
+      visibilityConfig: visibility(`bomagent-${props.config.name}`),
       rules: [
-        managed("AWSManagedRulesCommonRuleSet", 1),
-        managed("AWSManagedRulesKnownBadInputsRuleSet", 2),
-        managed("AWSManagedRulesAmazonIpReputationList", 3),
-        managed("AWSManagedRulesAnonymousIpList", 4),
+        // full common rule set everywhere except on upload bodies ...
+        managed("AWSManagedRulesCommonRuleSet", 1, {
+          scopeDownStatement: { notStatement: { statement: upload } },
+        }),
+        // ... where body rules only count: files are untrusted data handled by isolated
+        // parsers and size-limited by the API, not HTML or URLs (SECURITY.md)
+        managed(
+          "AWSManagedRulesCommonRuleSet",
+          2,
+          {
+            scopeDownStatement: upload,
+            ruleActionOverrides: BODY_RULES.map((rule) => ({
+              name: rule,
+              actionToUse: { count: {} },
+            })),
+          },
+          "AWSManagedRulesCommonRuleSet-uploads",
+        ),
+        managed("AWSManagedRulesKnownBadInputsRuleSet", 3),
+        managed("AWSManagedRulesAmazonIpReputationList", 4),
+        managed("AWSManagedRulesAnonymousIpList", 5),
         {
           name: "RateLimitPerIp",
           priority: 10,
           action: { block: {} },
           statement: { rateBasedStatement: { limit: 2000, aggregateKeyType: "IP" } },
-          visibilityConfig: {
-            cloudWatchMetricsEnabled: true,
-            metricName: "RateLimitPerIp",
-            sampledRequestsEnabled: true,
-          },
+          visibilityConfig: visibility("RateLimitPerIp"),
         },
       ],
     });
     this.webAclArn = acl.attrArn;
+    new CfnOutput(this, "WebAclArn", { value: acl.attrArn });
   }
+}
+
+export function siteBucketName(config: EnvConfig): string {
+  return `bomagent-${config.name}-site-${config.account}`;
 }
 
 export interface EdgeStackProps extends BaseStackProps {
   readonly loadBalancer: elbv2.IApplicationLoadBalancer;
   readonly albHttps: boolean;
   readonly originSecret: secrets.ISecret;
-  readonly webAclArn: string;
+  /** Undefined only until the WAF stack exists: this stack then refuses to synthesize. */
+  readonly webAclArn: string | undefined;
 }
 
 /**
@@ -80,6 +153,20 @@ export class EdgeStack extends BaseStack {
     super(scope, id, props);
     const { config } = props;
     const removal = config.production ? RemovalPolicy.RETAIN : RemovalPolicy.DESTROY;
+    if (
+      config.production &&
+      config.account !== PLACEHOLDER_ACCOUNT &&
+      !(config.cloudFrontCertificateArn && config.domainName && props.albHttps)
+    ) {
+      Annotations.of(this).addError(
+        "Production needs a custom domain with certificates: bomagent:domainName, bomagent:cloudFrontCertificateArn (us-east-1) and bomagent:albCertificateArn (TLS 1.2+ to viewers and HTTPS to the origin).",
+      );
+    }
+    if (!props.webAclArn) {
+      Annotations.of(this).addError(
+        "bomagent:webAclArn is required: deploy the WAF stack first (tools/deploy.sh does).",
+      );
+    }
 
     const logs = new s3.Bucket(this, "EdgeLogs", {
       encryption: s3.BucketEncryption.S3_MANAGED,
@@ -93,6 +180,7 @@ export class EdgeStack extends BaseStack {
     acknowledge(logs, "AwsSolutions-S1", "This bucket is the log destination itself.");
 
     this.siteBucket = new s3.Bucket(this, "Site", {
+      bucketName: siteBucketName(config), // fixed: the deploy role is scoped to it
       encryption: s3.BucketEncryption.S3_MANAGED, // public static assets of the SPA, no tenant data
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       enforceSSL: true,
@@ -158,7 +246,10 @@ export class EdgeStack extends BaseStack {
       defaultRootObject: "index.html",
       webAclId: props.webAclArn,
       priceClass: cloudfront.PriceClass.PRICE_CLASS_100, // edge locations in Europe and North America
-      minimumProtocolVersion: cloudfront.SecurityPolicyProtocol.TLS_V1_2_2021,
+      // the default *.cloudfront.net certificate has a fixed policy (TLSv1); prod needs one
+      minimumProtocolVersion: certificate
+        ? cloudfront.SecurityPolicyProtocol.TLS_V1_2_2021
+        : undefined,
       domainNames: config.domainName && certificate ? [config.domainName] : undefined,
       certificate,
       enableLogging: true,
@@ -183,6 +274,13 @@ export class EdgeStack extends BaseStack {
         },
       },
     });
+    if (!props.webAclArn) {
+      acknowledge(
+        this.distribution,
+        "AwsSolutions-CFR2",
+        "Never deployed: without bomagent:webAclArn this stack carries an error annotation and the CLI refuses it.",
+      );
+    }
     if (!certificate) {
       acknowledge(
         this.distribution,

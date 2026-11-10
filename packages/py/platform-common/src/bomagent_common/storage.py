@@ -1,8 +1,10 @@
 """Object storage with mandatory per-tenant prefixes (``tenants/{tenant_id}/...``).
 
 Keys are always derived from the tenant id - callers cannot address another tenant's
-prefix, and path traversal segments are rejected. In AWS the task role is additionally
-restricted to the prefix with session tags (ABAC), so a bug here is not enough to leak.
+prefix, and path traversal segments are rejected. In AWS the task roles reach only the
+``tenants/`` prefix of the files bucket; per-tenant prefixes are enforced here and by RLS
+on the file metadata (per-tenant ABAC session policies are a planned hardening, see
+DECISIONS_LOG).
 """
 
 from __future__ import annotations

@@ -1,4 +1,9 @@
-"""Parse uploaded design files in the sandbox (no network, read-only FS - ADR-0009).
+"""Parse uploaded design files in the sandbox (ADR-0009).
+
+In AWS the worker runs in isolated subnets: read-only root FS, no internet route, egress
+only HTTPS to VPC endpoints / own-account S3 and PostgreSQL. Parsing itself happens in
+the same process as the database session (a separate parser process without credentials
+is a planned hardening, see DECISIONS_LOG).
 
 ``file.uploaded`` -> all files of the project are parsed together (KiCad hierarchies
 span several files); every file row gets ``parsed``/``failed`` and the design summary

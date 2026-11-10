@@ -27,7 +27,7 @@ class ServiceSettings(BaseSettings):
 
     # Application role connection (no BYPASSRLS). Example:
     # postgresql+psycopg://bomagent_app:***@localhost:5432/bomagent
-    database_url: str | None = None
+    database_url: str | None = Field(default=None, repr=False)  # may carry a password
     # ...or its parts (ECS: host from the stack, password injected from Secrets Manager)
     database_host: str | None = None
     database_port: int = 5432

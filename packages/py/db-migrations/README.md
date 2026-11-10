@@ -27,7 +27,14 @@ without context, so "no context" means "no rows".
 
 - `bomagent_migrations.bootstrap(admin_url, passwords)` - create roles (idempotent)
 - `bomagent_migrations.upgrade(url, revision="head")`, `downgrade(url, revision)`
-- CLI: `bomagent-migrate upgrade|downgrade|bootstrap` (env `BOMAGENT_MIGRATOR_DATABASE_URL`)
+- `bomagent_migrations.prepare_database(admin_url, passwords)` - as the cluster administrator
+  (Aurora master user, not a superuser): roles + passwords, pgvector, database owned by
+  the migrator, CONNECT for the runtime roles. Idempotent; used by the AWS `dbbootstrap`
+  task and by the test fixtures.
+- CLI: `bomagent-migrate upgrade|downgrade` (env `BOMAGENT_MIGRATOR_DATABASE_URL`);
+  `bomagent-migrate bootstrap` (env `BOMAGENT_ADMIN_DATABASE_URL` or
+  `BOMAGENT_ADMIN_USER`/`BOMAGENT_ADMIN_PASSWORD`/`BOMAGENT_DATABASE_HOST`, passwords from
+  `BOMAGENT_{MIGRATOR,APP,PLATFORM}_PASSWORD`)
 
 ## Adding a tenant table
 

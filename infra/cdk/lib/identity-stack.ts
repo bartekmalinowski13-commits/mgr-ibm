@@ -54,7 +54,7 @@ export class IdentityStack extends BaseStack {
     acknowledge(
       this.userPool,
       "AwsSolutions-COG2",
-      "MFA is optional at pool level so organisations can enforce it per role; owners and admins are required to enrol TOTP by the application (SECURITY.md).",
+      "MFA is optional at pool level (users enrol TOTP themselves); per-organisation enforcement for owners and admins is planned with SSO (DECISIONS_LOG) and is not yet enforced by the application. Threat protection (adaptive authentication) is on.",
     );
 
     this.webClient = this.userPool.addClient("Web", {

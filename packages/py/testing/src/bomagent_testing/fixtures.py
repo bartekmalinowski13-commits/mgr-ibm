@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from bomagent_common.db import make_engine, platform_transaction
 from bomagent_common.tenancy import TenantContext
-from bomagent_migrations import APP_ROLE, PLATFORM_ROLE, bootstrap, upgrade
+from bomagent_migrations import APP_ROLE, PLATFORM_ROLE, prepare_database, upgrade
 
 PG_IMAGE = "pgvector/pgvector:pg16"
 
@@ -58,21 +58,14 @@ def db_urls() -> Iterator[DbUrls]:
     base = make_url(admin).set(drivername="postgresql+psycopg")
     dbname = f"bomagent_test_{secrets.token_hex(4)}"
     pwds = {r: secrets.token_hex(16) for r in ("bomagent_migrator", APP_ROLE, PLATFORM_ROLE)}
-    bootstrap(base.render_as_string(hide_password=False), pwds)
-
     eng = create_engine(base.render_as_string(hide_password=False), isolation_level="AUTOCOMMIT")
-    with eng.connect() as conn:
-        conn.execute(text(f'CREATE DATABASE "{dbname}" OWNER bomagent_migrator'))
+    with eng.connect() as conn:  # owned by the administrator, as in Aurora
+        conn.execute(text(f'CREATE DATABASE "{dbname}"'))
     eng.dispose()
 
     db_admin = base.set(database=dbname)
-    eng = create_engine(
-        db_admin.render_as_string(hide_password=False), isolation_level="AUTOCOMMIT"
-    )
-    with eng.connect() as conn:
-        conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
-        conn.execute(text(f'GRANT CONNECT ON DATABASE "{dbname}" TO {APP_ROLE}, {PLATFORM_ROLE}'))
-    eng.dispose()
+    # the same preparation the AWS bootstrap task runs (bomagent-migrate bootstrap)
+    prepare_database(db_admin.render_as_string(hide_password=False), pwds)
 
     def role_url(role: str) -> str:
         return db_admin.set(username=role, password=pwds[role]).render_as_string(

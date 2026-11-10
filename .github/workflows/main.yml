@@ -1,4 +1,5 @@
 # main: build images (SBOM + provenance), deploy dev -> staging -> prod (ARCHITECTURE.md §13).
+# Each environment runs .github/workflows/deploy-env.yml.
 # Disabled until the AWS accounts exist: vars.AWS_DEPLOY_ENABLED == 'true'.
 # AWS access: GitHub OIDC -> IAM role per environment (Cicd stack); no long-lived keys and
 # no third-party credential actions (the AWS CLI on the runner assumes the role).
@@ -21,7 +22,7 @@ jobs:
   images:
     name: images + SBOM + provenance
     if: vars.AWS_DEPLOY_ENABLED == 'true'
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-24.04-arm # images are linux/arm64 (Graviton): build natively, no QEMU
     environment: images
     permissions: { id-token: write, contents: read }
     strategy:
@@ -37,12 +38,12 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with: { persist-credentials: false }
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+      - name: render gateway config from the model catalogue (before any credentials)
+        if: matrix.image.dockerfile == 'llm-gateway'
+        run: uv run python -m bomagent_llm.gateway_config --region "$AWS_REGION" > deploy/gateway/config.yaml
       - name: AWS credentials (GitHub OIDC)
         env: { ROLE_ARN: "${{ vars.AWS_IMAGES_ROLE_ARN }}" }
         run: bash .github/scripts/aws-oidc.sh "$ROLE_ARN"
-      - name: render gateway config from the model catalogue
-        if: matrix.image.dockerfile == 'llm-gateway'
-        run: uv run python -m bomagent_llm.gateway_config --region "$AWS_REGION" > deploy/gateway/config.yaml
       - name: build and push (BuildKit SBOM + provenance attestations)
         env:
           REGISTRY: "${{ vars.IMAGE_REGISTRY }}"
@@ -58,31 +59,21 @@ jobs:
             --sbom=true --provenance=mode=max \
             -t "$REGISTRY/$NAME:${GITHUB_SHA}" --push .
 
-  deploy:
-    name: deploy ${{ matrix.env }}
+  # strictly in order; a failure stops the later environments. prod is a protected
+  # environment (required reviewers, deployment branch rule: main only).
+  dev:
     if: vars.AWS_DEPLOY_ENABLED == 'true'
     needs: images
-    runs-on: ubuntu-24.04
-    strategy:
-      max-parallel: 1 # dev -> staging -> prod, in order; prod is a protected environment
-      matrix: { env: [dev, staging, prod] }
-    environment: ${{ matrix.env }}
     permissions: { id-token: write, contents: read }
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with: { persist-credentials: false }
-      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with: { node-version: "22", cache: pnpm }
-      - run: pnpm install --frozen-lockfile
-      - name: AWS credentials (GitHub OIDC)
-        env: { ROLE_ARN: "${{ vars.AWS_DEPLOY_ROLE_ARN }}" }
-        run: bash .github/scripts/aws-oidc.sh "$ROLE_ARN"
-      - name: deploy, migrate, publish web app, smoke
-        env:
-          ENV: ${{ matrix.env }}
-          AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
-          IMAGE_REGISTRY: ${{ vars.IMAGE_REGISTRY }}
-          IMAGE_TAG: ${{ github.sha }}
-          DOMAIN_NAME: ${{ vars.DOMAIN_NAME }}
-        run: bash tools/deploy.sh
+    uses: ./.github/workflows/deploy-env.yml
+    with: { environment: dev }
+  staging:
+    needs: dev
+    permissions: { id-token: write, contents: read }
+    uses: ./.github/workflows/deploy-env.yml
+    with: { environment: staging }
+  prod:
+    needs: staging
+    permissions: { id-token: write, contents: read }
+    uses: ./.github/workflows/deploy-env.yml
+    with: { environment: prod }
