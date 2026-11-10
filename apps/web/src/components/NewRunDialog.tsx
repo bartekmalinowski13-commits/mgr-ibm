@@ -3,7 +3,7 @@ import * as RadioGroup from "@radix-ui/react-radio-group";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { clsx } from "clsx";
-import type { ReactNode } from "react";
+import { type ReactNode, useEffect } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import type { Design, Requirements, Variant } from "../api/types";
@@ -30,6 +30,14 @@ interface FormValues {
   modelId: string;
   variant: Choice;
 }
+const DEFAULTS: FormValues = {
+  name: "",
+  designId: "",
+  appliedPart: "BF",
+  power: "battery",
+  modelId: "fake-closed",
+  variant: "AB",
+};
 
 function Row({
   label,
@@ -97,16 +105,19 @@ export function NewRunDialog() {
     enabled: newRunOpen,
   });
   const parsed = designs.filter((d) => d.status === "parsed");
-  const { register, handleSubmit, control, formState } = useForm<FormValues>({
-    values: {
-      name: "",
-      designId: newRunDesign ?? parsed[0]?.id ?? "",
-      appliedPart: "BF",
-      power: "battery",
-      modelId: "fake-closed",
-      variant: "AB",
-    },
-  });
+  const { register, handleSubmit, control, formState, reset, getValues, setValue } =
+    useForm<FormValues>({
+      defaultValues: DEFAULTS,
+    });
+  // fresh form each time the dialog opens (optionally pre-selecting a design)
+  useEffect(() => {
+    if (newRunOpen) reset({ ...DEFAULTS, designId: newRunDesign ?? "" });
+  }, [newRunOpen, newRunDesign, reset]);
+  // designs load after opening: pick the first ready one without touching what was typed
+  const firstParsed = parsed[0]?.id;
+  useEffect(() => {
+    if (firstParsed && !getValues("designId")) setValue("designId", firstParsed);
+  }, [firstParsed, getValues, setValue]);
 
   const submit = handleSubmit(async (v) => {
     const variants: Variant[] = v.variant === "AB" ? ["A", "B"] : [v.variant];

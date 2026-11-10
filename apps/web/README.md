@@ -28,6 +28,7 @@ pnpm --filter @bomagent/web e2e        # Playwright + axe (WCAG 2.1 AA), desktop
 PW_CHANNEL=chrome pnpm --filter @bomagent/web e2e   # gdy jest tylko systemowy Chrome
 E2E_BASE_URL=http://localhost:5173 pnpm --filter @bomagent/web e2e   # przeciw działającemu stosowi
 node e2e/shot.mjs                      # zrzuty ekranów do review (serwer mock na :5179)
+pnpm --filter @bomagent/web build:demo # samodzielna kopia demo (mock, routing w pamięci) – dist-demo/
 ```
 
 ## Ograniczenia (świadome)
@@ -35,4 +36,5 @@ node e2e/shot.mjs                      # zrzuty ekranów do review (serwer mock 
 - Brak logowania OIDC w UI (PKCE) – M4 część 2; teraz token wklejany do `localStorage`.
 - Przełącznik organizacji działa w trybie mock; w trybie HTTP organizacja wynika z tokenu.
 - Komunikaty reguł walidacji są po angielsku (z backendu) – tłumaczenie po `rule_id` w kolejnym kroku.
+- Upload z przeglądarki prosto do S3 (presigned PUT) wymaga CORS na buckecie – M6 (CDK).
 - Bundle ~585 kB (mock i dane przykładowe w paczce) – podział na chunki przy M6.

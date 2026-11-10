@@ -369,8 +369,10 @@ export function RunPage() {
     enabled: run.data?.status === "completed",
   });
 
+  // one live subscription per run until it finishes (not one per update)
+  const live = run.isSuccess && !done;
   useEffect(() => {
-    if (!run.data || done) return;
+    if (!live) return;
     return api.watchRun(runId, (updated) => {
       qc.setQueryData([orgId, "run", runId], updated);
       void qc.invalidateQueries({ queryKey: [orgId, "trace", runId] });
@@ -378,7 +380,7 @@ export function RunPage() {
         void qc.invalidateQueries({ queryKey: [orgId, "runs"] });
       }
     });
-  }, [api, runId, orgId, qc, done, run.data]);
+  }, [api, runId, orgId, qc, live]);
 
   if (run.isError) return <EmptyState>{run.error.message}</EmptyState>;
   if (!run.data) return <Skeleton className="h-64" />;
