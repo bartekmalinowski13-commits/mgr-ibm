@@ -20,6 +20,7 @@ import { BomTable } from "./BomTable";
 import { LoadError, RunStatus, Skeleton } from "./common";
 import { ItemPanel } from "./ItemPanel";
 import { ReferencePanel } from "./ReferencePanel";
+import { RunTimeline } from "./RunTimeline";
 
 const TERMINAL = new Set(["completed", "failed", "budget_exceeded"]);
 
@@ -133,6 +134,7 @@ export function RunScreen() {
           ))}
         </dl>
         {status === "queued" ? <p className="text-muted">{t("run.waiting")}</p> : null}
+        {finished && status !== "failed" ? <RunTimeline runId={runId} /> : null}
         {status === "failed" ? (
           <p role="alert" className="text-error">
             {t("run.failedHelp", { error: run.data.error ?? "" })}

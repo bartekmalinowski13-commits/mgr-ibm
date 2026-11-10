@@ -336,6 +336,13 @@ async def test_evaluation_against_a_reference_bom(env):
     )
     await env.drain("runs", worker.handle)
 
+    trace = await c.get(f"/v1/runs/{run_id}/trace", headers=alice)
+    assert trace.status_code == 200, trace.text
+    steps = trace.json()
+    assert steps
+    assert {"node", "duration_s", "llm_calls"} == set(steps[0])
+    assert sum(st["llm_calls"] for st in steps) > 0
+    assert (await c.get(f"/v1/runs/{run_id}/trace", headers=bob)).status_code == 404
     reference = (fixture / "reference_bom.csv").read_bytes()
     url = f"/v1/runs/{run_id}/evaluation"
     resp = await c.post(url, headers=alice, files={"reference": ("ref.csv", reference)})

@@ -172,7 +172,13 @@
     "export": "Eksportuj CSV",
     "exported": "Wyeksportowano CSV",
     "version": "Wersja {{version}}",
-    "findings": "{{count}} uwag walidacji"
+    "findings": "{{count}} uwag walidacji",
+    "timeline": "Kroki przebiegu",
+    "stepCalls_one": "{{count}} wywołanie LLM",
+    "stepCalls_few": "{{count}} wywołania LLM",
+    "stepCalls_many": "{{count}} wywołań LLM",
+    "stepCalls_other": "{{count}} wywołania LLM",
+    "stepRule": "bez LLM"
   },
   "bom": {
     "title": "Zestawienie BOM",

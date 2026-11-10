@@ -172,7 +172,11 @@
     "export": "Export CSV",
     "exported": "Exported CSV",
     "version": "Version {{version}}",
-    "findings": "{{count}} validation findings"
+    "findings": "{{count}} validation findings",
+    "timeline": "Run steps",
+    "stepCalls_one": "{{count}} LLM call",
+    "stepCalls_other": "{{count}} LLM calls",
+    "stepRule": "no LLM"
   },
   "bom": {
     "title": "Bill of materials",

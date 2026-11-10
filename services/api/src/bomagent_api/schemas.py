@@ -185,6 +185,12 @@ class ModelOption(_M):
     tier: str | None
 
 
+class RunStep(_M):
+    node: str
+    duration_s: float
+    llm_calls: int
+
+
 class Counts(_M):
     tp: int
     fp: int

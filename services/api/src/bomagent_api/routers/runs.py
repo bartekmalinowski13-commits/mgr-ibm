@@ -31,6 +31,7 @@ from bomagent_api.schemas import (
     ReferenceDiff,
     Run,
     RunCreate,
+    RunStep,
     problem_responses,
 )
 from bomagent_bom.export import to_csv
@@ -288,6 +289,26 @@ async def read_bom(request: Request, ctx: OrgContext, run_id: uuid.UUID) -> BomE
     async with tenant_transaction(request.app.state.engine) as conn:
         _, version, bom = await latest_bom(conn, run_id)
     return BomEnvelope(run_id=run_id, version=version, bom=bom)
+
+
+@router.get("/{run_id}/trace", summary="Steps of a finished run (agent graph nodes)")
+async def read_trace(request: Request, ctx: OrgContext, run_id: uuid.UUID) -> list[RunStep]:
+    """Node name, duration and LLM calls per step; step details stay internal."""
+    require(ctx, "run.read")
+    async with tenant_transaction(request.app.state.engine) as conn:
+        row = (
+            await conn.execute(text("SELECT trace FROM runs.runs WHERE id = :i"), {"i": run_id})
+        ).first()
+    if row is None:
+        raise ProblemError(404, "Not Found", "run not found", slug="not-found")
+    return [
+        RunStep(
+            node=str(s.get("node", "")),
+            duration_s=float(s.get("duration_s", 0.0)),
+            llm_calls=int(s.get("llm_calls", 0)),
+        )
+        for s in row.trace or []
+    ]
 
 
 MAX_REFERENCE = 1024 * 1024

@@ -48,6 +48,7 @@ test("new run from a template -> live progress -> BOM -> provenance -> correctio
   await expect(page.getByText("Gotowy")).toBeVisible();
   await expectAccessible(page);
 
+  await expect(page.getByRole("heading", { name: "Kroki przebiegu" })).toBeVisible();
   await page.getByTestId("reference-input").setInputFiles(path.join(FIXTURE, "reference_bom.csv"));
   await expect(page.getByText("F1 pozycji")).toBeVisible();
   await expect(page.getByText(/rozbieżnoś/)).toBeVisible();
