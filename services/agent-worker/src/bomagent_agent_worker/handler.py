@@ -9,8 +9,10 @@ Message ``run.requested`` (tenant scope), payload::
 The parsed design is read from the tenant's object prefix (a key outside the prefix is
 rejected), the runtime runs with knowledge-base access confined to the tenant (RLS), and
 ``bom.json`` + ``result.json`` (trace, usage, config) are written next to it under
-``tenants/<tenant>/runs/<run_id>/``. Persisting run rows and audit events belongs to the
-API module (M4), which will consume ``run.completed`` events.
+``tenants/<tenant>/runs/<run_id>/``. With a database engine the run row moves
+``queued -> running -> completed|failed`` (RLS, tenant transaction) and an audit event is
+written; a message for a run that already finished is acknowledged without work
+(at-least-once delivery).
 """
 
 from __future__ import annotations
@@ -19,8 +21,13 @@ import uuid
 from collections.abc import Callable
 from dataclasses import dataclass
 
+from sqlalchemy.ext.asyncio import AsyncEngine
+
 from bomagent_agents import Budget, Dependencies, Retriever, RunConfig, get_runtime
 from bomagent_bom.model import ParsedDesign, Requirements
+from bomagent_common import records
+from bomagent_common.audit import AuditEvent, emit_audit
+from bomagent_common.db import tenant_transaction
 from bomagent_common.logging import get_logger
 from bomagent_common.messaging import Message
 from bomagent_common.storage import ObjectStore, key_belongs_to, tenant_key
@@ -42,6 +49,7 @@ class RunExecutor:
     store: ObjectStore
     retriever_for: Callable[[uuid.UUID, str | None], Retriever]
     allow_local_models: bool = False
+    engine: AsyncEngine | None = None
 
     async def handle(self, message: Message) -> None:
         if message.type != RUN_REQUESTED:
@@ -58,6 +66,12 @@ class RunExecutor:
         if not key_belongs_to(message.tenant_id, design_key):
             raise RejectedMessageError("design key outside the tenant prefix")
 
+        ctx = message.tenant_context()
+        if self.engine is not None:
+            async with tenant_transaction(self.engine, ctx.tenant_id) as conn:
+                if await records.mark_run_running(conn, run_id) is None:
+                    log.info("run_already_finished_or_unknown", run_id=str(run_id))
+                    return
         spec = self.catalog.get(model_id, allow_local=self.allow_local_models)
         design = ParsedDesign.model_validate_json(await self.store.get(design_key))
         requirements = Requirements.model_validate(p.get("requirements") or {})
@@ -76,17 +90,45 @@ class RunExecutor:
         )
         result = await get_runtime(variant).run(design, requirements, config, deps)
         prefix = ("runs", str(run_id))
+        bom_key = None
         if result.bom is not None:
+            bom_key = tenant_key(message.tenant_id, *prefix, "bom.json")
             await self.store.put(
-                tenant_key(message.tenant_id, *prefix, "bom.json"),
-                result.bom.model_dump_json(indent=1).encode(),
-                "application/json",
+                bom_key, result.bom.model_dump_json(indent=1).encode(), "application/json"
             )
+        result_key = tenant_key(message.tenant_id, *prefix, "result.json")
         await self.store.put(
-            tenant_key(message.tenant_id, *prefix, "result.json"),
+            result_key,
             result.model_dump_json(indent=1, exclude={"bom"}).encode(),
             "application/json",
         )
+        if self.engine is not None:
+            async with tenant_transaction(self.engine, ctx.tenant_id) as conn:
+                await records.mark_run_finished(
+                    conn,
+                    run_id,
+                    status=result.status,
+                    bom_key=bom_key,
+                    result_key=result_key,
+                    usage=result.usage.model_dump(mode="json"),
+                    error=result.error,
+                )
+                service_ctx = ctx.__class__(
+                    ctx.tenant_id, "agent-worker", "service", frozenset(), ctx.request_id
+                )
+                await emit_audit(
+                    conn,
+                    AuditEvent(
+                        action=f"run.{result.status}",
+                        object_type="run",
+                        object_id=str(run_id),
+                        after={
+                            "llm_calls": result.usage.llm_calls,
+                            "cost_eur": result.usage.cost_eur,
+                        },
+                    ),
+                    service_ctx,
+                )
         log.info(
             "run_finished",
             run_id=str(run_id),

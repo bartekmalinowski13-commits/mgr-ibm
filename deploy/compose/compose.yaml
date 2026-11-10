@@ -211,7 +211,9 @@ services:
       BOMAGENT_INGEST_QUEUE_URL: http://moto:5000/123456789012/ingest
       BOMAGENT_RUNS_QUEUE_URL: http://moto:5000/123456789012/runs
       BOMAGENT_KB_QUEUE_URL: http://moto:5000/123456789012/kb
-      BOMAGENT_AUTH_MODE: local
+      BOMAGENT_AUTH_MODE: dev  # HS256 dev tokens; refused in staging/prod
+      BOMAGENT_DEV_AUTH_SECRET: ${BOMAGENT_DEV_AUTH_SECRET:-local-dev-secret-change-me-0123456789}
+      BOMAGENT_ALLOW_LOCAL_MODELS: "true"
     ports: ["127.0.0.1:8000:8000"]
 
   ingest-worker:

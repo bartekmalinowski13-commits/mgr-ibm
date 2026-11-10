@@ -72,6 +72,7 @@ def build_handler(settings: Settings) -> Handler:
         ),
         retriever_for=retriever_for,
         allow_local_models=settings.allow_local_models,
+        engine=engine,
     )
     return executor.handle
 
