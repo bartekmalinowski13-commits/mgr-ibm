@@ -46,6 +46,28 @@ describe("app (mock API)", () => {
     expect(within(sheet).getByText(/patient connection/)).toBeInTheDocument();
   });
 
+  it("a reviewer corrects a line: the decision is marked as made by a person", async () => {
+    const api = new MockApi();
+    const runB = (await api.listRuns()).items.find((r) => r.variant === "B");
+    renderApp(`/runs/${runB?.id}`, api);
+    const table = await screen.findByRole("table");
+    await userEvent.click(within(table).getByRole("button", { name: "J1" }));
+    const sheet = await screen.findByRole("dialog", { name: "Szczegóły pozycji 9" });
+    const mpn = within(sheet).getByLabelText("MPN");
+    await userEvent.clear(mpn);
+    await userEvent.type(mpn, "22-23-2041");
+    await userEvent.click(within(sheet).getByRole("button", { name: "Zapisz poprawkę" }));
+    expect(await within(sheet).findByText("Napisz krótko, dlaczego")).toBeInTheDocument();
+    await userEvent.type(within(sheet).getByLabelText("Uzasadnienie*"), "4-pin w magazynie");
+    await userEvent.click(within(sheet).getByRole("button", { name: "Zapisz poprawkę" }));
+
+    await waitFor(async () => {
+      const bom = await api.getBom(runB?.id ?? "");
+      expect(bom.items.find((i) => i.line === 9)?.provenance.mpn?.kind).toBe("user");
+    });
+    expect(await screen.findByText("Po przeglądzie · 1 poprawka")).toBeInTheDocument();
+  });
+
   it("switching organisation shows only that organisation's data", async () => {
     renderApp("/projects");
     expect(

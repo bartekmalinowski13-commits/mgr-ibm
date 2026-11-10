@@ -1,6 +1,7 @@
 import { readStored } from "../lib/storage";
 import type {
   AuditEntry,
+  BomItemEdit,
   BomVersion,
   Design,
   DesignCreated,
@@ -32,6 +33,7 @@ export interface Api {
   getTrace(runId: string): Promise<RunTrace>;
   watchRun(runId: string, onUpdate: (run: Run) => void): () => void;
   auditEvents(): Promise<Page<AuditEntry>>;
+  editBomItem(runId: string, line: number, edit: BomItemEdit): Promise<BomVersion>;
   listKbDocuments(): Promise<Page<KbDocument>>;
   uploadKbDocument(
     file: File,
@@ -171,6 +173,12 @@ export class HttpApi implements Api {
   }
   auditEvents() {
     return request<Page<AuditEntry>>("/v1/audit/events?limit=100");
+  }
+  editBomItem(runId: string, line: number, edit: BomItemEdit) {
+    return request<BomVersion>(`/v1/runs/${runId}/bom/items/${line}`, {
+      method: "PATCH",
+      body: JSON.stringify(edit),
+    });
   }
   listKbDocuments() {
     return request<Page<KbDocument>>("/v1/kb/documents?limit=100");

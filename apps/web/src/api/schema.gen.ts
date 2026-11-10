@@ -228,6 +228,9 @@ export interface paths {
         /**
          * Get Run Bom
          * @description The ``BomVersion`` JSON (lines with per-field provenance and findings).
+         *
+         *     ``latest`` is the reviewed copy once a person has edited it; ``original`` is always
+         *     the agents' output, unchanged.
          */
         get: operations["get_run_bom_v1_runs__run_id__bom_get"];
         put?: never;
@@ -236,6 +239,23 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/v1/runs/{run_id}/bom/items/{line}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Edit Bom Item */
+        patch: operations["edit_bom_item_v1_runs__run_id__bom_items__line__patch"];
         trace?: never;
     };
     "/v1/runs/{run_id}/events": {
@@ -308,6 +328,26 @@ export interface components {
             occurred_at: string;
             /** Seq */
             seq: number;
+        };
+        /** BomItemEdit */
+        BomItemEdit: {
+            /** Dnp */
+            dnp?: boolean | null;
+            /** Manufacturer */
+            manufacturer?: string | null;
+            /** Mpn */
+            mpn?: string | null;
+            /**
+             * Note
+             * @description Why - kept with the decision.
+             */
+            note: string;
+            /**
+             * Remember
+             * @description Save the corrected part as this organisation's knowledge.
+             * @default false
+             */
+            remember: boolean;
         };
         /** Design */
         Design: {
@@ -610,6 +650,13 @@ export interface components {
             id: string;
             /** Model Id */
             model_id: string;
+            /**
+             * Review Edits
+             * @default 0
+             */
+            review_edits: number;
+            /** Reviewed At */
+            reviewed_at?: string | null;
             /** Started At */
             started_at?: string | null;
             /** Status */
@@ -1225,7 +1272,9 @@ export interface operations {
     };
     get_run_bom_v1_runs__run_id__bom_get: {
         parameters: {
-            query?: never;
+            query?: {
+                version?: "latest" | "original";
+            };
             header?: {
                 authorization?: string | null;
                 "x-request-id"?: string | null;
@@ -1238,6 +1287,45 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    edit_bom_item_v1_runs__run_id__bom_items__line__patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+                "x-request-id"?: string | null;
+            };
+            path: {
+                run_id: string;
+                line: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BomItemEdit"];
+            };
+        };
+        responses: {
+            /** @description Reviewed BomVersion */
             200: {
                 headers: {
                     [name: string]: unknown;

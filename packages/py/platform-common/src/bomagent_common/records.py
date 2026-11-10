@@ -206,6 +206,23 @@ async def get_run(conn: AsyncConnection, run_id: uuid.UUID) -> Row | None:
     return await _one(conn, "SELECT * FROM app.runs WHERE id = :id", {"id": run_id})
 
 
+async def get_run_for_update(conn: AsyncConnection, run_id: uuid.UUID) -> Row | None:
+    """Lock the run row for a read-modify-write of its artefacts (BOM review)."""
+    return await _one(conn, "SELECT * FROM app.runs WHERE id = :id FOR UPDATE", {"id": run_id})
+
+
+async def mark_run_reviewed(
+    conn: AsyncConnection, run_id: uuid.UUID, reviewed_bom_key: str, reviewed_by: str
+) -> Row | None:
+    return await _one(
+        conn,
+        """UPDATE app.runs SET reviewed_bom_key = :key, reviewed_by = :by, reviewed_at = now(),
+             review_edits = review_edits + 1
+           WHERE id = :id RETURNING *""",
+        {"id": run_id, "key": reviewed_bom_key, "by": reviewed_by},
+    )
+
+
 async def list_runs(
     conn: AsyncConnection, limit: int, cursor: str | None
 ) -> tuple[list[Row], str | None]:

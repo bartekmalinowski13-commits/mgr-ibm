@@ -5,6 +5,7 @@ import resultB from "../mocks/data/ecg-B-result.json";
 import { type Api, ApiError, kbMimeType } from "./client";
 import type {
   AuditEntry,
+  BomItemEdit,
   BomVersion,
   Design,
   DesignCreated,
@@ -13,6 +14,7 @@ import type {
   Organisation,
   Page,
   Project,
+  Provenance,
   Run,
   RunIn,
   RunTrace,
@@ -57,6 +59,7 @@ function seed(): OrgState {
     started_at: t0,
     finished_at: t0,
     error: null,
+    review_edits: 0,
   });
   const state: OrgState = {
     projects: [
@@ -217,6 +220,7 @@ export class MockApi implements Api {
       created_at: now(),
       usage: null,
       error: null,
+      review_edits: 0,
     };
     this.s.runs.unshift(r);
     this.s.boms[r.id] = (variant === "A" ? bomA : bomB) as unknown as BomVersion;
@@ -248,6 +252,47 @@ export class MockApi implements Api {
     const bom = this.s.boms[runId];
     if (!bom) throw new ApiError(404, "Not Found");
     return bom;
+  }
+  async editBomItem(runId: string, line: number, edit: BomItemEdit) {
+    const run = this.s.runs.find((r) => r.id === runId);
+    const bom = await this.getBom(runId);
+    // the agents' BOM stays untouched: edits go to a reviewed copy
+    const reviewed: BomVersion = structuredClone(bom);
+    const item = reviewed.items.find((i) => i.line === line);
+    if (!run || !item) throw new ApiError(404, "Not Found", "BOM line not found");
+    const decided: Provenance = {
+      kind: "user",
+      user_id: "bartek",
+      rationale: edit.note,
+      rule_id: null,
+      rule_pack: null,
+      rule_pack_version: null,
+      agent: null,
+      model_id: null,
+      prompt_id: null,
+      prompt_version: null,
+      citations: [],
+      parser: null,
+      at: now(),
+    };
+    for (const field of ["mpn", "manufacturer", "dnp"] as const) {
+      const value = edit[field];
+      if (value == null) continue;
+      Object.assign(item, { [field]: value });
+      item.provenance[field] = decided;
+    }
+    // deterministic re-check of the edited line: an agent's finding about the old choice goes
+    reviewed.findings = reviewed.findings.filter((f) => f.line !== line || f.rule_pack === "core");
+    this.s.boms[runId] = reviewed;
+    run.review_edits = (run.review_edits ?? 0) + 1;
+    run.reviewed_at = now();
+    this.audit("bom.item.edit", "run", runId);
+    if (edit.remember && edit.mpn) {
+      this.s.kb.unshift(
+        kbDoc(`Correction: ${edit.mpn}`, "correction", edit.manufacturer ?? "", "tenant", now()),
+      );
+    }
+    return reviewed;
   }
   async getTrace(runId: string) {
     const t = this.s.traces[runId];

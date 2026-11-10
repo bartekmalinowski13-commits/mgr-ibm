@@ -4,6 +4,7 @@ from fastapi import FastAPI
 
 from bomagent_api import __version__
 from bomagent_api.auth import Authenticator, DevAuthenticator, OidcAuthenticator
+from bomagent_api.bom_review import router as review_router
 from bomagent_api.kb_routes import router as kb_router
 from bomagent_api.routes import ApiServices, router
 from bomagent_common.config import ServiceSettings
@@ -118,4 +119,5 @@ def create_app(settings: Settings | None = None, services: ApiServices | None = 
         app.state.services = services
         app.include_router(router)
         app.include_router(kb_router)
+        app.include_router(review_router)
     return app

@@ -2,16 +2,21 @@
 
 **Responsibility:** public REST API v1 (OpenAPI 3.1 contract in `openapi.json`).
 
-## Endpoints (M4 part 1)
+## Endpoints (M4 part 1 + knowledge base + BOM review)
 | Method | Path | Role |
 |---|---|---|
 | POST/GET | `/v1/projects` | write / read |
 | POST | `/v1/projects/{id}/designs` → presigned upload URLs | write |
 | POST | `/v1/designs/{id}/complete` → queue parsing (ingest-worker) | write |
-| GET | `/v1/designs/{id}` | read |
+| GET | `/v1/projects/{id}/designs`, `/v1/designs/{id}` | read |
 | POST | `/v1/runs` (`Idempotency-Key` required) → queue run (agent-worker) | write |
 | GET | `/v1/runs`, `/v1/runs/{id}`, `/v1/runs/{id}/bom`, `/v1/runs/{id}/trace` | read |
 | GET | `/v1/runs/{id}/events` (SSE) | read |
+| GET | `/v1/runs/{id}/bom?version=latest\|original` – `original` is always the agents' output | read |
+| PATCH | `/v1/runs/{id}/bom/items/{line}` – reviewer edit (mpn/manufacturer/dnp + reason), `user` provenance, rule pack re-run, audited; `remember` → tenant KB correction | write |
+| POST | `/v1/kb/documents` → presigned upload (duplicate content → 200, no upload) | write |
+| POST | `/v1/kb/documents/{id}/complete` → queue indexing (kb-indexer) | write |
+| GET | `/v1/kb/documents`, `/v1/kb/documents/{id}` – own documents + shared corpus | read |
 | GET | `/v1/audit/events` | owner/admin/reviewer |
 
 Auth: OIDC bearer JWT (`sub`, `org_id`, `roles`); `BOMAGENT_AUTH_MODE=dev` only locally.

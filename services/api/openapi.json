@@ -60,6 +60,65 @@
         "title": "AuditEntry",
         "type": "object"
       },
+      "BomItemEdit": {
+        "additionalProperties": false,
+        "properties": {
+          "dnp": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dnp"
+          },
+          "manufacturer": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Manufacturer"
+          },
+          "mpn": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9.\\-_/#+()]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mpn"
+          },
+          "note": {
+            "description": "Why - kept with the decision.",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Note",
+            "type": "string"
+          },
+          "remember": {
+            "default": false,
+            "description": "Save the corrected part as this organisation's knowledge.",
+            "title": "Remember",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "note"
+        ],
+        "title": "BomItemEdit",
+        "type": "object"
+      },
       "Design": {
         "properties": {
           "components": {
@@ -830,6 +889,23 @@
           "model_id": {
             "title": "Model Id",
             "type": "string"
+          },
+          "review_edits": {
+            "default": 0,
+            "title": "Review Edits",
+            "type": "integer"
+          },
+          "reviewed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reviewed At"
           },
           "started_at": {
             "anyOf": [
@@ -2234,7 +2310,7 @@
     },
     "/v1/runs/{run_id}/bom": {
       "get": {
-        "description": "The ``BomVersion`` JSON (lines with per-field provenance and findings).",
+        "description": "The ``BomVersion`` JSON (lines with per-field provenance and findings).\n\n``latest`` is the reviewed copy once a person has edited it; ``original`` is always\nthe agents' output, unchanged.",
         "operationId": "get_run_bom_v1_runs__run_id__bom_get",
         "parameters": [
           {
@@ -2244,6 +2320,20 @@
             "schema": {
               "format": "uuid",
               "title": "Run Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "version",
+            "required": false,
+            "schema": {
+              "default": "latest",
+              "enum": [
+                "latest",
+                "original"
+              ],
+              "title": "Version",
               "type": "string"
             }
           },
@@ -2301,6 +2391,99 @@
           }
         },
         "summary": "Get Run Bom",
+        "tags": [
+          "runs"
+        ]
+      }
+    },
+    "/v1/runs/{run_id}/bom/items/{line}": {
+      "patch": {
+        "operationId": "edit_bom_item_v1_runs__run_id__bom_items__line__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Run Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "line",
+            "required": true,
+            "schema": {
+              "minimum": 1,
+              "title": "Line",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-request-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Request-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BomItemEdit"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Reviewed BomVersion"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Edit Bom Item",
         "tags": [
           "runs"
         ]

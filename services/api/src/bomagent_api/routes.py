@@ -148,6 +148,8 @@ class Run(BaseModel):
     created_at: datetime
     started_at: datetime | None = None
     finished_at: datetime | None = None
+    reviewed_at: datetime | None = None
+    review_edits: int = 0
 
 
 class AuditEntry(BaseModel):
@@ -413,11 +415,20 @@ async def _artefact(svc: ApiServices, ctx: TenantContext, key: str | None, what:
 @router.get(
     "/runs/{run_id}/bom", tags=["runs"], responses={200: {"content": {"application/json": {}}}}
 )
-async def get_run_bom(run_id: uuid.UUID, ctx: Ctx, svc: Svc) -> Response:
-    """The ``BomVersion`` JSON (lines with per-field provenance and findings)."""
+async def get_run_bom(
+    run_id: uuid.UUID,
+    ctx: Ctx,
+    svc: Svc,
+    version: Literal["latest", "original"] = "latest",
+) -> Response:
+    """The ``BomVersion`` JSON (lines with per-field provenance and findings).
+
+    ``latest`` is the reviewed copy once a person has edited it; ``original`` is always
+    the agents' output, unchanged."""
     require(*CAN_READ)(ctx)
     row = await _run_row(svc, ctx, run_id)
-    return await _artefact(svc, ctx, row["bom_key"], "BOM")
+    key = row["bom_key"] if version == "original" else row["reviewed_bom_key"] or row["bom_key"]
+    return await _artefact(svc, ctx, key, "BOM")
 
 
 @router.get(

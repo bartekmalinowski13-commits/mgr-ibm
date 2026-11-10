@@ -1,8 +1,9 @@
 import * as Dialog from "@radix-ui/react-dialog";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useParams } from "@tanstack/react-router";
 import { clsx } from "clsx";
 import { useEffect, useMemo, useState } from "react";
+import { useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import type { BomItem, BomVersion, Finding, Provenance, RunTrace, TraceStep } from "../api/types";
 import { RunStatus, VariantBadge } from "../components/RunStatus";
@@ -116,11 +117,112 @@ function ProvenanceDetail({ field, p }: { field: string; p: Provenance }) {
   );
 }
 
+interface EditValues {
+  mpn: string;
+  manufacturer: string;
+  dnp: boolean;
+  note: string;
+  remember: boolean;
+}
+
+function EditLine({ runId, item }: { runId: string; item: BomItem }) {
+  const { t } = useTranslation();
+  const { api, orgId, notify } = useApp();
+  const qc = useQueryClient();
+  const { register, handleSubmit, formState, reset } = useForm<EditValues>({
+    defaultValues: {
+      mpn: item.mpn,
+      manufacturer: item.manufacturer,
+      dnp: item.dnp,
+      note: "",
+      remember: false,
+    },
+  });
+  const save = useMutation({
+    mutationFn: (v: EditValues) =>
+      api.editBomItem(runId, item.line, {
+        mpn: v.mpn.trim() !== item.mpn ? v.mpn.trim() : undefined,
+        manufacturer:
+          v.manufacturer.trim() !== item.manufacturer ? v.manufacturer.trim() : undefined,
+        dnp: v.dnp !== item.dnp ? v.dnp : undefined,
+        note: v.note.trim(),
+        remember: v.remember,
+      }),
+    onSuccess: async (bom) => {
+      qc.setQueryData([orgId, "bom", runId], bom);
+      notify(t("review.saved"));
+      reset({ ...formState.defaultValues, note: "", remember: false } as EditValues);
+      await qc.invalidateQueries({ queryKey: [orgId, "run", runId] });
+      await qc.invalidateQueries({ queryKey: [orgId, "kb"] });
+    },
+  });
+  const field =
+    "h-9 w-full rounded-[var(--radius-control)] border border-line bg-paper px-3 text-[13.5px] focus:border-ink focus:bg-surface focus:outline-none";
+  return (
+    <form onSubmit={handleSubmit((v) => save.mutate(v))} className="flex flex-col gap-3" noValidate>
+      <p className="text-[12.5px] text-muted">{t("review.lead")}</p>
+      <label className="flex flex-col gap-1 text-[12.5px] text-ink-soft">
+        {t("review.mpn")}
+        <input
+          className={`${field} font-[family-name:var(--font-mono)]`}
+          {...register("mpn", { maxLength: 80 })}
+        />
+      </label>
+      <label className="flex flex-col gap-1 text-[12.5px] text-ink-soft">
+        {t("review.manufacturer")}
+        <input className={field} {...register("manufacturer", { maxLength: 120 })} />
+      </label>
+      <label className="flex items-center gap-2 text-[13px]">
+        <input type="checkbox" className="size-4 accent-[var(--color-ink)]" {...register("dnp")} />
+        {t("review.dnp")}
+      </label>
+      <label className="flex flex-col gap-1 text-[12.5px] text-ink-soft">
+        {t("review.note")}*
+        <input
+          className={field}
+          aria-invalid={formState.errors.note ? true : undefined}
+          aria-describedby={formState.errors.note ? `note-error-${item.line}` : undefined}
+          {...register("note", {
+            required: true,
+            validate: (v) => v.trim().length > 0,
+            maxLength: 500,
+          })}
+        />
+      </label>
+      {formState.errors.note && (
+        <p id={`note-error-${item.line}`} role="alert" className="-mt-2 text-[12.5px] text-err">
+          {t("review.noteRequired")}
+        </p>
+      )}
+      <label className="flex items-center gap-2 text-[13px]">
+        <input
+          type="checkbox"
+          className="size-4 accent-[var(--color-ink)]"
+          {...register("remember")}
+        />
+        {t("review.remember")}
+      </label>
+      {save.isError && (
+        <p role="alert" className="text-[13px] text-err">
+          {save.error.message}
+        </p>
+      )}
+      <div>
+        <Button variant="primary" type="submit" disabled={save.isPending}>
+          {t("review.save")}
+        </Button>
+      </div>
+    </form>
+  );
+}
+
 function LineSheet({
+  runId,
   item,
   findings,
   onClose,
 }: {
+  runId: string;
   item: BomItem | null;
   findings: Finding[];
   onClose: () => void;
@@ -187,6 +289,10 @@ function LineSheet({
                   ))}
                 </ul>
               </section>
+              <section className="border-t border-line px-5 py-4">
+                <h3 className="mb-2 text-[13.5px] font-semibold">{t("review.title")}</h3>
+                <EditLine key={`${item.line}-${item.mpn}-${item.dnp}`} runId={runId} item={item} />
+              </section>
             </>
           )}
         </Dialog.Content>
@@ -195,7 +301,7 @@ function LineSheet({
   );
 }
 
-function BomTable({ bom }: { bom: BomVersion }) {
+function BomTable({ bom, runId }: { bom: BomVersion; runId: string }) {
   const { t } = useTranslation();
   const { notify } = useApp();
   const [onlyIssues, setOnlyIssues] = useState(false);
@@ -342,6 +448,7 @@ function BomTable({ bom }: { bom: BomVersion }) {
         </table>
       </TableScroll>
       <LineSheet
+        runId={runId}
         item={selectedItem}
         findings={selected != null ? (byLine.get(selected) ?? []) : []}
         onClose={() => setSelected(null)}
@@ -402,6 +509,11 @@ export function RunPage() {
           <span className="flex flex-wrap items-center gap-2">
             <RunStatus status={r.status} />
             <span>{modelLabel(r.model_id)}</span>
+            {r.review_edits > 0 && (
+              <span className="rounded-[var(--radius-chip)] bg-user-bg px-2 py-px text-[11.5px] font-semibold text-user">
+                {t("review.badge", { count: r.review_edits })}
+              </span>
+            )}
           </span>
         }
         actions={
@@ -440,7 +552,7 @@ export function RunPage() {
         <Steps trace={trace.data?.trace ?? []} running={!done} />
       </Card>
       {r.status === "completed" && bom.data ? (
-        <BomTable bom={bom.data} />
+        <BomTable bom={bom.data} runId={r.id} />
       ) : r.status === "failed" ? null : (
         <EmptyState>{t("run.waiting")}</EmptyState>
       )}

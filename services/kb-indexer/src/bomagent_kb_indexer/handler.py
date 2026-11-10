@@ -5,6 +5,8 @@ Message types:
 * ``kb.document.uploaded`` (tenant scope) - payload ``{document_id, object_key, filename}``;
   runs in the message's tenant context with the application role, so RLS confines every
   read and write to that tenant.
+* ``kb.correction.requested`` (tenant scope) - payload ``{mpn, manufacturer, note}``; a
+  reviewer's BOM correction becomes knowledge of that organisation only (ADR-0008).
 * ``kb.global_document.uploaded`` (global corpus) - accepted only from the platform
   pseudo-tenant with ``actor_type == "system"``; uses the platform role.
 
@@ -29,6 +31,7 @@ log = get_logger(__name__)
 PLATFORM_TENANT = uuid.UUID(int=0)
 TENANT_UPLOAD = "kb.document.uploaded"
 GLOBAL_UPLOAD = "kb.global_document.uploaded"
+CORRECTION = "kb.correction.requested"
 
 
 class RejectedMessageError(ValueError):
@@ -49,6 +52,8 @@ class KbIndexer:
             await self._tenant(message)
         elif message.type == GLOBAL_UPLOAD:
             await self._global(message)
+        elif message.type == CORRECTION:
+            await self._correction(message)
         else:
             log.warning("message_type_ignored", message_type=message.type)
 
@@ -70,6 +75,17 @@ class KbIndexer:
         async with tenant_transaction(self.app_engine, message.tenant_id) as conn:
             result = await self.kb.index_document(conn, doc_id, extracted)
         log.info("kb_document_indexed", document_id=str(doc_id), chunks=result.chunks)
+
+    async def _correction(self, message: Message) -> None:
+        payload = message.payload
+        async with tenant_transaction(self.app_engine, message.tenant_id) as conn:
+            doc_id = await self.kb.add_correction(
+                conn,
+                mpn=str(payload["mpn"]),
+                manufacturer=str(payload.get("manufacturer", "")),
+                note=str(payload.get("note", "")),
+            )
+        log.info("kb_correction_indexed", document_id=str(doc_id))
 
     async def _global(self, message: Message) -> None:
         if message.tenant_id != PLATFORM_TENANT or message.actor_type != "system":

@@ -6,6 +6,7 @@ export type DesignCreated = components["schemas"]["DesignCreated"];
 export type Run = components["schemas"]["Run"];
 export type RunIn = components["schemas"]["RunIn"];
 export type AuditEntry = components["schemas"]["AuditEntry"];
+export type BomItemEdit = components["schemas"]["BomItemEdit"];
 export type KbDocument = components["schemas"]["KbDocument"];
 export type KbDocumentCreated = components["schemas"]["KbDocumentCreated"];
 export type KbKind = NonNullable<components["schemas"]["KbDocumentIn"]["kind"]>;

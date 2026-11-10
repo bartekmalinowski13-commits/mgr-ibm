@@ -9,6 +9,7 @@ const run = (id: string, variant: string, design: string, status = "completed"):
   model_id: "fake-closed",
   created_by: "u",
   created_at: "2026-11-10T00:00:00Z",
+  review_edits: 0,
 });
 
 describe("pickPair", () => {

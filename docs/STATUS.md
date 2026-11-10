@@ -12,12 +12,12 @@ _Aktualizuje Claude Code po każdym kamieniu milowym (patrz `docs/prompts/CLAUDE
 | M3 Agenci A/B | ✅ | gałąź `feat/m3-agents-runtimes` (na M0–M2) | Claude z projektu (sesja stanęła po M2) |
 | M4 API – część 1 (przebiegi end-to-end) | ✅ | gałąź `feat/m4-runs-api` (na M3) | Claude z projektu |
 | M4 część 2 (onboarding, SSO, klucze API, metering) | ⏳ | `docs/plans/M4-runs-api.md` | – |
-| M5 Frontend – część 1 (+ API bazy wiedzy z M4 cz. 2) | ✅ | gałąź `feat/m5-web` (na M4) | Claude z projektu |
+| M5 Frontend – część 1 (+ z M4 cz. 2: API bazy wiedzy, przegląd BOM przez człowieka) | ✅ | gałąź `feat/m5-web` (na M4) | Claude z projektu |
 | M5 część 2, M6–M8 | ⏳ | `docs/plans/M5-web.md` | – |
 
-**Frontend (`feat/m5-web`):** vitest 11/11, Playwright 21/21 (w tym axe WCAG 2.1 AA, mobile smoke), `tsc`, `biome` czyste; zrzuty w `docs/design/screens/m5/`. Uruchom: `pnpm --filter @bomagent/web dev:mock`.
+**Frontend (`feat/m5-web`):** vitest 12/12, Playwright 21/21 (w tym axe WCAG 2.1 AA, mobile smoke), `tsc`, `biome` czyste; zrzuty w `docs/design/screens/m5/`. Uruchom: `pnpm --filter @bomagent/web dev:mock`.
 
-**Weryfikacja (lokalnie, Postgres 16 + pgvector natywnie):** 341 testów zielonych na `feat/m4-runs-api` (w tym izolacja tenantów, integracyjne, kontrakt OpenAPI), pokrycie 95%, `ruff`, `mypy --strict`, `import-linter` czyste. Ścieżka dockerowa (`just up`, Testcontainers, E2E) **nie była uruchomiona** – w obu środowiskach brak demona Dockera; sprawdzi ją CI.
+**Weryfikacja (lokalnie, Postgres 16 + pgvector natywnie):** 350 testów zielonych na `feat/m5-web` (341 na `feat/m4-runs-api`) (w tym izolacja tenantów, integracyjne, kontrakt OpenAPI), pokrycie 95%, `ruff`, `mypy --strict`, `import-linter` czyste. Ścieżka dockerowa (`just up`, Testcontainers, E2E) **nie była uruchomiona** – w obu środowiskach brak demona Dockera; sprawdzi ją CI.
 
 ### Jak uruchomić
 ```bash
