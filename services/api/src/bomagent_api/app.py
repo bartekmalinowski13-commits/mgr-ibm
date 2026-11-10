@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import Field
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from bomagent_api import __version__
+from bomagent_api import __version__, maintenance
 from bomagent_api.auth import LocalIdp, TokenVerifier
 from bomagent_api.routers import api_keys, audit, identity, members, projects, runs
 from bomagent_api.routers.projects import MAX_UPLOAD
@@ -42,6 +42,8 @@ class Settings(ServiceSettings):
     llm_gateway_key: str | None = None
     embedding_model: str = "fake-embedding"
     cors_origins: list[str] = Field(default_factory=list)
+    maintenance_interval_s: float = 30.0  # outbox relay + stuck-run reaper; 0 disables
+    run_timeout_s: float = 3600.0
     sse_interval_s: float = 1.0
     sse_timeout_s: float = 900.0
 
@@ -90,7 +92,12 @@ def create_app(
         readiness["database"] = database
 
     app = create_service_app(
-        settings, version=__version__, title="BOM Agent API", readiness=readiness, docs=True
+        settings,
+        version=__version__,
+        title="BOM Agent API",
+        readiness=readiness,
+        docs=True,
+        lifespan=maintenance.lifespan(settings.maintenance_interval_s, settings.run_timeout_s),
     )
     s3 = {"region": settings.aws_region, "endpoint_url": settings.aws_endpoint_url}
     app.state.engine = engine

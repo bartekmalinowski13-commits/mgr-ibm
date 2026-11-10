@@ -18,8 +18,10 @@ from bomagent_api.plans import check_new_project
 from bomagent_api.schemas import FileInfo, Page, Project, ProjectCreate, problem_responses
 from bomagent_common.audit import AuditEvent, emit_audit
 from bomagent_common.db import tenant_transaction
+from bomagent_common.logging import get_logger
 from bomagent_common.messaging import Message
 from bomagent_common.metering import record_usage
+from bomagent_common.outbox import deliver, enqueue
 from bomagent_common.problems import ProblemError
 from bomagent_common.storage import tenant_key
 
@@ -28,6 +30,7 @@ router = APIRouter(
     tags=["projects"],
     responses=problem_responses(400, 401, 403, 404, 409, 413, 422, 429),
 )
+log = get_logger(__name__)
 MAX_UPLOAD = 64 * 1024 * 1024
 _SAFE_NAME = re.compile(r"[^A-Za-z0-9._\-]")
 PROJECT_COLS = "id, name, description, created_by, created_at"
@@ -200,14 +203,27 @@ async def upload_file(
                 ),
             )
             await record_usage(conn, files_uploaded=1, bytes_uploaded=len(data))
+            outbox_id = await enqueue(
+                conn,
+                "ingest",
+                Message.create(
+                    "file.uploaded", ctx, {"project_id": str(project_id), "file_id": str(info.id)}
+                ),
+            )
     except BaseException:
         await store.delete(key)  # the row was not committed: drop the new object
         raise
     if previous is not None and previous.object_key != key:
         await store.delete(previous.object_key)  # replaced: keep no orphaned copies
-    await request.app.state.queues["ingest"].send(
-        Message.create(
-            "file.uploaded", ctx, {"project_id": str(project_id), "file_id": str(info.id)}
-        )
-    )
+    await deliver_now(request, ctx.tenant_id, outbox_id)
     return info
+
+
+async def deliver_now(request: Request, tenant_id: uuid.UUID, outbox_id: uuid.UUID) -> None:
+    """Send a committed outbox message right away; on failure the relay retries it."""
+    try:
+        await deliver(
+            request.app.state.engine, tenant_id, request.app.state.queues, ids=[outbox_id]
+        )
+    except Exception:
+        log.warning("outbox_deliver_deferred", outbox_id=str(outbox_id))

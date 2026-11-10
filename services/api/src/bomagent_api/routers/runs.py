@@ -17,13 +17,14 @@ from bomagent_api.auth import OrgContext, still_authorized
 from bomagent_api.authz import require
 from bomagent_api.pagination import clamp, encode_cursor, page_clause
 from bomagent_api.plans import check_new_run
-from bomagent_api.routers.projects import get_project
+from bomagent_api.routers.projects import deliver_now, get_project
 from bomagent_api.schemas import BomEnvelope, BomItemPatch, Page, Run, RunCreate, problem_responses
 from bomagent_bom.export import to_csv
 from bomagent_bom.model import BomVersion, Provenance, ProvenanceKind
 from bomagent_common.audit import AuditEvent, emit_audit
 from bomagent_common.db import tenant_transaction
 from bomagent_common.messaging import Message
+from bomagent_common.outbox import enqueue
 from bomagent_common.problems import ProblemError
 from bomagent_llm.catalog import ModelNotAllowedError
 
@@ -125,21 +126,24 @@ async def create_run(
                 after={"variant": body.variant, "runtime": runtime, "model": body.model_id},
             ),
         )
-        await idempotency.store(conn, idempotency_key, payload, 202, run.model_dump(mode="json"))
-    await request.app.state.queues["runs"].send(
-        Message.create(
-            "run.requested",
-            ctx,
-            {
-                "run_id": str(rid),
-                "variant": body.variant,
-                "runtime": runtime,
-                "model_id": body.model_id,
-                "object_keys": list(keys),
-                "requirements": payload["requirements"],
-            },
+        outbox_id = await enqueue(
+            conn,
+            "runs",
+            Message.create(
+                "run.requested",
+                ctx,
+                {
+                    "run_id": str(rid),
+                    "variant": body.variant,
+                    "runtime": runtime,
+                    "model_id": body.model_id,
+                    "object_keys": list(keys),
+                    "requirements": payload["requirements"],
+                },
+            ),
         )
-    )
+        await idempotency.store(conn, idempotency_key, payload, 202, run.model_dump(mode="json"))
+    await deliver_now(request, ctx.tenant_id, outbox_id)
     return run
 
 
