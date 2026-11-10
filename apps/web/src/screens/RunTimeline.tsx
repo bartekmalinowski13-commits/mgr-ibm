@@ -22,6 +22,7 @@ export function RunTimeline({ runId }: { runId: string }) {
       </h2>
       <ol className="flex flex-wrap items-start gap-x-1 gap-y-3">
         {steps.map((s, i) => (
+          // biome-ignore lint/suspicious/noArrayIndexKey: steps are an ordered sequence; node names repeat
           <li key={`${s.node}-${i}`} className="flex items-start gap-1">
             <div className="flex min-w-[112px] flex-col gap-1 rounded-card border border-line bg-surface px-3 py-2">
               <span className="flex items-center gap-2">
