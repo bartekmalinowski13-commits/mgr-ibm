@@ -18,7 +18,7 @@ export default defineConfig({
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: {
-    command: "pnpm exec vite --port 5173 --strictPort",
+    command: "pnpm exec vite --host 127.0.0.1 --port 5173 --strictPort",
     url: "http://127.0.0.1:5173/login",
     reuseExistingServer: !process.env.CI,
     timeout: 60_000,
