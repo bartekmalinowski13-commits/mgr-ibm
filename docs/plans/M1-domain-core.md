@@ -24,3 +24,7 @@
 ## Kryteria akceptacji
 Pokrycie ≥ 85% (`packages/py/*`: 97,8%); parser KiCad przechodzi fixture'y; `bomagent parse` i `bomagent eval` działają (testy CLI).
 `kicad-cli` jako weryfikacja krzyżowa – niedostępny w sesji (brak KiCad), odnotowane w STATUS.
+
+## Uzupełnienie 2026-11-10 (ROADMAP: fixture'y wg `ZBIOR_EWALUACYJNY_KANDYDACI.md`)
+- Dodano niezmodyfikowaną kopię **BioAmp EXG Pill** (CERN-OHL-S v2, licencja sprawdzona w `LICENSE.md` źródła) – parser KiCad 6 przechodzi na prawdziwym projekcie (27 komponentów), schemat KiCad 5 odrzucany z podpowiedzią, reguły wykrywają wartości-zastępniki (`RG`, `BPFC_*`).
+- Referencyjny BOM dla projektów open source wymaga weryfikacji przez człowieka (brak MPN w źródle) – kolejne projekty z listy (Ganglion z BOM producenta, HealthyPi Move) do dodania po decyzji autora.

@@ -27,3 +27,8 @@ human before the files are committed.
 
 Real datasheets for the thesis experiment must be downloaded by a human from manufacturers'
 sites into the (private) global corpus; they are **not** committed (copyright).
+
+## Open-source projects (unmodified copies, licence verified from the source `LICENSE`)
+| Path | Source | Licence | Notes |
+|---|---|---|---|
+| `kicad-oss/bioamp-exg-pill/` | github.com/upsidedownlabs/BioAmp-EXG-Pill @ 86bb1f4 | CERN-OHL-S v2 (hardware) | KiCad 6 + KiCad 5 legacy schematic; no reference BOM yet (needs human verification) - see `SOURCE.md` |
