@@ -28,6 +28,9 @@ from bomagent_cad.sexpr import SexprError, SList, parse
 MIN_VERSION = 20211014  # KiCad 6.0
 KICAD_MAJOR = ((20250000, 9), (20231000, 8), (20221000, 7), (20211014, 6))
 TRUTHY = {"yes", "true", "1"}
+# budgets against hostile hierarchies (a sheet listed twice in itself fans out 2^depth)
+MAX_SHEET_INSTANCES = 1_000
+MAX_COMPONENTS = 100_000
 DNP_VALUES = {"dnp", "dnf", "nf", "no fit", "do not populate", "yes", "true", "1"}
 
 
@@ -52,6 +55,12 @@ class _Ctx:
     limitations: list[str] = field(default_factory=list)
     instance_fallbacks: int = 0
     unannotated: list[str] = field(default_factory=list)
+    project: str = ""
+    stack: list[str] = field(default_factory=list)
+    sheet_instances: int = 0
+    duplicates: list[Component] = field(default_factory=list)
+    foreign_projects: set[str] = field(default_factory=set)
+    units: dict[str, set[str]] = field(default_factory=dict)
 
 
 def _props(sym: SList) -> dict[str, str]:
@@ -115,16 +124,28 @@ class KicadParser:
         sheets = {name: _load(f) for name, f in schematics.items()}
         root_name = self._root(sheets, files)
         root = sheets[root_name]
+        pro = next((f for f in files if f.suffix == ".kicad_pro"), None)
         ctx = _Ctx(
             sheets=sheets,
             root_uuid=root.tree.value("uuid"),
             root_symbol_instances=self._legacy_instances(root.tree),
+            project=PurePosixPath(pro.name if pro else root_name).stem,
         )
         self._walk(ctx, root_name, f"/{ctx.root_uuid}", "/", depth=0)
         if ctx.instance_fallbacks:
             ctx.limitations.append(
                 f"{ctx.instance_fallbacks} symbol(s) had no instance data; "
                 "designators were taken from the Reference field"
+            )
+        if ctx.foreign_projects:
+            ctx.limitations.append(
+                "instance data of other project(s) ignored: "
+                + ", ".join(sorted(ctx.foreign_projects)[:5])
+            )
+        if ctx.duplicates:
+            ctx.limitations.append(
+                "duplicate designators used by different symbols: "
+                + ", ".join(sorted({c.refdes for c in ctx.duplicates})[:20])
             )
         pcb = next((f for f in files if f.suffix == ".kicad_pcb"), None)
         if pcb is not None:
@@ -133,7 +154,9 @@ class KicadParser:
             ctx.limitations.append(
                 "no .kicad_pcb provided: footprints come from the schematic only"
             )
-        comps = sorted(ctx.components.values(), key=lambda c: natural_key(c.refdes))
+        comps = sorted(
+            [*ctx.components.values(), *ctx.duplicates], key=lambda c: natural_key(c.refdes)
+        )
         unannotated = ctx.unannotated
         if unannotated:
             ctx.limitations.append(
@@ -141,7 +164,14 @@ class KicadParser:
                 f"({', '.join(unannotated[:10])}) - annotate the schematic in KiCad"
             )
         missing_sheets = sum("sheet file not provided" in m for m in ctx.limitations)
-        confidence = max(0.3, 1.0 - 0.25 * missing_sheets - (0.1 if unannotated else 0.0))
+        confidence = max(
+            0.3,
+            1.0
+            - 0.25 * missing_sheets
+            - (0.1 if unannotated else 0.0)
+            - (0.2 if ctx.instance_fallbacks else 0.0)
+            - (0.2 if ctx.duplicates else 0.0),
+        )
         design = PurePosixPath(root_name).stem
         return ParsedDesign(
             design_name=design,
@@ -163,7 +193,7 @@ class KicadParser:
             if candidate in sheets:
                 return candidate
         referenced = {
-            _props(s).get("Sheetfile", _props(s).get("Sheet file", ""))
+            PurePosixPath(_props(s).get("Sheetfile", _props(s).get("Sheet file", ""))).name
             for sh in sheets.values()
             for s in sh.tree.children("sheet")
         }
@@ -191,17 +221,25 @@ class KicadParser:
         return table
 
     def _walk(self, ctx: _Ctx, name: str, path: str, sheet_path: str, depth: int) -> None:
-        if depth > 32:
+        if depth > 32 or name in ctx.stack:
             raise ParseError(
-                "sheet hierarchy deeper than 32 levels (recursive sheets?)", code="kicad.recursion"
+                "recursive or too deep sheet hierarchy (a sheet contains itself?)",
+                code="kicad.recursion",
             )
+        ctx.sheet_instances += 1
+        if ctx.sheet_instances > MAX_SHEET_INSTANCES or len(ctx.components) > MAX_COMPONENTS:
+            raise ParseError(
+                "design too large or hierarchy fans out too much", code="kicad.too_complex"
+            )
+        ctx.stack.append(name)
         sheet = ctx.sheets[name]
         ctx.sheet_paths.append(sheet_path)
         for sym in sheet.tree.children("symbol"):
             self._add_symbol(ctx, sym, path, sheet_path)
         for sub in sheet.tree.children("sheet"):
             props = _props(sub)
-            file_name = props.get("Sheetfile", props.get("Sheet file", ""))
+            # uploads are flat: "sub/ch.kicad_sch" is matched by its file name
+            file_name = PurePosixPath(props.get("Sheetfile", props.get("Sheet file", ""))).name
             sheet_name = props.get("Sheetname", props.get("Sheet name", file_name))
             child_path = f"{path}/{sub.value('uuid')}"
             if file_name not in ctx.sheets:
@@ -210,24 +248,36 @@ class KicadParser:
             self._walk(
                 ctx, file_name, child_path, f"{sheet_path.rstrip('/')}/{sheet_name}", depth + 1
             )
+        ctx.stack.pop()
 
-    def _reference(self, ctx: _Ctx, sym: SList, path: str) -> list[str]:
-        refs: list[str] = []
+    def _reference(self, ctx: _Ctx, sym: SList, path: str) -> list[tuple[str, dict[str, str]]]:
+        """Designators of this symbol at ``path`` with per-instance overrides
+        (KiCad 6 stores value/footprint per instance)."""
         instances = sym.child("instances")
         if instances is not None:
+            by_project: dict[str, list[str]] = {}
             for project in instances.children("project"):
-                refs.extend(
+                name = str(project[1]) if len(project) > 1 else ""
+                by_project.setdefault(name, []).extend(
                     p.value("reference") for p in project.children("path") if str(p[1]) == path
                 )
+            refs = by_project.get(ctx.project)
             if refs:
-                return refs
+                ctx.foreign_projects.update(n for n in by_project if n != ctx.project)
+                return [(r, {}) for r in refs]
+            others = [r for refs_ in by_project.values() for r in refs_]
+            if others:
+                if len(by_project) > 1:
+                    ctx.foreign_projects.update(by_project)
+                return [(r, {}) for r in dict.fromkeys(others)]
         # KiCad 6: root table keyed by path without root uuid + symbol uuid
         legacy_path = path.removeprefix(f"/{ctx.root_uuid}") + f"/{sym.value('uuid')}"
         entry = ctx.root_symbol_instances.get(legacy_path)
         if entry and entry["reference"]:
-            return [entry["reference"]]
+            overrides = {k: entry[k] for k in ("value", "footprint") if entry.get(k)}
+            return [(entry["reference"], overrides)]
         ctx.instance_fallbacks += 1
-        return [_props(sym).get("Reference", "")]
+        return [(_props(sym).get("Reference", ""), {})]
 
     def _add_symbol(self, ctx: _Ctx, sym: SList, path: str, sheet_path: str) -> None:
         lib_id = sym.value("lib_id")
@@ -242,27 +292,51 @@ class KicadParser:
         }
         dnp_field = fields.get("DNP", "").strip().lower()
         dnp = _flag(sym, "dnp", False) or dnp_field in DNP_VALUES
-        for ref in self._reference(ctx, sym, path):
+        unit = sym.value("unit", "1")
+        for ref, overrides in self._reference(ctx, sym, path):
             if not ref or ref.startswith("#"):
                 continue
             if ref.endswith("?"):
                 ctx.unannotated.append(ref)
                 continue
-            if ref in ctx.components:  # another unit of a multi-unit symbol
-                existing = ctx.components[ref]
-                merged = {**fields, **existing.fields}
-                ctx.components[ref] = existing.model_copy(update={"fields": merged})
+            existing = ctx.components.get(ref)
+            if existing is not None:
+                if existing.lib_id == lib_id and unit not in ctx.units.get(ref, set()):
+                    ctx.units.setdefault(ref, set()).add(unit)
+                    # another unit of the same multi-unit symbol
+                    merged = {**fields, **existing.fields}
+                    ctx.components[ref] = existing.model_copy(update={"fields": merged})
+                    continue
+                # a *different* symbol re-using the designator: keep both so that the
+                # rule refdes.unique reports it instead of silently merging
+                ctx.duplicates.append(
+                    existing.model_copy(
+                        update={
+                            "value": overrides.get("value", props.get("Value", "")),
+                            "footprint": overrides.get("footprint", props.get("Footprint", "")),
+                            "lib_id": lib_id,
+                            "fields": fields,
+                            "dnp": dnp,
+                            "sheet_path": sheet_path,
+                        }
+                    )
+                )
                 continue
-            ctx.components[ref] = Component(
-                refdes=ref,
-                value=props.get("Value", ""),
-                footprint=props.get("Footprint", ""),
-                lib_id=lib_id,
-                fields=fields,
-                dnp=dnp,
-                in_bom=_flag(sym, "in_bom", True),
-                sheet_path=sheet_path,
-            )
+            try:
+                ctx.components[ref] = Component(
+                    refdes=ref,
+                    value=overrides.get("value", props.get("Value", "")),
+                    footprint=overrides.get("footprint", props.get("Footprint", "")),
+                    lib_id=lib_id,
+                    fields=fields,
+                    dnp=dnp,
+                    in_bom=_flag(sym, "in_bom", True),
+                    sheet_path=sheet_path,
+                )
+            except ValueError:
+                ctx.limitations.append(f"invalid designator {ref!r} skipped")
+                continue
+            ctx.units[ref] = {unit}
 
     @staticmethod
     def _merge_pcb(ctx: _Ctx, pcb: FileRef) -> None:

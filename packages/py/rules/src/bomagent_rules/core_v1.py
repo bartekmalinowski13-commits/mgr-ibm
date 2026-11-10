@@ -15,7 +15,14 @@ from decimal import Decimal
 
 import jsonschema
 
-from bomagent_bom.model import AppliedPart, BomItem, Finding, PowerSource, Severity
+from bomagent_bom.model import (
+    AppliedPart,
+    BomItem,
+    Finding,
+    PowerSource,
+    Requirements,
+    Severity,
+)
 from bomagent_bom.packages import package_from_part_number, package_from_text
 from bomagent_bom.schema import bom_item_json_schema
 from bomagent_bom.values import ValueParseError, parse_value
@@ -24,6 +31,10 @@ from bomagent_rules.base import Rule, RuleContext, RulePack, finding
 PACK_ID = "core"
 PACK_VERSION = "1.0.0"
 PASSIVE = {"resistor", "capacitor", "inductor"}
+# kinds whose MPN / value text conventionally encode the chip size (0402, 0603, ...).
+# For ICs, numbers like LT1206 or TPS2010 are part names, not sizes.
+SIZE_CODED = PASSIVE | {"ferrite_bead", "led"}
+EXPECTED_UNIT = {"resistor": "Ω", "capacitor": "F", "inductor": "H"}
 # plausible physical ranges of discrete passives (base units)
 RANGES: dict[str, tuple[Decimal, Decimal]] = {
     "resistor": (Decimal("0"), Decimal("1E9")),
@@ -32,7 +43,11 @@ RANGES: dict[str, tuple[Decimal, Decimal]] = {
 }
 _ITEM_SCHEMA = bom_item_json_schema()
 _VALIDATOR = jsonschema.Draft202012Validator(_ITEM_SCHEMA)
-_ISOLATION_HINT = re.compile(r"\b(opto|isolat|iso\d|adum|si86|transformer|dc-?dc)", re.I)
+_ISOLATION_HINT = re.compile(
+    r"\b(opto|isolat|iso\d|isow|adum|si8[4-7]|pc817|acpl-|hcpl-|tlp\d|6n13[5-9]|transformer"
+    r"|dc[-/]?dc)",
+    re.I,
+)
 _Y_CAP = re.compile(r"\b(Y1|Y2|X1Y2|safety)\b", re.I)
 
 
@@ -115,6 +130,15 @@ def _value_parsable(items: list[BomItem], _: RuleContext) -> Iterable[Finding]:
                 "value",
             )
             continue
+        if q.unit != EXPECTED_UNIT[item.kind]:
+            yield finding(
+                "value.unit_kind",
+                Severity.ERROR,
+                f"{q} is not a {item.kind} value (expected {EXPECTED_UNIT[item.kind]})",
+                item,
+                "value",
+            )
+            continue
         low, high = RANGES[item.kind]
         if not (low <= q.value <= high):
             yield finding(
@@ -130,7 +154,7 @@ def _value_parsable(items: list[BomItem], _: RuleContext) -> Iterable[Finding]:
 
 def _package_consistent(items: list[BomItem], _: RuleContext) -> Iterable[Finding]:
     for item in items:
-        if not item.package:
+        if not item.package or item.kind not in SIZE_CODED:
             continue
         hints = {
             "mpn": package_from_part_number(item.mpn),
@@ -167,6 +191,15 @@ def _capacitor_voltage(items: list[BomItem], _: RuleContext) -> Iterable[Finding
             )
 
 
+def _mopp(req: Requirements) -> str:
+    if req.power_source == PowerSource.MAINS and req.applied_part in {
+        AppliedPart.BF,
+        AppliedPart.CF,
+    }:
+        return "2 MOPP between mains and the applied part"
+    return "the means of patient protection required for the applied part (§8.5)"
+
+
 def _iec_isolation(items: list[BomItem], ctx: RuleContext) -> Iterable[Finding]:
     req = ctx.requirements
     if req.applied_part == AppliedPart.NONE:
@@ -178,7 +211,7 @@ def _iec_isolation(items: list[BomItem], ctx: RuleContext) -> Iterable[Finding]:
                 "iec60601.isolation_barrier",
                 Severity.REVIEW,
                 f"part of the isolation barrier of a type {req.applied_part.value} applied part:"
-                " confirm insulation rating (2 MOPP) and creepage/clearance",
+                f" confirm {_mopp(req)} and creepage/clearance",
                 item,
                 "mpn",
             )
@@ -190,7 +223,9 @@ def _iec_patient_connection(items: list[BomItem], ctx: RuleContext) -> Iterable[
         return
     for item in items:
         if item.kind == "connector" and re.search(
-            r"electrode|patient|lead|ecg|eeg", f"{item.value} {item.description}", re.I
+            r"electrode|patient|\bleads?\b(?!-free)|ecg|eeg",
+            f"{item.value} {item.description}",
+            re.I,
         ):
             extra = " and defibrillation protection" if req.defibrillation_proof else ""
             yield finding(

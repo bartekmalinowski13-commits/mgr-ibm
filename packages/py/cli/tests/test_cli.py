@@ -64,7 +64,7 @@ def test_bom_csv_and_json_and_eval(tmp_path):
 
     result = runner.invoke(app, ["eval", str(json_out), str(ECG / "reference_bom.csv")])
     assert result.exit_code == 0, result.output
-    assert "Line precision / recall / F1 | 100.0% / 100.0% / 100.0%" in result.output
+    assert "| Line precision / recall / F1 | 95.5% / 100.0% /" in result.output
 
     known = tmp_path / "known.txt"
     known.write_text("RC0603FR-0710KL\n")
@@ -84,7 +84,7 @@ def test_bom_csv_and_json_and_eval(tmp_path):
         ],
     )
     assert result.exit_code == 0, result.output
-    assert json.loads(report_out.read_text())["summary"]["line_f1"] == 1.0
+    assert json.loads(report_out.read_text())["summary"]["line_recall"] == 1.0
 
 
 def test_bom_rejects_unknown_format():

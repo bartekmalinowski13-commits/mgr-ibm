@@ -27,14 +27,28 @@ METRIC_TO_IMPERIAL = {
 
 _KICAD_CHIP = re.compile(r"_(?P<imp>\d{4,5})_(?P<metric>\d{4})Metric")
 _IC_PACKAGE = re.compile(
-    r"(?P<pkg>(?:SOIC|SOP|SSOP|TSSOP|MSOP|QFN|DFN|VQFN|WQFN|TQFP|LQFP|QFP|BGA|WLCSP|"
-    r"SOT|TO|SOD|SMA|SMB|SMC|DIP|PDIP|DPAK|D2PAK|LGA|PLCC)-?\d*(?:-\d+)?)",
-    re.IGNORECASE,
+    r"(?<![A-Za-z])(?P<pkg>(?:SOIC|SOP|SSOP|TSSOP|MSOP|QFN|DFN|VQFN|WQFN|TQFP|LQFP|QFP|BGA|"
+    r"WLCSP|SOT|TO|SOD|SMA|SMB|SMC|DIP|PDIP|DPAK|D2PAK|LGA|PLCC)(?:-?\d+(?:-\d+)?)?)(?![a-z])"
 )
 
 # manufacturer series codes encoding the chip size (resistors and MLCCs)
 _IMPERIAL = "01005|0201|0402|0603|0805|1206|1210|2010|2512"
 _SERIES_PATTERNS: tuple[tuple[re.Pattern[str], dict[str, str]], ...] = (
+    # TDK metric codes followed by a dielectric code: C0603X5R... is 0201, C0402... 01005
+    (
+        re.compile(
+            r"^C(?P<code>0402|0603|1005|1608|2012|3216|3225)(?:X5R|X7R|X6S|X7S|X7T|C0G|NP0|JB|CH)"
+        ),
+        {
+            "0402": "01005",
+            "0603": "0201",
+            "1005": "0402",
+            "1608": "0603",
+            "2012": "0805",
+            "3216": "1206",
+            "3225": "1210",
+        },
+    ),
     # Yageo RC0603..., KEMET C0603..., Vishay CRCW0603..., Bourns CR0603...
     (re.compile(rf"^(?:RC|RT|AC|CRCW|CR|C|ERA|RMCF)(?P<code>{_IMPERIAL})"), {}),
     # Murata GRM155 / GRM188 / GRM21B / GRM31C

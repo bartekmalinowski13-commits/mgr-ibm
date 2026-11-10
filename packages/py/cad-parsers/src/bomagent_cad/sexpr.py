@@ -10,9 +10,10 @@ from __future__ import annotations
 from collections.abc import Iterator
 from typing import Union
 
-MAX_BYTES = 64 * 1024 * 1024
+MAX_BYTES = 32 * 1024 * 1024
 MAX_DEPTH = 512
-MAX_TOKENS = 20_000_000
+# ~10x a large real schematic; keeps worst-case memory of the object tree bounded
+MAX_TOKENS = 3_000_000
 
 
 class SexprError(ValueError):
@@ -55,19 +56,29 @@ _ESCAPES = {"n": "\n", "t": "\t", "r": "\r"}
 
 
 def _read_string(text: str, i: int) -> tuple[str, int]:
-    """Read a quoted string starting at ``text[i] == '"'``; returns (value, next index)."""
-    j, n = i + 1, len(text)
-    buf: list[str] = []
-    while j < n and text[j] != '"':
-        if text[j] == "\\" and j + 1 < n:
-            buf.append(_ESCAPES.get(text[j + 1], text[j + 1]))
-            j += 2
-        else:
-            buf.append(text[j])
-            j += 1
-    if j >= n:
+    """Read a quoted string starting at ``text[i] == '"'``; returns (value, next index).
+
+    Fast path slices the whole string at once; escapes are only decoded when present."""
+    j = text.find('"', i + 1)
+    if j < 0:
         raise SexprError("unterminated string")
-    return "".join(buf), j + 1
+    if "\\" not in text[i + 1 : j]:
+        return text[i + 1 : j], j + 1
+    buf: list[str] = []
+    k, n = i + 1, len(text)
+    start = k
+    while k < n and text[k] != '"':
+        if text[k] == "\\" and k + 1 < n:
+            buf.append(text[start:k])
+            buf.append(_ESCAPES.get(text[k + 1], text[k + 1]))
+            k += 2
+            start = k
+        else:
+            k += 1
+    if k >= n:
+        raise SexprError("unterminated string")
+    buf.append(text[start:k])
+    return "".join(buf), k + 1
 
 
 def _read_atom(text: str, i: int) -> tuple[Atom, int]:

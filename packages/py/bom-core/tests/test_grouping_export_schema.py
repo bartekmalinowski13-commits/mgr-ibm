@@ -45,6 +45,17 @@ def test_identical_parts_are_grouped_regardless_of_value_notation():
     assert [i.line for i in items] == [1, 2, 3]
 
 
+def test_different_ratings_are_not_merged():
+    d = _design(
+        _c("C1", "100n 16V", "C_0603"),
+        _c("C2", "100n/50V X7R", "C_0603"),
+        _c("C3", "100nF 50V X7R", "C_0603"),
+        _c("R1", "10k 5%", "R_0603"),
+        _c("R2", "10k 0.1%", "R_0603"),
+    )
+    assert [i.refdes for i in group_components(d)] == [["C1"], ["C2", "C3"], ["R1"], ["R2"]]
+
+
 def test_dnp_and_different_footprints_split_lines():
     d = _design(
         _c("R1", "10k", "R_0603"),

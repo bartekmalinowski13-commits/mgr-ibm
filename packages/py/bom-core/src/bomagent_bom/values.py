@@ -88,21 +88,60 @@ class ParsedValue:
     extra: tuple[str, ...] = ()
 
 
-# 4k7, 1R0, 0R5, 4u7, 2n2, 1M5, 4K7, 4E7 (E = ohm marker in some libraries)
-_RKM = re.compile(r"^(?P<int>\d+)(?P<mark>[pnuµμmkKMGRrE])(?P<frac>\d+)(?P<unit>[A-Za-zΩω]*)$")
-# 4.7k, 10, 100n, 2.2 M, 10 kΩ, 0.1uF, 100nF, 10kohm, 1R
-_PLAIN = re.compile(
-    r"^(?P<num>\d+(?:[.,]\d+)?|[.,]\d+)\s*(?P<prefix>[pnuµμmkKMG]?)\s*(?P<unit>[A-Za-zΩω]*)$"
-)
-# R10 = 0.10 Ω, R47 = 0.47 Ω (RKM with leading ohm marker)
+# 4k7, 1R0, 0R5, 4u7, 2n2, 1M5, 4K7, 6V3 (6.3 V)
+_RKM = re.compile(r"^(?P<int>\d+)(?P<mark>[pnuµμmkKMGRrV])(?P<frac>\d+)(?P<unit>[A-Za-zΩωΩ]*)$")
+# R10 = 0.10 (Ω for resistors), R47
 _RKM_LEADING_R = re.compile(r"^[Rr](?P<frac>\d+)$")
-_TOLERANCE = re.compile(r"^±?(?P<tol>\d+(?:[.,]\d+)?)\s*%$")
+# number followed by an optional prefix+unit suffix: 4.7k, 10, 100nF, 10kΩ, 0.1UF, 2.2MEG
+_PLAIN = re.compile(r"^(?P<num>\d+(?:[.,]\d+)?|[.,]\d+)(?P<suffix>[A-Za-zµμΩωΩ]*)$")
+# 1,000 / 2,200 - thousands separator or decimal comma? refuse to guess
+_THOUSANDS = re.compile(r"^\d{1,3},\d{3}(?!\d)")
+_TOLERANCE = re.compile(r"^±?(?P<tol>\d+(?:[.,]\d+)?)%$")
 # attribute separators: whitespace, "/", ";" and "," unless it is a decimal comma (0,1uF)
 _SPLIT = re.compile(r"[\s/;]+|,\s*(?!\d)|(?<!\d),\s*")
-# "10 kΩ" / "2.2 kOhm" / "100 nF": join a number with the unit that follows it
+# "10 kΩ" / "2.2 kOhm" / "100 nF" / "4.7 UF" / "10 MEG": join a number with its unit
 _SPACED_UNIT = re.compile(
-    r"(\d)\s+([pnuµμmkKMG]?(?:Ω|ω|[Oo]hms?|OHMS?|F|H|V|A|Hz|W)|[pnuµμmkKMG])(?=$|[\s/;,])"
+    r"(\d)\s+((?:MEG|Meg|meg|[pPnNuUµμmMkKgG])?(?:Ω|ω|Ω|[Oo]hms?|OHMS?|[FfHhVvAaWw]|Hz|HZ|FD|fd)?)"
+    r"(?=$|[\s/;,])"
 )
+_DIELECTRIC = re.compile(r"^(X5R|X7R|X6S|X7S|X8R|C0G|COG|NP0|NPO|Y5V|Z5U|X7T)$", re.IGNORECASE)
+_RKM_R_UNIT: dict[str, tuple[Unit, int]] = {
+    # the R marker is the decimal point in the kind's customary unit
+    "resistor": ("Ω", 0),
+    "capacitor": ("F", -12),  # 4R7 = 4.7 pF
+    "inductor": ("H", -6),  # 4R7 = 4.7 µH
+}
+# suffix (lower-cased) -> (exponent, unit or None for "kind's default unit")
+_SUFFIXES: dict[str, tuple[int, Unit | None]] = {}
+_UNIT_WORDS: tuple[tuple[str, Unit | None], ...] = (
+    ("", None),
+    ("f", "F"),
+    ("fd", "F"),
+    ("h", "H"),
+    ("v", "V"),
+    ("a", "A"),
+    ("w", "W"),
+    ("hz", "Hz"),
+    ("ohm", "Ω"),
+    ("ohms", "Ω"),
+    ("ω", "Ω"),
+    ("\u2126", "Ω"),
+    ("r", "Ω"),
+)
+for _p, _e in (
+    ("p", -12),
+    ("n", -9),
+    ("u", -6),
+    ("µ", -6),
+    ("μ", -6),
+    ("", 0),
+    ("k", 3),
+    ("meg", 6),
+    ("g", 9),
+):
+    for _word, _base in _UNIT_WORDS:
+        _SUFFIXES.setdefault(_p + _word, (_e, _base))
+_SUFFIXES["mfd"] = (-6, "F")  # legacy US notation: MFD = microfarad
 
 
 def _to_decimal(text: str) -> Decimal:
@@ -121,63 +160,104 @@ def _unit(text: str, default: Unit | None) -> Unit | None:
     return unit
 
 
-def parse_quantity(text: str, default_unit: Unit | None = None) -> Quantity:
-    """Parse a single token like ``4k7``, ``100nF`` or ``10 kΩ``."""
-    raw = text.strip()
+def _suffix(suffix: str, default_unit: Unit | None, raw: str) -> tuple[int, Unit]:
+    """Resolve prefix+unit case-insensitively, except the M/m distinction, which is
+    kept: ``M`` = mega, ``m`` = milli; ``MEG`` = mega, ``MFD`` = microfarad; ``MF`` is
+    ambiguous (legacy microfarad vs megafarad) and rejected."""
+    if suffix.upper() == "MF" and suffix != "mF":
+        raise ValueParseError(f"ambiguous unit {suffix!r} in {raw!r} (write µF)")
+    low = suffix.lower()
+    if low.startswith("m") and not low.startswith(("meg", "mfd")):
+        exp = 6 if suffix[0] == "M" else -3
+        entry = _SUFFIXES.get(low[1:])
+        if entry is None or entry[0] != 0:
+            raise ValueParseError(f"unknown unit {suffix!r} in {raw!r}")
+        return exp, entry[1] or _require(default_unit, raw)
+    entry = _SUFFIXES.get(low)
+    if entry is None:
+        raise ValueParseError(f"unknown unit {suffix!r} in {raw!r}")
+    exp, unit = entry
+    return exp, unit or _require(default_unit, raw)
+
+
+def _require(unit: Unit | None, raw: str) -> Unit:
+    if unit is None:
+        raise ValueParseError(f"cannot infer unit of {raw!r}")
+    return unit
+
+
+def parse_quantity(
+    text: str, default_unit: Unit | None = None, kind: str | None = None
+) -> Quantity:
+    """Parse a single token like ``4k7``, ``100nF``, ``10 kΩ`` or ``4.7UF``."""
+    raw = _SPACED_UNIT.sub(r"\1\2", text.strip())
     if not raw:
         raise ValueParseError("empty value")
+    if _THOUSANDS.match(raw):
+        raise ValueParseError(f"ambiguous separator in {raw!r} (thousands or decimal comma?)")
     m = _RKM_LEADING_R.match(raw)
     if m:
-        return Quantity(_to_decimal(f"0.{m['frac']}"), "Ω")
+        unit, exp = _RKM_R_UNIT.get(kind or "", ("Ω", 0))
+        return Quantity(_to_decimal(f"0.{m['frac']}").scaleb(exp), unit)
     m = _RKM.match(raw)
     if m:
         mark = m["mark"]
-        unit_default: Unit | None
-        if mark in {"R", "r", "E"}:
-            exp, unit_default = 0, "Ω"
-        else:
-            exp, unit_default = PREFIXES[mark], default_unit
         number = _to_decimal(f"{m['int']}.{m['frac']}")
-        unit = _unit(m["unit"], unit_default)
-        if unit is None:
-            raise ValueParseError(f"cannot infer unit of {raw!r}")
-        return Quantity(number.scaleb(exp), unit)
+        if mark in {"R", "r"}:
+            unit_r, exp = _RKM_R_UNIT.get(kind or "", ("Ω", 0))
+            if m["unit"]:
+                unit_r = _require(_unit(m["unit"], None), raw)
+            return Quantity(number.scaleb(exp), unit_r)
+        if mark == "V":
+            if m["unit"]:
+                raise ValueParseError(f"unrecognised value {raw!r}")
+            return Quantity(number, "V")
+        rkm_unit = _unit(m["unit"], default_unit)
+        return Quantity(number.scaleb(PREFIXES[mark]), _require(rkm_unit, raw))
     m = _PLAIN.match(raw)
     if m:
-        prefix, unit_text = m["prefix"], m["unit"]
-        # "1R" / "10R" / "1m" (milli without unit) are ambiguous: R means ohm, bare "m"
-        # with a default unit is milli.
-        if unit_text in {"R", "r", "E"} and not prefix:
-            unit_text = "ohm"
-        # "100M" with no unit -> mega (not milli); "10m" -> milli
-        unit = _unit(unit_text, default_unit)
-        if unit is None:
-            raise ValueParseError(f"cannot infer unit of {raw!r}")
         number = _to_decimal(m["num"])
-        return Quantity(number.scaleb(PREFIXES[prefix]), unit)
+        exp, unit = (
+            _suffix(m["suffix"], default_unit, raw)
+            if m["suffix"]
+            else (0, _require(default_unit, raw))
+        )
+        return Quantity(number.scaleb(exp), unit)
     raise ValueParseError(f"unrecognised value {raw!r}")
+
+
+def _normalise_text(text: str) -> str:
+    text = text.strip().replace("+/-", "±").replace("+-", "±")
+    text = re.sub(r"(\d)\s+%", r"\1%", text)
+    text = re.sub(r"±\s+", "±", text)
+    return _SPACED_UNIT.sub(r"\1\2", text)
 
 
 def parse_value(text: str, kind: str | None = None) -> ParsedValue:
     """Parse a schematic value field; ``kind`` (resistor/capacitor/inductor) sets the
-    default unit for bare numbers. Attributes (voltage, tolerance) are extracted."""
+    default unit for bare numbers. Attributes (voltage, tolerance, dielectric) are
+    extracted; an unknown word right after a bare number is an error, never ignored."""
     default = KIND_UNIT.get(kind or "")
-    joined = _SPACED_UNIT.sub(r"\1\2", text.strip())
-    tokens = [t for t in _SPLIT.split(joined) if t]
+    tokens = [t for t in _SPLIT.split(_normalise_text(text)) if t]
     if not tokens:
         raise ValueParseError("empty value")
-    main = parse_quantity(tokens[0], default)
+    main = parse_quantity(tokens[0], default, kind)
+    bare_number = bool(re.fullmatch(r"\d+(?:[.,]\d+)?", tokens[0]))
     voltage: Quantity | None = None
     tolerance: Decimal | None = None
     extra: list[str] = []
-    for token in tokens[1:]:
+    for i, token in enumerate(tokens[1:]):
         tol = _TOLERANCE.match(token)
         if tol:
             tolerance = _to_decimal(tol["tol"])
             continue
         try:
-            q = parse_quantity(token)
+            q = parse_quantity(token, None, kind)
         except ValueParseError:
+            if i == 0 and bare_number and token[:1].isalpha() and not _DIELECTRIC.match(token):
+                raise ValueParseError(
+                    f"unknown unit {token!r} after a bare number in {text!r}"
+                ) from None
             extra.append(token)
             continue
         if q.unit == "V" and voltage is None:

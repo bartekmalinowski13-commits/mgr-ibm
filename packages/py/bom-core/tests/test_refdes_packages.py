@@ -51,6 +51,7 @@ def test_compress_ranges():
         ("Package_TO_SOT_SMD:SOT-23", "SOT-23"),
         ("Package_DFN_QFN:QFN-20-1EP_4x4mm_P0.5mm_EP2.5x2.5mm", "QFN-20-1"),
         ("Connector_PinHeader_2.54mm:PinHeader_1x03_P2.54mm_Vertical", None),
+        ("Battery:BatteryHolder_Keystone_103_1x20mm", None),
         ("", None),
     ],
 )
@@ -69,6 +70,8 @@ def test_package_from_footprint(footprint, pkg):
         ("ERJ-3EKF1002V", "0603"),
         ("CRCW060310K0FKEA", "0603"),
         ("C0805C105K4RACTU", "0805"),
+        ("C0603X5R0J104K030BC", "0201"),
+        ("C0402X5R0J102K020BC", "01005"),
         ("AD8232ACPZ-R7", None),
         ("", None),
     ],

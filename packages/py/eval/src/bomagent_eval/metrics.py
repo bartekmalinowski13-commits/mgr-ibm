@@ -1,18 +1,26 @@
 """BOM quality metrics (thesis Tab. 6.1).
 
-* **Line P/R/F1** - predicted lines are matched to reference lines by the largest
-  designator overlap (Jaccard >= 0.5, greedy); unmatched predicted lines are false
-  positives, unmatched reference lines false negatives.
-* **Designator P/R/F1** - per reference designator (catches invented or missing parts).
-* **Field accuracy** - for each designator present in both BOMs: value (unit-aware),
-  footprint, MPN (reference MPN or an accepted alternate), manufacturer, DNP; quantity is
-  compared on matched lines.
-* **MPN hallucination rate** - share of predicted MPNs that exist in *no* trusted source
-  (reference, alternates, input design, knowledge-base catalogue passed as ``known_mpns``).
+Definitions are written to be fair to both variants (review of M1):
+
+* **Line P/R/F1** - predicted lines matched to reference lines by the largest designator
+  overlap (Jaccard >= 0.5, greedy). The reference groups identical parts on one line
+  regardless of how the schematic happened to annotate them.
+* **Designator P/R/F1** - per reference designator; a designator listed on several
+  predicted lines counts once as TP and every extra listing as FP.
+* **Field accuracy** - two numbers per field: ``accuracy`` over designators present in
+  both BOMs, and ``accuracy_ref`` over *all* reference designators (a missing part counts
+  as wrong), so a BOM listing only one correct part cannot score 100 %.
+* **MPN metrics** - ``coverage`` (reference parts that received any MPN),
+  ``out_of_reference`` (predicted MPN is neither the reference MPN nor an accepted
+  alternate) and ``unverified`` (predicted MPN found in no trusted catalogue: knowledge
+  base snapshot, input design, reference). ``unverified`` - the hallucination rate - is
+  only computed when a catalogue is supplied; otherwise it is NaN, never a guess.
+* Undefined ratios (empty denominators) are NaN and are skipped by aggregation.
 """
 
 from __future__ import annotations
 
+import math
 import re
 from dataclasses import dataclass, field
 
@@ -23,7 +31,27 @@ from bomagent_bom.values import values_equivalent
 
 MATCH_THRESHOLD = 0.5
 FIELDS = ("value", "footprint", "mpn", "manufacturer", "dnp", "quantity")
+NAN = float("nan")
 _NON_ALNUM = re.compile(r"[^0-9a-z]+")
+MANUFACTURER_ALIASES = {
+    "ti": "texasinstruments",
+    "adi": "analogdevices",
+    "maxim": "analogdevices",
+    "maximintegrated": "analogdevices",
+    "linear": "analogdevices",
+    "lineartechnology": "analogdevices",
+    "st": "stmicroelectronics",
+    "stm": "stmicroelectronics",
+    "nxp": "nxpsemiconductors",
+    "onsemi": "onsemiconductor",
+    "sem": "samsungelectromechanics",
+    "samsung": "samsungelectromechanics",
+    "murataelectronics": "murata",
+    "muratamanufacturing": "murata",
+    "yageocorporation": "yageo",
+    "vishaydale": "vishay",
+    "microchiptechnology": "microchip",
+}
 
 
 def norm_mpn(mpn: str) -> str:
@@ -31,11 +59,20 @@ def norm_mpn(mpn: str) -> str:
 
 
 def norm_manufacturer(name: str) -> str:
-    return _NON_ALNUM.sub("", name.casefold())
+    key = _NON_ALNUM.sub("", name.casefold())
+    for suffix in ("incorporated", "inc", "corporation", "corp", "ltd", "gmbh", "co"):
+        if key.endswith(suffix) and len(key) > len(suffix) + 2:
+            key = key[: -len(suffix)]
+            break
+    return MANUFACTURER_ALIASES.get(key, key)
 
 
 def norm_footprint(fp: str) -> str:
     return fp.split(":", 1)[-1].strip().casefold()
+
+
+def _ratio(num: int, den: int) -> float:
+    return num / den if den else NAN
 
 
 class PRF(BaseModel):
@@ -45,45 +82,58 @@ class PRF(BaseModel):
 
     @property
     def precision(self) -> float:
-        return self.tp / (self.tp + self.fp) if self.tp + self.fp else 0.0
+        return _ratio(self.tp, self.tp + self.fp)
 
     @property
     def recall(self) -> float:
-        return self.tp / (self.tp + self.fn) if self.tp + self.fn else 0.0
+        return _ratio(self.tp, self.tp + self.fn)
 
     @property
     def f1(self) -> float:
-        p, r = self.precision, self.recall
-        return 2 * p * r / (p + r) if p + r else 0.0
-
-    def as_dict(self) -> dict[str, float]:
-        return {
-            "precision": self.precision,
-            "recall": self.recall,
-            "f1": self.f1,
-            "tp": self.tp,
-            "fp": self.fp,
-            "fn": self.fn,
-        }
+        if self.tp + self.fp + self.fn == 0:
+            return NAN
+        return 2 * self.tp / (2 * self.tp + self.fp + self.fn)
 
 
 class FieldScore(BaseModel):
     correct: int = 0
     compared: int = 0
+    reference_total: int = 0
 
     @property
     def accuracy(self) -> float:
-        return self.correct / self.compared if self.compared else 0.0
+        return _ratio(self.correct, self.compared)
+
+    @property
+    def accuracy_ref(self) -> float:
+        return _ratio(self.correct, self.reference_total)
 
 
-class Hallucinations(BaseModel):
-    predicted_mpns: int = 0
-    hallucinated: int = 0
+class MpnMetrics(BaseModel):
+    predicted: int = 0
+    reference_parts: int = 0
+    covered: int = 0
+    out_of_reference: int = 0
+    unverified: int = 0
+    catalogue_checked: bool = False
     examples: list[str] = Field(default_factory=list)
 
     @property
+    def coverage(self) -> float:
+        return _ratio(self.covered, self.reference_parts)
+
+    @property
+    def out_of_reference_rate(self) -> float:
+        return _ratio(self.out_of_reference, self.predicted)
+
+    @property
     def rate(self) -> float:
-        return self.hallucinated / self.predicted_mpns if self.predicted_mpns else 0.0
+        """Hallucination rate: MPNs absent from every trusted catalogue (NaN if unchecked)."""
+        return _ratio(self.unverified, self.predicted) if self.catalogue_checked else NAN
+
+
+# backwards-compatible name used in reports
+Hallucinations = MpnMetrics
 
 
 class ItemDiff(BaseModel):
@@ -100,17 +150,20 @@ class EvalReport(BaseModel):
     lines: PRF
     designators: PRF
     fields: dict[str, FieldScore]
-    hallucinations: Hallucinations
+    hallucinations: MpnMetrics
     usage: Usage = Field(default_factory=Usage)
     diffs: list[ItemDiff] = Field(default_factory=list)
 
     def summary(self) -> dict[str, float]:
+        h = self.hallucinations
         out = {
             "line_precision": self.lines.precision,
             "line_recall": self.lines.recall,
             "line_f1": self.lines.f1,
             "designator_f1": self.designators.f1,
-            "mpn_hallucination_rate": self.hallucinations.rate,
+            "mpn_coverage": h.coverage,
+            "mpn_out_of_reference_rate": h.out_of_reference_rate,
+            "mpn_hallucination_rate": h.rate,
             "input_tokens": float(self.usage.input_tokens),
             "output_tokens": float(self.usage.output_tokens),
             "llm_calls": float(self.usage.llm_calls),
@@ -118,6 +171,7 @@ class EvalReport(BaseModel):
             "wall_time_s": self.usage.wall_time_s,
         }
         out |= {f"acc_{k}": v.accuracy for k, v in self.fields.items()}
+        out |= {f"acc_ref_{k}": v.accuracy_ref for k, v in self.fields.items()}
         return out
 
 
@@ -152,16 +206,20 @@ def match_lines(pred: list[BomItem], ref: list[BomItem]) -> _Match:
     return m
 
 
-def _mpn_ok(pred: BomItem, ref: BomItem) -> bool:
-    accepted = {norm_mpn(ref.mpn)} | {
+def _accepted_mpns(ref: BomItem) -> set[str]:
+    return {norm_mpn(ref.mpn)} | {
         norm_mpn(a) for a in ref.fields.get("mpn_alternates", "").split() if a
     }
-    return norm_mpn(pred.mpn) in accepted
 
 
 def _mfr_ok(pred: str, ref: str) -> bool:
     a, b = norm_manufacturer(pred), norm_manufacturer(ref)
-    return bool(a) and bool(b) and (a.startswith(b) or b.startswith(a))
+    if not a or not b:
+        return False
+    if a == b:
+        return True
+    short, long_ = sorted((a, b), key=len)
+    return len(short) >= 5 and long_.startswith(short)
 
 
 def evaluate(
@@ -169,6 +227,7 @@ def evaluate(
     reference: list[BomItem],
     *,
     known_mpns: set[str] | None = None,
+    design_mpns: set[str] | None = None,
     design: str = "",
     variant: str = "",
     model: str = "",
@@ -179,12 +238,19 @@ def evaluate(
     m = match_lines(pred_items, reference)
     lines = PRF(tp=len(m.pairs), fp=len(m.unmatched_pred), fn=len(m.unmatched_ref))
 
-    pred_by_ref = {r: i for i in pred_items for r in i.refdes}
+    pred_by_ref: dict[str, BomItem] = {}
+    duplicate_listings = 0
+    for item in pred_items:
+        for r in item.refdes:
+            if r in pred_by_ref:
+                duplicate_listings += 1  # first listing is the one scored
+            else:
+                pred_by_ref[r] = item
     ref_by_ref = {r: i for i in reference for r in i.refdes}
     common = set(pred_by_ref) & set(ref_by_ref)
     designators = PRF(
         tp=len(common),
-        fp=len(set(pred_by_ref) - set(ref_by_ref)),
+        fp=len(set(pred_by_ref) - set(ref_by_ref)) + duplicate_listings,
         fn=len(set(ref_by_ref) - set(pred_by_ref)),
     )
 
@@ -198,6 +264,16 @@ def evaluate(
         elif len(diffs) < max_diffs:
             diffs.append(ItemDiff(refdes=refdes, field=name, predicted=got, expected=want))
 
+    for r, e in ref_by_ref.items():
+        scores["value"].reference_total += 1
+        scores["footprint"].reference_total += 1
+        scores["dnp"].reference_total += 1
+        scores["mpn"].reference_total += bool(e.mpn)
+        scores["manufacturer"].reference_total += bool(e.manufacturer)
+        if r not in common and len(diffs) < max_diffs:
+            diffs.append(ItemDiff(refdes=r, field="missing", predicted="", expected=e.value))
+    scores["quantity"].reference_total = len(reference)
+
     for r in sorted(common):
         p, e = pred_by_ref[r], ref_by_ref[r]
         score("value", values_equivalent(p.value, e.value, e.kind), r, p.value, e.value)
@@ -209,7 +285,7 @@ def evaluate(
             e.footprint,
         )
         if e.mpn:
-            score("mpn", _mpn_ok(p, e), r, p.mpn, e.mpn)
+            score("mpn", norm_mpn(p.mpn) in _accepted_mpns(e), r, p.mpn, e.mpn)
         if e.manufacturer:
             score(
                 "manufacturer",
@@ -222,19 +298,7 @@ def evaluate(
     for p, e in m.pairs:
         score("quantity", p.quantity == e.quantity, e.refdes[0], str(p.quantity), str(e.quantity))
 
-    trusted = {norm_mpn(x) for x in (known_mpns or set())}
-    for e in reference:
-        trusted.add(norm_mpn(e.mpn))
-        trusted |= {norm_mpn(a) for a in e.fields.get("mpn_alternates", "").split()}
-    hall = Hallucinations()
-    for p in pred_items:
-        if not p.mpn:
-            continue
-        hall.predicted_mpns += 1
-        if norm_mpn(p.mpn) not in trusted:
-            hall.hallucinated += 1
-            if len(hall.examples) < 20:
-                hall.examples.append(p.mpn)
+    mpn = _mpn_metrics(pred_items, reference, pred_by_ref, ref_by_ref, known_mpns, design_mpns)
 
     return EvalReport(
         design=design,
@@ -243,7 +307,47 @@ def evaluate(
         lines=lines,
         designators=designators,
         fields=scores,
-        hallucinations=hall,
+        hallucinations=mpn,
         usage=usage,
         diffs=diffs,
     )
+
+
+def _mpn_metrics(
+    pred_items: list[BomItem],
+    reference: list[BomItem],
+    pred_by_ref: dict[str, BomItem],
+    ref_by_ref: dict[str, BomItem],
+    known_mpns: set[str] | None,
+    design_mpns: set[str] | None,
+) -> MpnMetrics:
+    mpn = MpnMetrics(catalogue_checked=known_mpns is not None)
+    reference_mpns: set[str] = set()
+    for e in reference:
+        reference_mpns |= _accepted_mpns(e) - {""}
+    trusted = (
+        {norm_mpn(x) for x in (known_mpns or set())}
+        | {norm_mpn(x) for x in (design_mpns or set())}
+        | reference_mpns
+    )
+    for r, e in ref_by_ref.items():
+        if e.mpn and not e.dnp:
+            mpn.reference_parts += 1
+            if r in pred_by_ref and pred_by_ref[r].mpn:
+                mpn.covered += 1
+    for p in pred_items:
+        if not p.mpn:
+            continue
+        mpn.predicted += 1
+        n = norm_mpn(p.mpn)
+        if n not in reference_mpns:
+            mpn.out_of_reference += 1
+        if n not in trusted:
+            mpn.unverified += 1
+            if len(mpn.examples) < 20:
+                mpn.examples.append(p.mpn)
+    return mpn
+
+
+def isnan(x: float) -> bool:
+    return isinstance(x, float) and math.isnan(x)

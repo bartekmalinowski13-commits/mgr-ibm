@@ -36,3 +36,11 @@ def test_depth_and_token_limits():
         parse("(" * 600 + ")" * 600)
     with pytest.raises(SexprError, match="tokens"):
         parse("(a " + "b " * 100 + ")", max_tokens=50)
+
+
+def test_large_string_fast_path_and_escapes():
+    big = "字" * 200_000
+    assert parse(f'(a "{big}")')[1] == big
+    assert parse('(a "x\\\\y\\"z")')[1] == 'x\\y"z'
+    with pytest.raises(SexprError):
+        parse('(a "x\\\\')

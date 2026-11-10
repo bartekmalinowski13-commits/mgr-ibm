@@ -192,3 +192,126 @@ def test_sniff_scores():
     assert p.sniff(FileRef("a.kicad_sch", b"junk")) == 0.3
     assert p.sniff(FileRef("a.kicad_pcb", b"")) == 0.5
     assert p.sniff(FileRef("a.txt", b"")) == 0.0
+
+
+def _sch(body: str, uuid: str = "root", version: int = 20231120) -> bytes:
+    return f'(kicad_sch (version {version}) (generator "eeschema") (uuid "{uuid}") {body})'.encode()
+
+
+def _sym(
+    ref: str, value: str, lib: str = "Device:R", uid: str = "s", unit: int = 1, instances: str = ""
+) -> str:
+    return (
+        f'(symbol (lib_id "{lib}") (unit {unit}) (in_bom yes) (on_board yes) (dnp no)'
+        f' (uuid "{uid}") (property "Reference" "{ref}" (at 0 0 0))'
+        f' (property "Value" "{value}" (at 0 0 0)) {instances})'
+    )
+
+
+def _sheet(file: str, uid: str, name: str = "S") -> str:
+    return (
+        f'(sheet (uuid "{uid}") (property "Sheetname" "{name}" (at 0 0 0))'
+        f' (property "Sheetfile" "{file}" (at 0 0 0)))'
+    )
+
+
+def test_exponential_sheet_fanout_is_bounded():
+    # each level instantiates the next twice: 2^20 walks without a budget
+    files = [
+        FileRef("top.kicad_pro", b"{}"),
+        FileRef("top.kicad_sch", _sch(_sheet("l0.kicad_sch", "a") + _sheet("l0.kicad_sch", "b"))),
+    ]
+    for level in range(20):
+        nxt = f"l{level + 1}.kicad_sch"
+        files.append(
+            FileRef(
+                f"l{level}.kicad_sch",
+                _sch(_sheet(nxt, f"a{level}") + _sheet(nxt, f"b{level}"), uuid=f"u{level}"),
+            )
+        )
+    files.append(FileRef("l20.kicad_sch", _sch(_sym("R1", "1k"), uuid="leaf")))
+    with pytest.raises(ParseError) as exc:
+        parse_files(files)
+    assert exc.value.code == "kicad.too_complex"
+
+
+def test_sheet_including_itself_twice_is_rejected():
+    files = [
+        FileRef("top.kicad_pro", b"{}"),
+        FileRef("top.kicad_sch", _sch(_sheet("loop.kicad_sch", "a"))),
+        FileRef(
+            "loop.kicad_sch",
+            _sch(_sheet("loop.kicad_sch", "x") + _sheet("loop.kicad_sch", "y"), uuid="l"),
+        ),
+    ]
+    with pytest.raises(ParseError) as exc:
+        parse_files(files)
+    assert exc.value.code == "kicad.recursion"
+
+
+def test_duplicate_designator_on_different_symbols_is_kept_and_reported():
+    sch = _sch(_sym("R1", "10k", uid="a") + _sym("R1", "100n", lib="Device:C", uid="b"))
+    design = parse_files([FileRef("x.kicad_sch", sch)])
+    assert [c.value for c in design.components] == ["10k", "100n"]
+    assert any("duplicate designators" in m for m in design.limitations)
+    assert design.confidence < 1.0
+
+
+def test_other_project_instances_are_ignored():
+    inst = (
+        '(instances (project "x" (path "/root" (reference "R1") (unit 1)))'
+        ' (project "old-copy" (path "/root" (reference "R7") (unit 1))))'
+    )
+    design = parse_files([FileRef("x.kicad_sch", _sch(_sym("R1", "1k", instances=inst)))])
+    assert [c.refdes for c in design.components] == ["R1"]
+    assert any("old-copy" in m for m in design.limitations)
+
+
+def test_kicad6_per_instance_value_and_footprint():
+    child = _sch(_sym("R1", "10k", uid="sym"), uuid="c", version=20211014)
+    root = _sch(
+        _sheet("ch.kicad_sch", "s1", "A")
+        + _sheet("ch.kicad_sch", "s2", "B")
+        + '(symbol_instances (path "/s1/sym" (reference "R101") (unit 1) (value "10k")'
+        ' (footprint "R_0603")) (path "/s2/sym" (reference "R201") (unit 1) (value "22k")'
+        ' (footprint "R_0805")))',
+        version=20211014,
+    )
+    design = parse_files(
+        [
+            FileRef("top.kicad_sch", root),
+            FileRef("ch.kicad_sch", child),
+            FileRef("top.kicad_pro", b"{}"),
+        ]
+    )
+    by = {c.refdes: c for c in design.components}
+    assert (by["R101"].value, by["R101"].footprint) == ("10k", "R_0603")
+    assert (by["R201"].value, by["R201"].footprint) == ("22k", "R_0805")
+
+
+def test_sheetfile_in_subdirectory_and_invalid_designator():
+    root = _sch(_sheet("sub/ch.kicad_sch", "s1"))
+    child = _sch(_sym("R1.1", "1k", uid="q") + _sym("R2", "1k", uid="w"), uuid="c")
+    design = parse_files(
+        [
+            FileRef("top.kicad_sch", root),
+            FileRef("ch.kicad_sch", child),
+            FileRef("top.kicad_pro", b"{}"),
+        ]
+    )
+    assert [c.refdes for c in design.components] == ["R2"]
+    assert any("invalid designator 'R1.1'" in m for m in design.limitations)
+
+
+def test_reused_sheet_without_instance_data_lowers_confidence():
+    root = _sch(_sheet("ch.kicad_sch", "s1") + _sheet("ch.kicad_sch", "s2"))
+    child = _sch(_sym("R1", "1k", uid="q"), uuid="c")
+    design = parse_files(
+        [
+            FileRef("top.kicad_sch", root),
+            FileRef("ch.kicad_sch", child),
+            FileRef("top.kicad_pro", b"{}"),
+        ]
+    )
+    assert design.confidence <= 0.8
+    assert any("no instance data" in m for m in design.limitations)

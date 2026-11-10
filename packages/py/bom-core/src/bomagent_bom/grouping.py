@@ -18,7 +18,7 @@ from bomagent_bom.packages import (
     package_from_text,
 )
 from bomagent_bom.refdes import natural_key
-from bomagent_bom.values import normalize_value
+from bomagent_bom.values import ValueParseError, format_quantity, parse_value
 
 MPN_FIELDS = (
     "MPN",
@@ -55,7 +55,24 @@ def describe(c: Component) -> dict[str, object]:
     kind = c.kind
     mpn = c.field(*MPN_FIELDS)
     manufacturer = c.field(*MANUFACTURER_FIELDS)
-    value_norm = normalize_value(c.value, kind) if kind in PASSIVE_KINDS else None
+    value_norm: str | None = None
+    rating = ""
+    if kind in PASSIVE_KINDS:
+        try:
+            parsed = parse_value(c.value, kind)
+        except ValueParseError:
+            parsed = None
+        if parsed is not None:
+            value_norm = format_quantity(parsed.quantity)
+            # ratings and attributes are part of the identity of a part: 100n/16V and
+            # 100n/50V X7R must not be merged into one line
+            rating = "|".join(
+                [
+                    format_quantity(parsed.voltage_rating) if parsed.voltage_rating else "",
+                    str(parsed.tolerance_percent or ""),
+                    *sorted(x.casefold() for x in parsed.extra),
+                ]
+            )
     package = (
         package_from_footprint(c.footprint)
         or package_from_part_number(mpn)
@@ -67,6 +84,7 @@ def describe(c: Component) -> dict[str, object]:
         "manufacturer": manufacturer,
         "description": c.field(*DESCRIPTION_FIELDS),
         "value_normalized": value_norm,
+        "rating": rating,
         "package": package,
     }
 
@@ -78,7 +96,7 @@ def group_components(design: ParsedDesign) -> list[BomItem]:
         d = describe(c)
         key = _Key(
             kind=str(d["kind"]),
-            value=str(d["value_normalized"] or c.value.strip().casefold()),
+            value=f"{d['value_normalized'] or c.value.strip().casefold()}#{d['rating']}",
             footprint=c.footprint.strip(),
             mpn=str(d["mpn"]).upper(),
             manufacturer=str(d["manufacturer"]).casefold(),

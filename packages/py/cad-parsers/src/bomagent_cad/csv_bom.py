@@ -11,11 +11,14 @@ from __future__ import annotations
 import csv
 import io
 import re
+from typing import Literal
 
+from bomagent_bom.dnp import parse_dnp
 from bomagent_bom.model import Component, ParsedDesign
 from bomagent_cad.base import FileRef, ParseError
 
 MAX_ROWS = 50_000
+MAX_COMPONENTS = 100_000
 ALIASES: dict[str, tuple[str, ...]] = {
     "refdes": (
         "reference",
@@ -31,15 +34,16 @@ ALIASES: dict[str, tuple[str, ...]] = {
     ),
     "value": ("value", "val", "comment"),
     "footprint": ("footprint", "package", "pcb footprint", "case", "case/package"),
+    # ordered by specificity: earlier aliases win when several columns match
     "mpn": (
-        "mpn",
         "manufacturer part number",
+        "manufacturer_part_number",
+        "mpn",
         "mfr pn",
         "mfr. part #",
         "mfr part number",
-        "part number",
-        "manufacturer_part_number",
         "mpn#",
+        "part number",
     ),
     "manufacturer": ("manufacturer", "mfr", "mfr.", "manufacturer name"),
     "quantity": ("qty", "quantity", "qty.", "count"),
@@ -48,7 +52,6 @@ ALIASES: dict[str, tuple[str, ...]] = {
 }
 _RANGE = re.compile(r"^(?P<prefix>[A-Za-z_]+)(?P<a>\d+)\s*[-\u2013]\s*(?:[A-Za-z_]+)?(?P<b>\d+)$")
 _SEP = re.compile(r"[\s,;]+")
-_FALSEY = {"", "no", "false", "0", "fit", "populate", "yes-populate"}
 
 
 def expand_refdes(cell: str) -> list[str]:
@@ -65,13 +68,17 @@ def expand_refdes(cell: str) -> list[str]:
 
 
 def _map_headers(headers: list[str]) -> dict[str, int]:
-    mapping: dict[str, int] = {}
+    """Column per key; when several columns match, the most specific alias wins
+    (e.g. "Manufacturer Part Number" over an internal "Part Number")."""
+    best: dict[str, tuple[int, int]] = {}
     for idx, header in enumerate(headers):
-        h = header.strip().strip("﻿").casefold()
+        h = header.strip().strip("\ufeff").casefold()
         for key, aliases in ALIASES.items():
-            if h in aliases and key not in mapping:
-                mapping[key] = idx
-    return mapping
+            if h in aliases:
+                rank = aliases.index(h)
+                if key not in best or rank < best[key][0]:
+                    best[key] = (rank, idx)
+    return {key: idx for key, (_, idx) in best.items()}
 
 
 class CsvBomParser:
@@ -130,14 +137,17 @@ class CsvBomParser:
         European ``;`` files are common; ``csv.Sniffer`` alone guesses wrong on them)."""
         best: tuple[int, list[list[str]], int | None] = (-1, [], None)
         for delimiter in (",", ";", "\t"):
-            rows = list(csv.reader(io.StringIO(text), delimiter=delimiter))
+            try:
+                rows = list(csv.reader(io.StringIO(text), delimiter=delimiter))
+            except csv.Error as exc:
+                raise ParseError(f"malformed CSV: {exc}", code="csv.malformed") from exc
             for i, row in enumerate(rows[:20]):
                 mapped = _map_headers(row)
                 if "refdes" in mapped and len(mapped) > best[0]:
                     best = (len(mapped), rows, i)
                     break
         if best[2] is None:
-            return list(csv.reader(io.StringIO(text))), None
+            return [], None
         return best[1], best[2]
 
     @staticmethod
@@ -162,13 +172,15 @@ class CsvBomParser:
         qty = cell("quantity")
         if qty.isdigit() and int(qty) != len(refs):
             limitations.append(f"row {n}: Qty {qty} but {len(refs)} designators")
-        dnp_raw = cell("dnp").casefold()
-        if "dnp" not in cols:
-            dnp = False
-        elif headers[cols["dnp"]].strip().casefold() == "populate":
-            dnp = dnp_raw in {"no", "false", "0"}
-        else:
-            dnp = dnp_raw not in _FALSEY
+        dnp = False
+        if "dnp" in cols:
+            column: Literal["dnp", "populate"] = (
+                "populate" if headers[cols["dnp"]].strip().casefold() == "populate" else "dnp"
+            )
+            parsed = parse_dnp(cell("dnp"), column)
+            if parsed is None:
+                limitations.append(f"row {n}: unrecognised DNP value {cell('dnp')!r}")
+            dnp = bool(parsed)
         fields = {
             name: row[i].strip()
             for i, name in extra_cols.items()
@@ -181,6 +193,8 @@ class CsvBomParser:
         ):
             if cell(key):
                 fields[label] = cell(key)
+        if len(components) + len(refs) > MAX_COMPONENTS:
+            raise ParseError(f"more than {MAX_COMPONENTS} components", code="file.too_large")
         for ref in refs:
             if ref in seen:
                 limitations.append(f"row {n}: duplicate designator {ref}")

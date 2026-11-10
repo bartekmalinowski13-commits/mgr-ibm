@@ -70,6 +70,7 @@ def test_quantity_mismatch_and_schema_violation():
         ({"value": "0R", "mpn": "RC0603JR-070RL"}, "value.zero_ohm"),
         ({"mpn": "RC0402FR-0710KL"}, "footprint.package_match"),
         ({"value": "10k 0805"}, "footprint.package_match"),
+        ({"value": "100nF"}, "value.unit_kind"),
     ],
 )
 def test_single_rule_triggers(kw, code):
@@ -92,6 +93,50 @@ def test_dnp_and_test_points_are_exempt_from_mpn_and_footprint():
         ]
     )
     assert codes(report) == set()
+
+
+def test_ic_part_numbers_with_size_like_digits_are_not_package_checked():
+    ic = item(
+        refdes=("U1",),
+        kind="ic",
+        value="LT1206",
+        footprint="Package_SO:SOIC-8",
+        package="SOIC-8",
+        mpn="LT1206CS8",
+        manufacturer="ADI",
+    )
+    assert "footprint.package_match" not in codes(validate([ic]))
+
+
+def test_isolation_regex_and_lead_free_connector():
+    parts = [
+        item(
+            1,
+            ("U7",),
+            kind="ic",
+            value="PC817",
+            footprint="DIP-4",
+            package="DIP-4",
+            mpn="PC817X",
+            manufacturer="Sharp",
+        ),
+        item(
+            2,
+            ("J3",),
+            kind="connector",
+            value="Header lead-free",
+            footprint="x",
+            package=None,
+            mpn="X1",
+            manufacturer="Y",
+        ),
+    ]
+    report = validate(parts, Requirements(applied_part=AppliedPart.BF))
+    assert [f.refdes for f in report.findings if f.rule_id == "iec60601.isolation_barrier"] == [
+        ["U7"]
+    ]
+    assert "iec60601.patient_connector" not in codes(report)
+    assert "2 MOPP" not in report.findings[0].message  # battery device: no mains MOPP claim
 
 
 def test_capacitor_voltage_rating():

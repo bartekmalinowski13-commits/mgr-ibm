@@ -214,6 +214,7 @@ def reference_bom(project: Project, out: Path) -> None:
     """Write the reference BOM (grouped lines) and the flat expected component list."""
     v_rows: dict[tuple[str, ...], list[str]] = defaultdict(list)
     meta: dict[tuple[str, ...], Part] = {}
+    alternates: dict[tuple[str, ...], set[str]] = defaultdict(set)
     flat: list[dict[str, object]] = []
 
     def instances_of(file: str) -> list[str]:
@@ -237,9 +238,12 @@ def reference_bom(project: Project, out: Path) -> None:
                 mpn = part.ref_mpn or part.mpn
                 man = part.ref_manufacturer or part.manufacturer
                 dnp = part.dnp or part.dnp_as_field
-                key = (part.value, part.footprint, mpn, man, str(dnp), part.alternates)
+                # one line per physical part: identical parts share a line no matter how
+                # the schematic annotated them (alternates are merged, not part of the key)
+                key = (part.value, part.footprint, mpn, man, str(dnp))
                 v_rows[key].append(ref)
                 meta[key] = part
+                alternates[key].update(part.alternates.split())
                 flat.append(
                     {
                         "refdes": ref,
@@ -270,7 +274,8 @@ def reference_bom(project: Project, out: Path) -> None:
             ]
         )
         for key, refs in rows:
-            value, fp, mpn, man, dnp, alts = key
+            value, fp, mpn, man, dnp = key
+            alts = " ".join(sorted(alternates[key]))
             w.writerow(
                 [
                     " ".join(sorted(refs, key=nat)),

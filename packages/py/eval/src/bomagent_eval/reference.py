@@ -10,7 +10,9 @@ from __future__ import annotations
 import csv
 import io
 from pathlib import Path
+from typing import Literal
 
+from bomagent_bom.dnp import parse_dnp
 from bomagent_bom.model import BomItem
 from bomagent_bom.packages import package_from_footprint
 from bomagent_bom.refdes import kind_of
@@ -25,6 +27,18 @@ def _col(headers: list[str], key: str) -> int | None:
         if h.strip().casefold() in ALIASES[key]:
             return i
     return None
+
+
+def _dnp(headers: list[str], col: int | None, cell: str) -> bool:
+    if col is None:
+        return False
+    column: Literal["dnp", "populate"] = (
+        "populate" if headers[col].strip().casefold() == "populate" else "dnp"
+    )
+    parsed = parse_dnp(cell, column)
+    if parsed is None:
+        raise ValueError(f"reference BOM: unrecognised DNP value {cell!r}")
+    return parsed
 
 
 def load_reference_csv(text: str) -> list[BomItem]:
@@ -65,7 +79,7 @@ def load_reference_csv(text: str) -> list[BomItem]:
                 package=package_from_footprint(footprint),
                 manufacturer=get(row, cols["manufacturer"]),
                 mpn=get(row, cols["mpn"]),
-                dnp=get(row, cols["dnp"]).casefold() in {"dnp", "yes", "true", "1", "x"},
+                dnp=_dnp(headers, cols["dnp"], get(row, cols["dnp"])),
                 fields=fields,
             )
         )

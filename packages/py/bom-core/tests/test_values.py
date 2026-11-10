@@ -3,7 +3,7 @@ from __future__ import annotations
 from decimal import Decimal
 
 import pytest
-from hypothesis import given
+from hypothesis import assume, given
 from hypothesis import strategies as st
 
 from bomagent_bom.values import (
@@ -32,7 +32,16 @@ from bomagent_bom.values import (
         ("1R", None, "1 Ω"),
         ("0R", None, "0 Ω"),
         ("R47", None, "470 mΩ"),
-        ("4E7", None, "4.7 Ω"),
+        ("4R7", "inductor", "4.7 µH"),
+        ("4R7", "capacitor", "4.7 pF"),
+        ("4.7 UF", "capacitor", "4.7 µF"),
+        ("47 PF", "capacitor", "47 pF"),
+        ("0.1 MFD", "capacitor", "100 nF"),
+        ("2.2 MEG", "resistor", "2.2 MΩ"),
+        ("4.7 UH", "inductor", "4.7 µH"),
+        ("10 k\u2126", None, "10 kΩ"),
+        ("6V3", None, "6.3 V"),
+        ("1mF", None, "1 mF"),
         ("1M5", "resistor", "1.5 MΩ"),
         ("100M", "resistor", "100 MΩ"),
         ("100n", "capacitor", "100 nF"),
@@ -76,16 +85,29 @@ def test_bare_rkm_without_kind_is_ambiguous():
         parse_quantity("4u7")
 
 
-@pytest.mark.parametrize("bad", ["", "  ", "k10", "10xF", "/"])
+@pytest.mark.parametrize(
+    "bad",
+    ["", "  ", "k10", "10xF", "/", "1,000pF", "2,200uF", "1,500", "1E3", "10MF", "10 parsecs"],
+)
 def test_invalid_values_raise(bad):
     with pytest.raises(ValueParseError):
         parse_value(bad, "resistor")
 
 
-def test_unknown_trailing_words_are_kept_as_extra():
-    pv = parse_value("10 parsecs", "resistor")
-    assert format_quantity(pv.quantity) == "10 Ω"
-    assert pv.extra == ("parsecs",)
+def test_unknown_words_after_a_unit_are_kept_as_extra():
+    pv = parse_value("10k thin-film", "resistor")
+    assert format_quantity(pv.quantity) == "10 kΩ"
+    assert pv.extra == ("thin-film",)
+
+
+@pytest.mark.parametrize("text", ["10k 1 %", "10k ±1%", "10k +/-1%", "10k ± 1 %"])
+def test_tolerance_notations(text):
+    assert parse_value(text, "resistor").tolerance_percent == Decimal("1")
+
+
+def test_rkm_voltage_attribute():
+    pv = parse_value("100n/6V3", "capacitor")
+    assert pv.voltage_rating == Quantity(Decimal("6.3"), "V")
 
 
 def test_comma_separates_attributes_but_not_decimals():
@@ -109,6 +131,8 @@ _PREFIXED = st.builds(
 
 @given(value=_PREFIXED, unit=st.sampled_from(["Ω", "F", "H"]))
 def test_format_parse_roundtrip(value, unit):
+    # mega-farad / mega-henry do not exist in BOMs and "MF" is rejected as ambiguous
+    assume(not (unit in {"F", "H"} and value >= 1000))
     q = Quantity(value, unit)
     text = format_quantity(q)
     back = parse_quantity(text)

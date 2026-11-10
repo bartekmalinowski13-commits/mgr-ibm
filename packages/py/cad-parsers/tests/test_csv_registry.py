@@ -24,7 +24,10 @@ def test_reference_bom_fixture_parses():
     by_ref = {c.refdes: c for c in design.components}
     assert by_ref["R9"].dnp is True
     assert by_ref["R5"].field("MPN") == "RC0603FR-07100KL"
-    assert by_ref["R5"].field("MPN Alternates") == "ERJ-3EKF1003V CRCW0603100KFKEA"
+    assert set(by_ref["R5"].field("MPN Alternates").split()) == {
+        "ERJ-3EKF1003V",
+        "CRCW0603100KFKEA",
+    }
     assert design.limitations == []
 
 
@@ -48,9 +51,20 @@ def test_semicolon_csv_with_preamble_qty_mismatch_and_duplicates():
 
 
 def test_dnp_column():
-    text = "Reference,Value,DNP\nR1,10k,\nR2,10k,DNP\n"
+    text = "Reference,Value,DNP\nR1,10k,\nR2,10k,DNP\nR3,1k,N\nR4,1k,n/a\n"
     design = CsvBomParser().parse([FileRef("b.csv", text.encode())])
-    assert [c.dnp for c in design.components] == [False, True]
+    assert [c.dnp for c in design.components] == [False, True, False, False]
+    assert any("unrecognised DNP value 'n/a'" in m for m in design.limitations)
+
+
+def test_specific_mpn_header_wins_and_range_bomb_is_capped():
+    text = "Part Number,Reference,Manufacturer Part Number\nINT-1,R1,RC0603FR-0710KL\n"
+    design = CsvBomParser().parse([FileRef("b.csv", text.encode())])
+    assert design.components[0].field("MPN") == "RC0603FR-0710KL"
+    bomb = "Reference,Value\n" + "\n".join(f"R{i}000-R{i}999,1k" for i in range(1, 120))
+    with pytest.raises(ParseError) as exc:
+        CsvBomParser().parse([FileRef("b.csv", bomb.encode())])
+    assert exc.value.code == "file.too_large"
 
 
 def test_csv_without_designator_column():
