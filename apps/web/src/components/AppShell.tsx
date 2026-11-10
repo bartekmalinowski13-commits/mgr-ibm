@@ -158,6 +158,9 @@ function Sidebar() {
         <NavItem to="/compare" icon="compare">
           {t("nav.compare")}
         </NavItem>
+        <NavItem to="/knowledge" icon="book">
+          {t("nav.knowledge")}
+        </NavItem>
         <NavItem to="/audit" icon="shield">
           {t("nav.audit")}
         </NavItem>

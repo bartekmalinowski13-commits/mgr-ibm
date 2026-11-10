@@ -4,6 +4,9 @@ import type {
   BomVersion,
   Design,
   DesignCreated,
+  KbDocument,
+  KbDocumentCreated,
+  KbKind,
   Organisation,
   Page,
   Project,
@@ -29,6 +32,30 @@ export interface Api {
   getTrace(runId: string): Promise<RunTrace>;
   watchRun(runId: string, onUpdate: (run: Run) => void): () => void;
   auditEvents(): Promise<Page<AuditEntry>>;
+  listKbDocuments(): Promise<Page<KbDocument>>;
+  uploadKbDocument(
+    file: File,
+    meta: { title: string; kind: KbKind; manufacturer: string },
+  ): Promise<KbDocument>;
+}
+
+export const KB_MIME: Record<
+  string,
+  "application/pdf" | "text/markdown" | "text/plain" | "text/html"
+> = {
+  pdf: "application/pdf",
+  md: "text/markdown",
+  txt: "text/plain",
+  html: "text/html",
+};
+
+export function kbMimeType(filename: string) {
+  return KB_MIME[filename.split(".").pop()?.toLowerCase() ?? ""];
+}
+
+async function sha256Hex(file: File): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", await file.arrayBuffer());
+  return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
 export class ApiError extends Error {
@@ -144,5 +171,27 @@ export class HttpApi implements Api {
   }
   auditEvents() {
     return request<Page<AuditEntry>>("/v1/audit/events?limit=100");
+  }
+  listKbDocuments() {
+    return request<Page<KbDocument>>("/v1/kb/documents?limit=100");
+  }
+  async uploadKbDocument(file: File, meta: { title: string; kind: KbKind; manufacturer: string }) {
+    const mime = kbMimeType(file.name);
+    if (!mime) throw new ApiError(422, "Unsupported file type");
+    const created = await request<KbDocumentCreated>("/v1/kb/documents", {
+      method: "POST",
+      body: JSON.stringify({
+        filename: file.name,
+        title: meta.title,
+        kind: meta.kind,
+        manufacturer: meta.manufacturer,
+        mime_type: mime,
+        sha256: await sha256Hex(file),
+        size_bytes: file.size,
+      }),
+    });
+    if (!created.upload) return created; // same file already in the knowledge base
+    await fetch(created.upload.url, { method: "PUT", body: file });
+    return request<KbDocument>(`/v1/kb/documents/${created.id}/complete`, { method: "POST" });
   }
 }

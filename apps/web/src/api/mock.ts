@@ -2,12 +2,14 @@ import bomA from "../mocks/data/ecg-A-bom.json";
 import resultA from "../mocks/data/ecg-A-result.json";
 import bomB from "../mocks/data/ecg-B-bom.json";
 import resultB from "../mocks/data/ecg-B-result.json";
-import { type Api, ApiError } from "./client";
+import { type Api, ApiError, kbMimeType } from "./client";
 import type {
   AuditEntry,
   BomVersion,
   Design,
   DesignCreated,
+  KbDocument,
+  KbKind,
   Organisation,
   Page,
   Project,
@@ -34,6 +36,7 @@ interface OrgState {
   boms: Record<string, BomVersion>;
   traces: Record<string, RunTrace>;
   audit: AuditEntry[];
+  kb: KbDocument[];
 }
 
 function seed(): OrgState {
@@ -80,6 +83,11 @@ function seed(): OrgState {
     boms: { [runA]: bomA as unknown as BomVersion, [runB]: bomB as unknown as BomVersion },
     traces: { [runA]: resultA as unknown as RunTrace, [runB]: resultB as unknown as RunTrace },
     audit: [],
+    kb: [
+      kbDoc("AD8232 – karta katalogowa", "datasheet", "Analog Devices", "tenant", t0),
+      kbDoc("Wytyczne doboru złączy elektrod", "application_note", "", "tenant", t0),
+      ...GLOBAL_KB(t0),
+    ],
   };
   let seq = 0;
   for (const [action, type, id, actor] of [
@@ -263,8 +271,65 @@ export class MockApi implements Api {
   async auditEvents() {
     return { items: [...this.s.audit] };
   }
+  async listKbDocuments() {
+    return { items: [...this.s.kb] };
+  }
+  async uploadKbDocument(file: File, meta: { title: string; kind: KbKind; manufacturer: string }) {
+    if (!kbMimeType(file.name)) throw new ApiError(422, "Unsupported file type");
+    const doc: KbDocument = {
+      ...kbDoc(meta.title, meta.kind, meta.manufacturer, "tenant", now()),
+      mime_type: kbMimeType(file.name) ?? "application/pdf",
+      size_bytes: file.size,
+      status: "indexing",
+      indexed_at: null,
+    };
+    this.s.kb.unshift(doc);
+    this.audit("kb.document.created", "kb_document", doc.id);
+    setTimeout(() => {
+      Object.assign(doc, { status: "indexed", indexed_at: now() });
+    }, 900);
+    return { ...doc };
+  }
 }
 
 function emptyState(): OrgState {
-  return { projects: [], designs: [], runs: [], boms: {}, traces: {}, audit: [] };
+  return {
+    projects: [],
+    designs: [],
+    runs: [],
+    boms: {},
+    traces: {},
+    audit: [],
+    kb: GLOBAL_KB(now()),
+  };
 }
+
+function kbDoc(
+  title: string,
+  kind: KbDocument["kind"],
+  manufacturer: string,
+  scope: KbDocument["scope"],
+  at: string,
+): KbDocument {
+  return {
+    id: uid(),
+    scope,
+    title,
+    kind,
+    manufacturer,
+    mime_type: "application/pdf",
+    sha256: "0".repeat(64),
+    size_bytes: 240_000 + title.length * 1000,
+    status: "indexed",
+    created_by: scope === "global" ? "platform" : "bartek",
+    created_at: at,
+    indexed_at: at,
+    error: null,
+  };
+}
+
+/* The shared corpus every organisation can read (read-only for tenants). */
+const GLOBAL_KB = (at: string) => [
+  kbDoc("IEC 60601-1 – streszczenie wymagań dla BOM", "standard", "", "global", at),
+  kbDoc("Kondensatory MLCC – noty doboru", "application_note", "Murata", "global", at),
+];

@@ -2,7 +2,16 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 
 /* Smoke: every screen renders and has no serious accessibility violations (WCAG 2.1 AA). */
-const SCREENS = ["/", "/projects", "/runs", "/compare", "/audit", "/settings", "/notifications"];
+const SCREENS = [
+  "/",
+  "/projects",
+  "/runs",
+  "/compare",
+  "/knowledge",
+  "/audit",
+  "/settings",
+  "/notifications",
+];
 
 for (const path of SCREENS) {
   test(`screen ${path} renders without a11y violations`, async ({ page }) => {

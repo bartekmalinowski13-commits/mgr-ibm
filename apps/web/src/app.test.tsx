@@ -57,6 +57,13 @@ describe("app (mock API)", () => {
     expect(screen.queryAllByRole("link", { name: /Monitor EKG, 1 odprowadzenie/ })).toHaveLength(0);
   });
 
+  it("lists the organisation's documents next to the shared corpus", async () => {
+    renderApp("/knowledge");
+    expect(await screen.findByText("AD8232 – karta katalogowa")).toBeInTheDocument();
+    expect(screen.getAllByText("Wspólny korpus").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Twoja organizacja").length).toBeGreaterThan(0);
+  });
+
   it("starts both variants and lands on the comparison", async () => {
     const { router } = renderApp("/runs");
     const [openDialog] = await screen.findAllByRole("button", { name: "Nowy przebieg" });

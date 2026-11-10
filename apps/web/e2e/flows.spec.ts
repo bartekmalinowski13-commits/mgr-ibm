@@ -70,3 +70,25 @@ test("interface switches to English", async ({ page }) => {
   await page.reload();
   await expect(page.getByRole("link", { name: "Runs" })).toBeVisible();
 });
+
+test("knowledge base: add a datasheet, refuse an unsupported format", async ({ page }) => {
+  await page.goto("/knowledge");
+  await expect(page.getByText("Wspólny korpus").first()).toBeVisible();
+  await page.getByLabel("Tytuł").fill("MAX30102 – karta katalogowa");
+  await page.getByLabel("Producent").fill("Analog Devices");
+  await page.getByTestId("kb-file").setInputFiles({
+    name: "max30102.pdf",
+    mimeType: "application/pdf",
+    buffer: Buffer.from("%PDF-1.7"),
+  });
+  const row = page.getByRole("row", { name: /MAX30102 – karta katalogowa/ });
+  await expect(row).toContainText("Twoja organizacja");
+  await expect(row).toContainText("Gotowy");
+
+  await page.getByTestId("kb-file").setInputFiles({
+    name: "notes.docx",
+    mimeType: "application/octet-stream",
+    buffer: Buffer.from("x"),
+  });
+  await expect(page.getByRole("alert")).toContainText("format nie jest obsługiwany");
+});

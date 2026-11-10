@@ -8,6 +8,7 @@ import {
 import { AppShell } from "./components/AppShell";
 import { EmptyState } from "./components/ui";
 import { ComparePage } from "./pages/Compare";
+import { KnowledgePage } from "./pages/Knowledge";
 import { AuditPage, NotificationsPage, SettingsPage } from "./pages/Misc";
 import { ProjectDetailPage, ProjectsPage } from "./pages/Projects";
 import { RunPage } from "./pages/RunPage";
@@ -42,6 +43,7 @@ const routes = [
       b: typeof s.b === "string" ? s.b : undefined,
     }),
   }),
+  createRoute({ getParentRoute: () => shell, path: "/knowledge", component: KnowledgePage }),
   createRoute({ getParentRoute: () => shell, path: "/audit", component: AuditPage }),
   createRoute({ getParentRoute: () => shell, path: "/settings", component: SettingsPage }),
 ] as const;
