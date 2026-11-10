@@ -1208,6 +1208,11 @@ export interface components {
             limits: {
                 [key: string]: number;
             };
+            /**
+             * Plan
+             * @enum {string}
+             */
+            plan: "pilot" | "team" | "business" | "enterprise";
             /** Usage */
             usage: {
                 [key: string]: number;

@@ -204,7 +204,7 @@ export function Shell() {
                   })}
                 </span>
                 <span className="rounded-full bg-llm/10 px-2.5 py-0.5 font-medium text-llm">
-                  {t("plan.pill", { plan: "Pilot" })}
+                  {t("plan.pill", { plan: t(`plan.names.${usage.data.plan}`) })}
                 </span>
               </Link>
             ) : null}

@@ -1873,6 +1873,16 @@
             "title": "Limits",
             "type": "object"
           },
+          "plan": {
+            "enum": [
+              "pilot",
+              "team",
+              "business",
+              "enterprise"
+            ],
+            "title": "Plan",
+            "type": "string"
+          },
           "usage": {
             "additionalProperties": {
               "type": "number"
@@ -1882,6 +1892,7 @@
           }
         },
         "required": [
+          "plan",
           "usage",
           "limits"
         ],

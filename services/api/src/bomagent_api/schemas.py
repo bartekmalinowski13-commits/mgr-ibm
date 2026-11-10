@@ -186,6 +186,7 @@ class ModelOption(_M):
 
 
 class UsageReport(_M):
+    plan: Literal["pilot", "team", "business", "enterprise"]
     usage: dict[str, float]
     limits: dict[str, float]
 

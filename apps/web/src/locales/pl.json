@@ -49,6 +49,12 @@
   },
   "plan": {
     "pill": "Plan {{plan}}",
+    "names": {
+      "pilot": "Pilot",
+      "team": "Team",
+      "business": "Business",
+      "enterprise": "Enterprise"
+    },
     "budget": "LLM w tym miesiącu: {{used}} z {{limit}}"
   },
   "start": {

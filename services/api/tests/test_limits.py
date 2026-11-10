@@ -84,6 +84,7 @@ async def test_project_run_and_org_quotas_and_usage(client, monkeypatch, app_eng
     assert report["usage"]["files_uploaded"] == 1
     assert report["usage"]["bytes_uploaded"] == 5
     assert report["limits"]["max_projects"] == 1
+    assert report["plan"] == "pilot"
 
     for n in range(2):
         await _org(client, auth, f"q{n}-{s}")

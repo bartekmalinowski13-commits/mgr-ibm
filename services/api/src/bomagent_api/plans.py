@@ -115,6 +115,20 @@ async def check_new_run(conn: AsyncConnection) -> None:
         raise quota_exceeded("monthly LLM budget of the plan is used up")
 
 
+async def plan_name(conn: AsyncConnection) -> str:
+    return str(
+        (
+            await conn.execute(
+                text("SELECT plan FROM tenancy.tenants WHERE id = app.current_tenant_id()")
+            )
+        ).scalar()
+    )
+
+
 async def usage_report(conn: AsyncConnection) -> dict[str, Any]:
     plan = await plan_of(conn)
-    return {"usage": await month_to_date(conn), "limits": plan.__dict__}
+    return {
+        "plan": await plan_name(conn),
+        "usage": await month_to_date(conn),
+        "limits": plan.__dict__,
+    }
