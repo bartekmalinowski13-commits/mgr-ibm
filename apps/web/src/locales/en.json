@@ -1,5 +1,7 @@
 {
-  "app": { "name": "BOM Agent" },
+  "app": {
+    "name": "BOM Agent"
+  },
   "common": {
     "cancel": "Cancel",
     "close": "Close",
@@ -72,10 +74,22 @@
       "completedEmpty": "BOMs ready for review will show up here."
     },
     "templates": {
-      "ecg": { "title": "Wearable ECG", "hint": "BF part, battery" },
-      "pulseox": { "title": "Pulse oximeter", "hint": "BF part, USB" },
-      "eeg": { "title": "EEG amplifier", "hint": "CF part, battery" },
-      "infusion": { "title": "Infusion pump", "hint": "CF part, mains" }
+      "ecg": {
+        "title": "Wearable ECG",
+        "hint": "BF part, battery"
+      },
+      "pulseox": {
+        "title": "Pulse oximeter",
+        "hint": "BF part, USB"
+      },
+      "eeg": {
+        "title": "EEG amplifier",
+        "hint": "CF part, battery"
+      },
+      "infusion": {
+        "title": "Infusion pump",
+        "hint": "CF part, mains"
+      }
     }
   },
   "projects": {
@@ -96,7 +110,11 @@
     "noRuns": "This project has no runs yet.",
     "startRun": "Start run",
     "components": "{{count}} components",
-    "fileStatus": { "uploaded": "Checking", "parsed": "Ready", "failed": "Rejected" }
+    "fileStatus": {
+      "uploaded": "Checking",
+      "parsed": "Ready",
+      "failed": "Rejected"
+    }
   },
   "newRun": {
     "title": "New run",
@@ -116,7 +134,12 @@
     "openWeight": "open weights",
     "device": "Device name",
     "appliedPart": "Applied part",
-    "appliedParts": { "none": "None", "B": "Type B", "BF": "Type BF", "CF": "Type CF" },
+    "appliedParts": {
+      "none": "None",
+      "B": "Type B",
+      "BF": "Type BF",
+      "CF": "Type CF"
+    },
     "power": "Power source",
     "powers": {
       "battery": "Battery",
@@ -193,7 +216,10 @@
     "parser": "Read from the file ({{parser}})",
     "user": "Changed by {{user}}"
   },
-  "runs": { "title": "Runs", "empty": "No runs yet. Start the first one from Home." },
+  "runs": {
+    "title": "Runs",
+    "empty": "No runs yet. Start the first one from Home."
+  },
   "audit": {
     "title": "Audit log",
     "objectType": "Object",
@@ -209,7 +235,12 @@
   },
   "settings": {
     "title": "Organisation settings",
-    "tabs": { "members": "Members", "keys": "API keys", "usage": "Usage and limits", "sso": "SSO" },
+    "tabs": {
+      "members": "Members",
+      "keys": "API keys",
+      "usage": "Usage and limits",
+      "sso": "SSO"
+    },
     "members": "Members",
     "role": "Role",
     "roles": {
@@ -253,5 +284,20 @@
   "errors": {
     "notMember": "You do not have access to this organisation. Choose another one.",
     "notFound": "This item was not found. It may have been deleted or belong to another organisation."
+  },
+  "compare": {
+    "title": "Variant comparison",
+    "open": "Compare variants A and B",
+    "needTwo": "Comparing needs two finished runs of this project. Start a run in “Both and compare” mode.",
+    "left": "First run",
+    "right": "Second run",
+    "metrics": "Run metrics",
+    "metric": "Metric",
+    "lines": "BOM lines",
+    "findings": "Validation findings",
+    "differences_one": "{{count}} difference between the variants",
+    "differences_other": "{{count}} differences between the variants",
+    "same": "Both variants decided the same for every designator.",
+    "missing": "Missing in this variant"
   }
 }

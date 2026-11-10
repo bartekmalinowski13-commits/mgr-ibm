@@ -46,3 +46,26 @@ describe("formatEur", () => {
     expect(formatEur(12.5, "en-GB")).toBe("€12.50");
   });
 });
+
+describe("diffBoms", () => {
+  it("lists designators whose value, manufacturer or MPN differ, or that one variant lacks", async () => {
+    const { diffBoms } = await import("../screens/CompareScreen");
+    const line = (refdes: string[], mpn: string) => ({
+      line: 1,
+      refdes,
+      quantity: refdes.length,
+      value: "10k",
+      manufacturer: "Yageo",
+      mpn,
+      provenance: {},
+    });
+    const a = { items: [line(["R1", "R2"], "RC0603FR-0710KL"), line(["C1"], "X")] } as never;
+    const b = { items: [line(["R1"], "RC0603FR-0710KL"), line(["R2"], "ERJ-3EKF1002V")] } as never;
+    const diffs = diffBoms(a, b);
+    expect(diffs.map((d) => [d.refdes, d.changed])).toEqual([
+      ["C1", ["value", "manufacturer", "mpn"]],
+      ["R1", []],
+      ["R2", ["mpn"]],
+    ]);
+  });
+});

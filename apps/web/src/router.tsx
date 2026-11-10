@@ -6,6 +6,7 @@ import {
   Outlet,
 } from "@tanstack/react-router";
 import { AuditScreen } from "./screens/AuditScreen";
+import { CompareScreen } from "./screens/CompareScreen";
 import { LoginScreen } from "./screens/LoginScreen";
 import { OnboardingScreen } from "./screens/OnboardingScreen";
 import { ProjectScreen } from "./screens/ProjectScreen";
@@ -40,6 +41,15 @@ export const projectRoute = createRoute({
   path: "/projects/$projectId",
   component: ProjectScreen,
 });
+export const compareRoute = createRoute({
+  getParentRoute: () => app,
+  path: "/projects/$projectId/compare",
+  component: CompareScreen,
+  validateSearch: (search: Record<string, unknown>): { a?: string; b?: string } => ({
+    a: typeof search.a === "string" ? search.a : undefined,
+    b: typeof search.b === "string" ? search.b : undefined,
+  }),
+});
 const runs = createRoute({ getParentRoute: () => app, path: "/runs", component: RunsScreen });
 export const runRoute = createRoute({
   getParentRoute: () => app,
@@ -57,7 +67,17 @@ export const router = createRouter({
   routeTree: root.addChildren([
     login,
     onboarding,
-    app.addChildren([index, start, projects, projectRoute, runs, runRoute, audit, settings]),
+    app.addChildren([
+      index,
+      start,
+      projects,
+      projectRoute,
+      compareRoute,
+      runs,
+      runRoute,
+      audit,
+      settings,
+    ]),
   ]),
   defaultPreload: "intent",
 });

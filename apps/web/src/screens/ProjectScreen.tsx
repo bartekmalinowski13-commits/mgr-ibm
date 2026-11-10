@@ -1,5 +1,6 @@
 import { Button, StatusBadge } from "@bomagent/ui";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { UploadCloud } from "lucide-react";
 import { type DragEvent, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -61,6 +62,10 @@ export function ProjectScreen() {
 
   if (project.isError) return <LoadError error={project.error} />;
   const ready = files.data?.some((f) => f.status === "parsed");
+  const finished = new Set(
+    (runs.data?.items ?? []).filter((r) => r.status === "completed").map((r) => r.variant),
+  );
+  const comparable = finished.has("A") && finished.has("B");
 
   return (
     <div className="flex flex-col gap-8">
@@ -137,9 +142,21 @@ export function ProjectScreen() {
       </section>
 
       <section aria-labelledby="runs-title" className="flex flex-col gap-3">
-        <h2 id="runs-title" className="font-display text-2xl font-bold">
-          {t("projects.runs")}
-        </h2>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 id="runs-title" className="font-display text-2xl font-bold">
+            {t("projects.runs")}
+          </h2>
+          {comparable ? (
+            <Link
+              to="/projects/$projectId/compare"
+              params={{ projectId }}
+              search={{}}
+              className="font-medium underline underline-offset-4"
+            >
+              {t("compare.open")}
+            </Link>
+          ) : null}
+        </div>
         {runs.data?.items.length ? (
           <RunTable runs={runs.data.items} />
         ) : (

@@ -18,5 +18,7 @@
 ## Zakres v1 (zrobione)
 Logowanie (lokalne), onboarding (organizacja, dołączenie kodem zaproszenia), shell z przełącznikiem organizacji, Start (powitanie, szablony urządzeń z własnymi ilustracjami SVG, karty z pustymi stanami), Projekty (lista, utworzenie, upload drag & drop, statusy plików), modal Nowy przebieg (projekt, wariant A/B/oba, model z katalogu, wymagania urządzenia), Przebieg na żywo (SSE, liczniki), BOM (tabela, filtr „tylko z uwagami”, panel pochodzenia, poprawka → nowa wersja + wiedza organizacji), eksport CSV, Log audytu (filtr, weryfikacja łańcucha), Ustawienia (członkowie i role, zaproszenia, klucze API z rotacją, zużycie i limity, SSO – informacja), PL/EN.
 
+Porównanie wariantów A/B: metryki przebiegów (pozycje, wywołania LLM, tokeny, koszt, uwagi) i różnice per oznaczenie (wartość, producent, MPN) z kolorem pochodzenia.
+
 ## Do zrobienia w M5 (kolejne kroki)
-Porównanie wariantów A/B (ekran różnic vs BOM referencyjny), Baza wiedzy (dokumenty organizacji, stan indeksowania – wymaga endpointów KB w API), oś kroków przebiegu z rodzajem kroku (wymaga zdarzeń kroków w SSE), logowanie Cognito (PKCE) razem z M6, zrzuty ekranów w PR.
+Porównanie z BOM referencyjnym (P/R/F1 – wymaga wgrania referencji i endpointu ewaluacji), Baza wiedzy (dokumenty organizacji, stan indeksowania – wymaga endpointów KB w API), oś kroków przebiegu z rodzajem kroku (wymaga zdarzeń kroków w SSE), logowanie Cognito (PKCE) razem z M6, zrzuty ekranów w PR.
