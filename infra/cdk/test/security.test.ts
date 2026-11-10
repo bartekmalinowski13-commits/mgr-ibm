@@ -181,3 +181,40 @@ describe("edge", () => {
     expect(dist).toContain("WebACLId");
   });
 });
+
+describe("operations", () => {
+  const { stacks } = synthEnv("prod");
+
+  it("GuardDuty scans uploads for malware and monitors ECS at runtime", () => {
+    const sec = Template.fromStack(stacks.security);
+    sec.hasResourceProperties("AWS::GuardDuty::MalwareProtectionPlan", {
+      ProtectedResource: { S3Bucket: { BucketName: "bomagent-prod-files-000000000000" } },
+    });
+    expect(JSON.stringify(sec.toJSON())).toContain("ECS_FARGATE_AGENT_MANAGEMENT");
+    sec.resourceCountIs("AWS::SecurityHub::Standard", 2);
+    sec.resourceCountIs("AWS::AccessAnalyzer::Analyzer", 1);
+  });
+
+  it("backups are copied to a vault in eu-west-1", () => {
+    expect(stacks.backupCopy.region).toBe("eu-west-1");
+    const plan = JSON.stringify(
+      Template.fromStack(stacks.security).findResources("AWS::Backup::BackupPlan"),
+    );
+    expect(plan).toContain("CopyActions");
+  });
+
+  it("the GitHub deploy role is limited to one repository environment and CDK bootstrap roles", () => {
+    const cicd = JSON.stringify(Template.fromStack(stacks.cicd).toJSON());
+    expect(cicd).toContain("repo:bomagent/mgr-ibm:environment:prod");
+    expect(cicd).toContain("cdk-hnb659fds-*-role-000000000000-*");
+    expect(cicd).not.toContain("AdministratorAccess");
+  });
+
+  it("dead-letter queues raise alarms", () => {
+    const obs = Template.fromStack(stacks.observability);
+    expect(Object.keys(obs.findResources("AWS::CloudWatch::Alarm")).length).toBeGreaterThanOrEqual(
+      6,
+    );
+    obs.hasResourceProperties("AWS::SNS::Topic", { KmsMasterKeyId: {} });
+  });
+});

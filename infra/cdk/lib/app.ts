@@ -6,6 +6,12 @@ import { DataStack } from "./data-stack";
 import { EdgeStack, WafStack } from "./edge-stack";
 import { IdentityStack } from "./identity-stack";
 import { NetworkStack } from "./network-stack";
+import {
+  BackupVaultStack,
+  CicdStack,
+  ObservabilityStack,
+  SecurityBaselineStack,
+} from "./operations-stacks";
 
 export interface BomAgentStacks {
   network: NetworkStack;
@@ -14,6 +20,10 @@ export interface BomAgentStacks {
   compute: ComputeStack;
   waf: WafStack;
   edge: EdgeStack;
+  observability: ObservabilityStack;
+  backupCopy: BackupVaultStack;
+  security: SecurityBaselineStack;
+  cicd: CicdStack;
 }
 
 /** Builds every stack of one environment; used by bin/app.ts and the tests. */
@@ -52,5 +62,24 @@ export function buildApp(app: App, config?: EnvConfig): BomAgentStacks {
     originSecret: compute.originSecret,
     webAclArn: waf.webAclArn,
   });
-  return { network, data, identity, compute, waf, edge };
+  const observability = new ObservabilityStack(app, `${prefix}-Observability`, {
+    env,
+    config: cfg,
+    data,
+    compute,
+  });
+  const backupCopy = new BackupVaultStack(app, `${prefix}-BackupCopy`, {
+    env: { account: cfg.account, region: cfg.backupRegion },
+    crossRegionReferences: true,
+    config: cfg,
+  });
+  const security = new SecurityBaselineStack(app, `${prefix}-Security`, {
+    env,
+    crossRegionReferences: true,
+    config: cfg,
+    data,
+    copyVault: backupCopy.vault,
+  });
+  const cicd = new CicdStack(app, `${prefix}-Cicd`, { env, config: cfg });
+  return { network, data, identity, compute, waf, edge, observability, backupCopy, security, cicd };
 }
