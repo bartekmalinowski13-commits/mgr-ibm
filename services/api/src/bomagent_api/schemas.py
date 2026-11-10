@@ -139,6 +139,44 @@ class ChainStatus(_M):
     first_broken_seq: int | None
 
 
+Role = Literal["owner", "admin", "engineer", "reviewer", "viewer"]
+
+
+class Member(_M):
+    user_sub: str
+    email: str
+    display_name: str
+    roles: list[Role]
+    created_at: datetime
+
+
+class MemberUpdate(_M):
+    roles: list[Role] = Field(min_length=1, max_length=5)
+
+
+class InvitationCreate(_M):
+    email: str = Field(min_length=3, max_length=254, pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+    roles: list[Role] = Field(min_length=1, max_length=5)
+
+
+class Invitation(_M):
+    id: uuid.UUID
+    email: str
+    roles: list[Role]
+    status: Literal["pending", "accepted", "revoked"]
+    invited_by: str
+    created_at: datetime
+    expires_at: datetime
+
+
+class InvitationCreated(Invitation):
+    token: str = Field(description="Secret for the invitee; returned only once.")
+
+
+class InvitationAccept(_M):
+    token: str = Field(min_length=20, max_length=200)
+
+
 class Page[T](_M):
     items: list[T]
     next_cursor: str | None
@@ -148,6 +186,7 @@ class DevToken(_M):
     sub: str = Field(min_length=1, max_length=255)
     email: str
     name: str = ""
+    email_verified: bool = True
 
 
 class Token(_M):

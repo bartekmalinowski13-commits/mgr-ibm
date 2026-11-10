@@ -105,3 +105,77 @@ async def test_memberships_lookup_returns_only_the_users_own(
     async with tenant_transaction(app_engine, a.tenant_id) as conn:
         in_a = (await conn.execute(text("SELECT user_sub FROM tenancy.memberships"))).scalars()
         assert in_a.all() == ["alice"]
+
+
+@pytest.mark.parametrize(
+    ("sql", "params"),
+    [
+        (
+            "INSERT INTO runs.runs (id, tenant_id, project_id, variant, runtime, model_id,"
+            " created_by) VALUES (:i, :t, :p, 'B', 'langgraph_b', 'fake-closed', 'u')",
+            "project",
+        ),
+        (
+            "INSERT INTO projects.files (id, tenant_id, project_id, name, object_key, sha256,"
+            " size_bytes, created_by) VALUES (:i, :t, :p, 'f', 'k', repeat('a', 64), 1, 'u')",
+            "project",
+        ),
+        (
+            "INSERT INTO bom.versions (id, tenant_id, run_id, version, content, created_by)"
+            " VALUES (:i, :t, :p, 1, '{}'::jsonb, 'u')",
+            "run",
+        ),
+    ],
+)
+async def test_children_cannot_reference_foreign_parent_ids(app_engine, make_tenant, sql, params):
+    """FK checks bypass RLS: composite (tenant_id, id) keys keep references in-tenant."""
+    a, b = await make_tenant(), await make_tenant()
+    pid_b, rid_b = await _project(app_engine, b)
+    parent = pid_b if params == "project" else rid_b
+    with pytest.raises(DBAPIError, match="foreign key"):
+        async with tenant_transaction(app_engine, a.tenant_id) as conn:
+            await conn.execute(text(sql), {"i": uuid.uuid4(), "t": a.tenant_id, "p": parent})
+
+
+async def test_invitations_visible_only_to_tenant_or_token_holder(app_engine, make_tenant):
+    import hashlib
+
+    a, b = await make_tenant(), await make_tenant()
+    token_hash = hashlib.sha256(b"secret-token").hexdigest()
+    async with tenant_transaction(app_engine, a.tenant_id) as conn:
+        await conn.execute(
+            text(
+                "INSERT INTO tenancy.invitations (id, tenant_id, email, roles, token_hash,"
+                " invited_by, expires_at) VALUES (:i, :t, 'carol@x.eu', ARRAY['viewer'], :h,"
+                " 'u', now() + interval '1 day')"
+            ),
+            {"i": uuid.uuid4(), "t": a.tenant_id, "h": token_hash},
+        )
+
+    async def visible(email: str, digest: str) -> int:
+        async with platform_transaction(app_engine) as conn:
+            await conn.execute(
+                text(
+                    "SELECT set_config('app.user_email', :e, true),"
+                    " set_config('app.invite_token_hash', :h, true)"
+                ),
+                {"e": email, "h": digest},
+            )
+            return (await conn.execute(text("SELECT count(*) FROM tenancy.invitations"))).scalar()
+
+    assert await visible("", "") == 0
+    assert await visible("carol@x.eu", "") == 0  # e-mail alone is not enough
+    assert await visible("eve@x.eu", token_hash) == 0  # token alone is not enough
+    assert await visible("CAROL@x.eu", token_hash) == 1
+    async with tenant_transaction(app_engine, b.tenant_id) as conn:
+        assert (await conn.execute(text("SELECT count(*) FROM tenancy.invitations"))).scalar() == 0
+    with pytest.raises(DBAPIError, match="row-level security"):
+        async with tenant_transaction(app_engine, b.tenant_id) as conn:
+            await conn.execute(
+                text(
+                    "INSERT INTO tenancy.invitations (id, tenant_id, email, roles, token_hash,"
+                    " invited_by, expires_at) VALUES (:i, :t, 'x@x.eu', ARRAY['owner'], :h,"
+                    " 'u', now() + interval '1 day')"
+                ),
+                {"i": uuid.uuid4(), "t": a.tenant_id, "h": "b" * 64},
+            )

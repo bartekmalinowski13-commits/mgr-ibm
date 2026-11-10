@@ -33,6 +33,7 @@ class Principal:
     sub: str
     email: str
     name: str
+    email_verified: bool = False
 
 
 class TokenVerifier:
@@ -68,6 +69,8 @@ class TokenVerifier:
             sub=str(claims["sub"]),
             email=str(claims.get("email", "")),
             name=str(claims.get("name", "")),
+            # OIDC: boolean; some IdPs (older Cognito) send the string "true"
+            email_verified=claims.get("email_verified") in (True, "true"),
         )
 
 
@@ -79,7 +82,15 @@ class LocalIdp:
         self.verifier = TokenVerifier(LOCAL_ISSUER, audience, public_key=self._key.public_key())
         self.audience = audience
 
-    def issue(self, sub: str, email: str, name: str = "", ttl_s: int = 3600) -> str:
+    def issue(
+        self,
+        sub: str,
+        email: str,
+        name: str = "",
+        ttl_s: int = 3600,
+        *,
+        email_verified: bool = True,
+    ) -> str:
         now = int(time.time())
         return jwt.encode(
             {
@@ -88,6 +99,7 @@ class LocalIdp:
                 "sub": sub,
                 "email": email,
                 "name": name,
+                "email_verified": email_verified,
                 "iat": now,
                 "exp": now + ttl_s,
             },

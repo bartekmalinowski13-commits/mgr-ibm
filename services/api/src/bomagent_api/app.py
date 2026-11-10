@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from bomagent_api import __version__
 from bomagent_api.auth import LocalIdp, TokenVerifier
-from bomagent_api.routers import audit, identity, projects, runs
+from bomagent_api.routers import audit, identity, members, projects, runs
 from bomagent_common.config import ServiceSettings
 from bomagent_common.db import make_engine, ping
 from bomagent_common.health import ReadinessCheck
@@ -115,7 +115,7 @@ def create_app(
             settings.oidc_issuer, settings.oidc_audience, jwks_url=settings.oidc_jwks_url
         )
 
-    for router in (identity.router, projects.router, runs.router, audit.router):
+    for router in (identity.router, members.router, projects.router, runs.router, audit.router):
         app.include_router(router)
 
     @app.middleware("http")

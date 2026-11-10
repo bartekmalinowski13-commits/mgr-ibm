@@ -26,6 +26,7 @@ POLICIES: dict[str, frozenset[str]] = {
     "audit.read": ADMIN | {"reviewer"},
     "member.read": ADMIN,
     "member.invite": ADMIN,
+    "member.manage": ADMIN,
     "org.update": ADMIN,
 }
 

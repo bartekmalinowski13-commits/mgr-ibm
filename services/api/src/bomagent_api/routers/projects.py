@@ -148,7 +148,7 @@ async def upload_file(
                 "INSERT INTO projects.files (id, tenant_id, project_id, name,"
                 " object_key, sha256, size_bytes, created_by) VALUES (:i,"
                 " app.current_tenant_id(), :p, :n, :k, :h, :s, :u)"
-                " ON CONFLICT (project_id, name) DO UPDATE SET object_key ="
+                " ON CONFLICT (tenant_id, project_id, name) DO UPDATE SET object_key ="
                 " EXCLUDED.object_key, sha256 = EXCLUDED.sha256, size_bytes ="
                 " EXCLUDED.size_bytes, status = 'uploaded', summary = '{}'"
             ),
