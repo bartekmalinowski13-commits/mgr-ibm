@@ -1,11 +1,17 @@
 """Execute BOM runs from the ``runs`` queue (message ``run.requested``).
 
 Payload: ``{run_id, variant, model_id, runtime?, object_keys: [...], requirements?}``.
-The worker parses the design files (already scanned and stored under the tenant prefix),
-runs the variant with tenant-scoped retrieval (RLS) and writes ``bom.json`` and
-``trace.json`` next to the run under ``tenants/{tenant}/runs/{run_id}/``. An audit event
-``run.completed`` is recorded in the tenant's chain. Persisting runs to database tables
-and streaming progress (SSE) belong to the API milestone (M4).
+
+Runs created through the API have a ``runs.runs`` row: the worker *claims* it atomically
+(``queued`` -> ``running``) and takes variant, runtime, model, requirements and the design
+files from the database, never from the message. SQS delivers at least once, so a
+redelivered message for a run that is already running or finished is acknowledged
+without running (and paying for) the LLM pipeline again. A failure marks the run
+``failed`` with an audit event. Messages without a row (CLI, tests) are accepted only
+when ``allow_unregistered`` is set (local/test environments).
+
+Results: ``bom.json`` and ``trace.json`` under ``tenants/{tenant}/runs/{run_id}/``,
+version 1 in ``bom.versions`` and ``run.<status>`` in the tenant's audit chain.
 """
 
 from __future__ import annotations
@@ -14,6 +20,7 @@ import json
 import uuid
 from collections.abc import Callable
 from dataclasses import dataclass
+from typing import Any
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
@@ -47,6 +54,7 @@ class RunWorker:
     chat: ChatClient
     kb: KnowledgeBase
     retriever_factory: Callable[[uuid.UUID, str | None], Retriever] | None = None
+    allow_unregistered: bool = False
 
     def _retriever(self, tenant_id: uuid.UUID, snapshot: str | None) -> Retriever:
         if self.retriever_factory is not None:
@@ -59,20 +67,89 @@ class RunWorker:
             return
         await self.execute(message)
 
-    async def execute(self, message: Message) -> RunOutput:
-        p = message.payload
-        run_id = uuid.UUID(p["run_id"])
+    async def _claim(self, message: Message, run_id: uuid.UUID) -> dict[str, Any] | None:
+        """Run parameters from the database (``queued`` -> ``running``), the message
+        payload for unregistered runs, or ``None`` when the run is already taken."""
+        async with tenant_transaction(self.engine, message.tenant_id) as conn:
+            row = (
+                await conn.execute(
+                    text(
+                        "UPDATE runs.runs SET status = 'running', started_at = now()"
+                        " WHERE id = :i AND status = 'queued'"
+                        " RETURNING project_id, variant, runtime, model_id, requirements"
+                    ),
+                    {"i": run_id},
+                )
+            ).first()
+            if row is not None:
+                keys = (
+                    await conn.execute(
+                        text(
+                            "SELECT object_key FROM projects.files"
+                            " WHERE project_id = :p ORDER BY name"
+                        ),
+                        {"p": row.project_id},
+                    )
+                ).scalars()
+                return {
+                    "variant": row.variant,
+                    "runtime": row.runtime,
+                    "model_id": row.model_id,
+                    "requirements": row.requirements,
+                    "object_keys": list(keys),
+                    "registered": True,
+                }
+            exists = (
+                await conn.execute(
+                    text("SELECT status FROM runs.runs WHERE id = :i"), {"i": run_id}
+                )
+            ).scalar()
+        if exists is not None:
+            log.info("run_already_claimed", run_id=str(run_id), status=exists)
+            return None
+        if not self.allow_unregistered:
+            raise RejectedRunError("unknown run (no runs.runs row in this tenant)")
+        return dict(message.payload) | {"registered": False}
+
+    async def _fail(self, message: Message, run_id: uuid.UUID, exc: BaseException) -> None:
+        error = f"{type(exc).__name__}: run failed"  # no exception text: it may echo file content
+        async with tenant_transaction(self.engine, message.tenant_id) as conn:
+            await conn.execute(
+                text(
+                    "UPDATE runs.runs SET status = 'failed', finished_at = now(), error = :e"
+                    " WHERE id = :i AND status = 'running'"
+                ),
+                {"e": error, "i": run_id},
+            )
+            await emit_audit(
+                conn,
+                AuditEvent(
+                    action="run.failed",
+                    object_type="run",
+                    object_id=str(run_id),
+                    after={"error": error},
+                ),
+            )
+
+    async def execute(self, message: Message) -> RunOutput | None:
+        run_id = uuid.UUID(message.payload["run_id"])
+        p = await self._claim(message, run_id)
+        if p is None:
+            return None
+        try:
+            return await self._run(message, run_id, p)
+        except Exception as exc:
+            if p["registered"]:
+                await self._fail(message, run_id, exc)
+            raise
+
+    async def _run(self, message: Message, run_id: uuid.UUID, p: dict[str, Any]) -> RunOutput:
         runtime = p.get("runtime")
         if runtime is not None and RUNTIME_VARIANT.get(runtime) != p["variant"]:
             raise RejectedRunError(f"runtime {runtime!r} does not implement variant {p['variant']}")
         keys = [str(k) for k in p["object_keys"]]
         if not keys or not all(key_belongs_to(message.tenant_id, k) for k in keys):
             raise RejectedRunError("design files must be under the tenant prefix")
-        async with tenant_transaction(self.engine, message.tenant_id) as conn:
-            await conn.execute(
-                text("UPDATE runs.runs SET status = 'running', started_at = now() WHERE id = :i"),
-                {"i": run_id},
-            )
         files = [FileRef(k.rsplit("/", 1)[-1], await self.store.get(k)) for k in keys]
         design = parse_files(files)
         config = RunConfig(
@@ -106,7 +183,7 @@ class RunWorker:
                 text(
                     "UPDATE runs.runs SET status = :s, finished_at = now(),"
                     " usage = CAST(:u AS jsonb), trace = CAST(:t AS jsonb),"
-                    " kb_snapshot_id = :k WHERE id = :i"
+                    " kb_snapshot_id = :k WHERE id = :i AND status = 'running'"
                 ),
                 {
                     "s": result.status,

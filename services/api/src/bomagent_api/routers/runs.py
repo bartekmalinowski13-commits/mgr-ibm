@@ -264,6 +264,8 @@ async def patch_item(
     if not changes:
         raise ProblemError(422, "Unprocessable Entity", "nothing to change", slug="empty-patch")
     async with tenant_transaction(request.app.state.engine) as conn:
+        # serialise edits of one run: concurrent PATCHes would race for the next version
+        await conn.execute(text("SELECT 1 FROM runs.runs WHERE id = :i FOR UPDATE"), {"i": run_id})
         parent_id, version, bom = await latest_bom(conn, run_id)
         idx = next((n for n, i in enumerate(bom.items) if i.line == line), None)
         if idx is None:

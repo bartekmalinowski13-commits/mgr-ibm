@@ -241,3 +241,67 @@ def test_local_idp_refused_outside_local_and_openapi_is_current():
 
     committed = json.loads((Path(__file__).parents[1] / "openapi.json").read_text())
     assert committed == json.loads(json.dumps(openapi_document(), sort_keys=True))
+
+
+async def test_concurrent_idempotent_posts_and_bom_edits(env):
+    """Races must not end in 500: same-key POSTs replay, parallel edits get versions."""
+    import asyncio
+
+    s = uuid.uuid4().hex[:6]
+    alice = await env.org(await env.login(f"alice-{s}"), f"race-{s}")
+    c = env.client
+    key = alice | {"Idempotency-Key": f"race-{s}-key"}
+    created = await asyncio.gather(
+        *(c.post("/v1/projects", headers=key, json={"name": "same"}) for _ in range(5))
+    )
+    assert {r.status_code for r in created} == {201}
+    assert len({r.json()["id"] for r in created}) == 1
+    # the same key from another member is that member's own key
+    bob = await env.login(f"bob-{s}")
+    async with platform_transaction(env.app.state.platform_engine) as conn:
+        await conn.execute(
+            text(
+                "INSERT INTO tenancy.memberships (tenant_id, user_sub, email, roles)"
+                " VALUES (:t, :s, 'b@x.eu', ARRAY['engineer'])"
+            ),
+            {"t": alice["X-Org-Id"], "s": f"bob-{s}"},
+        )
+    other = await c.post(
+        "/v1/projects",
+        headers=bob | {"X-Org-Id": alice["X-Org-Id"], "Idempotency-Key": f"race-{s}-key"},
+        json={"name": "same"},
+    )
+    assert other.status_code == 201
+    assert other.json()["id"] != created[0].json()["id"]
+
+    pid = created[0].json()["id"]
+    for path in sorted((KICAD_FIXTURES / "ecg-frontend").glob("*.kicad_*")):
+        await c.post(
+            f"/v1/projects/{pid}/files",
+            headers=alice,
+            files={"file": (path.name, path.read_bytes())},
+        )
+    run_id = (
+        await c.post("/v1/runs", headers=alice, json={"project_id": pid, "variant": "B"})
+    ).json()["id"]
+    retriever = await InMemoryRetriever.from_directory(FIXTURES / "datasheets")
+    worker = RunWorker(
+        engine=env.engine,
+        store=env.store,
+        chat=FakeChat(heuristic_responder),
+        kb=env.kb,
+        retriever_factory=lambda t, snap: retriever,
+    )
+    await env.drain("runs", worker.handle)
+    edits = await asyncio.gather(
+        *(
+            c.patch(
+                f"/v1/runs/{run_id}/bom/items/1",
+                headers=alice,
+                json={"manufacturer": f"M{n}", "reason": "race"},
+            )
+            for n in range(5)
+        )
+    )
+    assert {r.status_code for r in edits} == {200}, [r.text for r in edits]
+    assert sorted(r.json()["version"] for r in edits) == [2, 3, 4, 5, 6]

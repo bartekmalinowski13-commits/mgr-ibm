@@ -58,6 +58,7 @@ def build_handler(settings: Settings) -> Handler:
         ),
         chat=chat,
         kb=KnowledgeBase(embedder),
+        allow_unregistered=settings.environment in {"local", "test"},
     )
     return worker.handle
 

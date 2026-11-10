@@ -1,7 +1,10 @@
 """Idempotency-Key for creating POSTs (ARCHITECTURE / ADR-0015).
 
 Same key + same body -> the stored response is replayed; same key + different body ->
-422. Keys are per tenant (RLS) and stored in the same transaction as the created row.
+422. Keys are per tenant (RLS) *and per user* (the stored key is a hash of user + key, so
+another member reusing a key never receives someone else's response) and stored in the
+same transaction as the created row. A transaction-level advisory lock serialises
+concurrent requests with the same key: the second one waits and then replays.
 """
 
 from __future__ import annotations
@@ -14,6 +17,11 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from bomagent_common.problems import ProblemError
+from bomagent_common.tenancy import require_tenant
+
+
+def scoped_key(key: str) -> str:
+    return hashlib.sha256(f"{require_tenant().actor_id}\n{key}".encode()).hexdigest()
 
 
 def request_hash(body: Any) -> str:
@@ -27,13 +35,18 @@ async def replay(conn: AsyncConnection, key: str | None, body: Any) -> dict[str,
         raise ProblemError(
             400, "Bad Request", "Idempotency-Key must be 8-255 characters", slug="idempotency-key"
         )
+    scoped = scoped_key(key)
+    await conn.execute(
+        text("SELECT pg_advisory_xact_lock(hashtextextended(:l, 0))"),
+        {"l": f"idempotency:{scoped}"},
+    )
     row = (
         await conn.execute(
             text(
                 "SELECT request_hash, response FROM app.idempotency_keys"
                 " WHERE tenant_id = app.current_tenant_id() AND key = :k"
             ),
-            {"k": key},
+            {"k": scoped},
         )
     ).first()
     if row is None:
@@ -59,5 +72,10 @@ async def store(
             "INSERT INTO app.idempotency_keys (tenant_id, key, request_hash, status_code,"
             " response) VALUES (app.current_tenant_id(), :k, :h, :s, CAST(:r AS jsonb))"
         ),
-        {"k": key, "h": request_hash(body), "s": status, "r": json.dumps(response, default=str)},
+        {
+            "k": scoped_key(key),
+            "h": request_hash(body),
+            "s": status,
+            "r": json.dumps(response, default=str),
+        },
     )
