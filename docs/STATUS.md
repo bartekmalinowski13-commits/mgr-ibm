@@ -38,9 +38,16 @@ _Updated by Claude Code after every milestone (see `docs/prompts/CLAUDE_CODE_MAS
 - **LangGraph checkpoints in PostgreSQL** with RLS (migration 0012, `TenantCheckpointSaver`),
   used by the agent worker for API runs.
 - **Claude Agent SDK adapter:** run budget (turns, time, tokens) and KB snapshot recorded.
-- In progress at the time of writing (see `docs/HANDOFF.md`): deferred M4 low items, parsing in
-  a resource-limited subprocess, `sslmode=verify-full` to RDS, translation of the remaining
-  Polish documents.
+- **Deferred M4 low items closed** (migration 0011): storage quota per plan, upload races,
+  idempotency hash bound to method + path, outbox retry limit (10 attempts and 24 h) + cleanup,
+  composite FKs in `kb.*` and `api_keys.replaced_by`.
+- **Parsing in a resource-limited subprocess** (`bomagent_cad.sandbox`: RLIMIT_AS 1 GiB, CPU
+  60 s, wall 90 s, minimal env, non-dumpable worker), projects bounded to 50 files / 256 MiB;
+  workers take one message at a time.
+- **`sslmode=verify-full`** to RDS with the pinned RDS CA bundle (all AWS connection paths).
+- **Documentation translated to English** (thesis and supervisor report stay Polish).
+- Reviews by subagents for every change above; all CRITICAL/HIGH findings fixed, the rest in
+  `DECISIONS_LOG.md`.
 
 ### How to run
 
@@ -60,9 +67,8 @@ uv run bomagent experiment run evals/experiments/pilot-fake.yaml   # report: eva
 
 ### Test results (2026-11-11, local, Python 3.13, PostgreSQL 16 + pgvector)
 
-- Full Python suite: **509 passed** before the checkpointer commit (contract tests: 42
-  Schemathesis subtests); agents + worker + isolation suites green after it. CI (8 jobs) green
-  on `f72c058`.
+- Full Python suite: **541 passed** (+ 42 Schemathesis contract subtests), including the
+  tenant isolation suite; `tools/devstack.py --seed` (local demo) verified end to end.
 - Coverage thresholds (packages 85 %, services 75 %) met in CI.
 - ruff, ruff format, mypy --strict, import-linter (2 contracts), biome, TS typecheck - clean.
 

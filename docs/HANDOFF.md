@@ -49,17 +49,17 @@ user without a password, set `BOMAGENT_DEV_ADMIN_URL=postgresql+psycopg://user:p
 ## Where things are
 
 - **Branch:** `claude/code-master-prompt-part-2-5651f9` (all work; not merged to `main`,
-  no PR opened yet - the owner decides). Last commit at handoff: SSO per organisation.
-- **CI** (`.github/workflows/pr.yml`, 8 jobs): green up to the parser hardening commit
-  (`955328b`). The run for the SSO commit (`2e2253f`) was still running at handoff -
-  **check it first** and fix anything red.
+  no PR opened yet - the owner decides). Last code commit: the sandbox/M4 review fixes.
+- **CI** (`.github/workflows/pr.yml`, 8 jobs): check the run of the latest commit first and
+  fix anything red (local: 541 tests, lint and contract drift clean).
 - **Milestones:** M0-M5 done; M6 infrastructure code done, **not deployed** (deployment is
   the owner's step, `docs/platform/runbooks/README.md`); M7 formats done (KiCad, CSV,
   IPC-2581, EDIF, ODB++, DXF parts lists, PDF BOM tables); M8 experiment tool done
   (`bomagent experiment run`, statistics, error-injection validation measurement, SVG
   figures + CSV tables for chapter 7) - the real experiment needs the owner's data.
-  Also done: live run steps over SSE, SSO per organisation (`docs/plans/M4-sso.md`).
-- **Estimated completion of the original task:** about 90 %. The remaining 10 % is
+  Also done: live run steps over SSE, SSO per organisation (`docs/plans/M4-sso.md`),
+  LangGraph checkpoints in Postgres, parse sandbox, verify-full TLS, local demo.
+- **Estimated completion of the original task:** about 95 % (2026-11-11 evening). The remaining 5 % is
   mostly blocked on the owner (data, model access, AWS) - see the second list.
 
 ## Next tasks for Claude Code (in this order)
@@ -70,21 +70,21 @@ budget/snapshot, deferred M4 low items (storage quota, upload races, idempotency
 outbox retry limit + cleanup, composite FKs - migration 0011), parsing in a resource-limited
 subprocess, `sslmode=verify-full` to RDS, translation of the specification documents.
 
+Also done: reviews of all of the above with fixes (sandbox/M4 review: project size bound,
+non-dumpable workers, one message per receive, outbox give-up after 24 h, pinned RDS CA).
+
 Still open (in this order):
 
-1. If not yet done at handoff: apply the findings of the review of `6cb5405` (parse sandbox,
-   TLS) and `c626bd1` (M4 hardening); finish translating `docs/plans/*`, the runbooks,
-   `NEW_SESSION_PROMPT.md`, ADR 0016 and `DECISIONS_LOG.md` (check with
-   `git ls-files '*.md' | xargs grep -l -E "ą|ę|ś|ć|ż|ź|ł|ó|ń"`; thesis and supervisor
-   report stay Polish).
-2. Remaining deferred items (`DECISIONS_LOG.md`): per-IP / per-user limits for paths without
-   an organisation (M4 L4), malware-scan enforcement before parsing (GuardDuty tag), LiteLLM
+1. Remaining deferred items (`DECISIONS_LOG.md`): per-IP / per-user limits for paths without
+   an organisation (M4 L4), malware-scan enforcement before parsing (GuardDuty tag), parsing
+   in a separate task without an IAM role (network-level isolation of the parser), LiteLLM
    read-only FS test on the real image, Cognito e-mail via SES, global KB in AWS, EDIF
    hierarchy expansion, SSO MEDIUM-3 (reconcile federated providers after CDK deploys),
-   MEDIUM-4 (`auth_time` limit / API key lifetime), LOW-6..9.
-3. Resume of crashed runs from LangGraph checkpoints (needs budget/trace restoration; today
+   MEDIUM-4 (`auth_time` limit / API key lifetime), LOW-6..9, sandbox review LOW-5/6/9,
+   outbox dead-row alarm and requeue.
+2. Resume of crashed runs from LangGraph checkpoints (needs budget/trace restoration; today
    checkpoints are deleted when a run ends and the reaper fails stuck runs).
-4. M7 leftovers needing an ADR first: PDF schematics/scans (OCR, vision), native
+3. M7 leftovers needing an ADR first: PDF schematics/scans (OCR, vision), native
    Altium/OrCAD/DWG.
 
 ## Assumptions awaiting your acceptance
