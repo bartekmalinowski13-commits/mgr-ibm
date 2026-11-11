@@ -5,7 +5,10 @@ environment) and the ingest and agent workers consuming in-memory queues with th
 LLM. Needs only PostgreSQL 16 + pgvector (no Docker, no AWS emulators).
 
     BOMAGENT_DEV_ADMIN_URL=postgresql+psycopg://postgres:...@localhost:5432/postgres \
-        uv run python tools/devstack.py --port 8000
+        uv run python tools/devstack.py --port 8000 [--seed]
+
+`--seed` creates a demo organisation with projects and finished runs (tools/demo_seed.py);
+`just demo` / tools/demo.sh starts this plus the web app.
 
 Note: role passwords are (re)set on start, like the pytest fixtures do; do not run it
 while the integration tests run against the same server. The database is dropped on exit.
@@ -16,10 +19,13 @@ from __future__ import annotations
 import argparse
 import asyncio
 import contextlib
+import logging
 import os
 import secrets
+import sys
 from pathlib import Path
 
+import httpx
 import uvicorn
 from sqlalchemy import create_engine, make_url, text
 
@@ -38,6 +44,8 @@ from bomagent_llm.embeddings import HashingEmbeddings
 from bomagent_migrations import APP_ROLE, PLATFORM_ROLE, bootstrap, upgrade
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "tools"))
+from demo_seed import DEMO_EMAIL, seed  # noqa: E402
 
 
 def create_database(admin_url: str) -> tuple[str, dict[str, str], str]:
@@ -80,7 +88,21 @@ async def consume(queue: InMemoryQueue, handler: Handler, stop: asyncio.Event) -
                 await asyncio.wait_for(stop.wait(), timeout=0.2)
 
 
-async def serve(urls: dict[str, str], port: int) -> None:
+async def seed_when_ready(server: uvicorn.Server, port: int) -> None:
+    """Wait for the API to listen, then create the demo data through HTTP."""
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    while not server.started:  # noqa: ASYNC110 - uvicorn exposes a flag, not an event
+        await asyncio.sleep(0.1)
+    async with httpx.AsyncClient(base_url=f"http://127.0.0.1:{port}", timeout=30) as client:
+        result = await seed(client)
+    print(
+        f"devstack: demo data ready - sign in as {DEMO_EMAIL} "
+        f"({len(result.project_ids)} projects, {len(result.run_ids)} runs)",
+        flush=True,
+    )
+
+
+async def serve(urls: dict[str, str], port: int, *, with_seed: bool = False) -> None:
     engine = make_engine(urls[APP_ROLE])
     platform = make_engine(urls[PLATFORM_ROLE], pool_size=2)
     store = InMemoryObjectStore(enforce_tenant=False)
@@ -115,9 +137,12 @@ async def serve(urls: dict[str, str], port: int) -> None:
         ),
     ]
     server = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=port, log_config=None))
+    seeding = asyncio.create_task(seed_when_ready(server, port)) if with_seed else None
     try:
         await server.serve()
     finally:
+        if seeding is not None and not seeding.done():
+            seeding.cancel()
         stop.set()
         await asyncio.gather(*workers)
         await engine.dispose()
@@ -127,6 +152,9 @@ async def serve(urls: dict[str, str], port: int) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--port", type=int, default=int(os.environ.get("BOMAGENT_PORT", "8000")))
+    parser.add_argument(
+        "--seed", action="store_true", help="create the demo organisation, projects and runs"
+    )
     args = parser.parse_args()
     admin = os.environ.get("BOMAGENT_DEV_ADMIN_URL") or os.environ.get("BOMAGENT_TEST_DATABASE_URL")
     if not admin:
@@ -134,7 +162,7 @@ def main() -> None:
     name, urls, admin_url = create_database(admin)
     print(f"devstack: database {name}, API on http://127.0.0.1:{args.port}", flush=True)
     try:
-        asyncio.run(serve(urls, args.port))
+        asyncio.run(serve(urls, args.port, with_seed=args.seed))
     finally:
         drop_database(admin_url, name)
 

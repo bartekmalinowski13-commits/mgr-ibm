@@ -10,6 +10,42 @@ Start prompt for the new session (copy as is):
 > Read `docs/HANDOFF.md` and continue with the next open task from its list. Follow
 > `CLAUDE.md`. Work on branch `claude/code-master-prompt-part-2-5651f9`.
 
+## Local demo (owner's Mac, no Docker, no LLM keys)
+
+One command starts the API with demo data and the web app; open **http://localhost:5173**.
+Everything runs locally: the LLM is the deterministic fake provider, queues and file
+storage are in memory, only PostgreSQL is needed. The demo database is created on start
+and dropped on exit (Ctrl-C).
+
+One-time setup (Homebrew):
+
+```bash
+brew install postgresql@17 pgvector uv node pnpm just
+```
+
+```bash
+brew services start postgresql@17
+```
+
+(Postgres.app with its bundled pgvector works too.) Then, from the repository root:
+
+```bash
+just demo
+```
+
+(or `./tools/demo.sh` without `just`). If your PostgreSQL admin user is not your macOS
+user without a password, set `BOMAGENT_DEV_ADMIN_URL=postgresql+psycopg://user:pass@localhost:5432/postgres` first.
+
+- **URL:** http://localhost:5173 (API on http://127.0.0.1:8000, proxied under `/v1`)
+- **Sign in:** e-mail `anna@medtech-demo.example`, any name (local test identity
+  provider; any other e-mail starts with an empty account and the onboarding flow)
+- **Demo data** (`tools/demo_seed.py`, created through the public API): organisation
+  "MedTech Demo" (you are the owner), projects "ECG front-end", "EEG 2-channel",
+  "Pulse oximeter" (open KiCad fixtures from `evals/fixtures/kicad`), four finished runs
+  (ECG in variant A and B, the others in B). Try: a run's BOM with field provenance, a
+  correction, CSV export, comparing A vs B, upload `reference_bom.csv` from the fixture
+  folder for the F1 score, the audit log, Settings -> SSO, PL/EN switch at the bottom left.
+
 ## Where things are
 
 - **Branch:** `claude/code-master-prompt-part-2-5651f9` (all work; not merged to `main`,

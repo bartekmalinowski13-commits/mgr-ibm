@@ -64,6 +64,10 @@ smoke:
     SMOKE_TEMPO_URL=${SMOKE_TEMPO_URL:-http://localhost:3200} uv run pytest -m smoke tests/smoke -v
 
 # end-to-end UI tests (Playwright) against the local stack
+# local demo without Docker or LLM keys: API + demo data + web app on http://localhost:5173
+demo:
+    ./tools/demo.sh
+
 e2e:
     pnpm --filter @bomagent/web exec playwright test --trace off
 
