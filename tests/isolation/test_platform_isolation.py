@@ -216,3 +216,91 @@ async def test_api_key_lookup_exposes_only_the_matching_active_key(app_engine, m
         assert (await conn.execute(text("SELECT count(*) FROM tenancy.api_keys"))).scalar() == 0
         with pytest.raises(DBAPIError, match="permission denied"):
             await conn.execute(text("UPDATE tenancy.api_keys SET roles = ARRAY['owner']"))
+
+
+async def _sso(app_engine, tenant, *, provider, status, domains):
+    async with tenant_transaction(app_engine, tenant.tenant_id) as conn:
+        await conn.execute(
+            text(
+                "INSERT INTO tenancy.sso_connections (tenant_id, protocol, provider_name,"
+                " metadata_url, status, created_by) VALUES (:t, 'saml', :p,"
+                " 'https://idp.example/metadata', :s, 'u')"
+            ),
+            {"t": tenant.tenant_id, "p": provider, "s": status},
+        )
+        for domain, verified in domains:
+            await conn.execute(
+                text(
+                    "INSERT INTO tenancy.sso_domains (tenant_id, domain, token, verified_at)"
+                    f" VALUES (:t, :d, repeat('x', 32), {'now()' if verified else 'NULL'})"
+                ),
+                {"t": tenant.tenant_id, "d": domain},
+            )
+
+
+async def test_sso_rows_are_isolated_and_lookups_show_one_verified_domain(app_engine, make_tenant):
+    a, b = await make_tenant(), await make_tenant()
+    tag = uuid.uuid4().hex[:8]
+    await _sso(
+        app_engine,
+        a,
+        provider=f"org-a-{tag}",
+        status="active",
+        domains=[(f"a-{tag}.example", True), (f"pending-{tag}.example", False)],
+    )
+    await _sso(
+        app_engine, b, provider=f"org-b-{tag}", status="draft", domains=[(f"b-{tag}.example", True)]
+    )
+
+    async with tenant_transaction(app_engine, b.tenant_id) as conn:
+        seen = (await conn.execute(text("SELECT tenant_id FROM tenancy.sso_connections"))).scalars()
+        assert set(seen) == {b.tenant_id}
+        doms = (await conn.execute(text("SELECT domain FROM tenancy.sso_domains"))).scalars()
+        assert set(doms) == {f"b-{tag}.example"}
+
+    async def by_domain(domain: str) -> tuple[list, list]:
+        async with platform_transaction(app_engine) as conn:
+            await conn.execute(text("SELECT set_config('app.sso_domain', :d, true)"), {"d": domain})
+            d = (await conn.execute(text("SELECT tenant_id FROM tenancy.sso_domains"))).all()
+            c = (
+                await conn.execute(text("SELECT provider_name FROM tenancy.sso_connections"))
+            ).all()
+            return d, c
+
+    assert await by_domain("") == ([], [])
+    d, c = await by_domain(f"A-{tag}.example")  # case-insensitive
+    assert [r[0] for r in d] == [a.tenant_id]
+    assert [r[0] for r in c] == [f"org-a-{tag}"]
+    assert await by_domain(f"pending-{tag}.example") == ([], [])  # not verified
+    d, c = await by_domain(f"b-{tag}.example")
+    assert c == []  # connection not active
+
+    async with platform_transaction(app_engine) as conn:
+        await conn.execute(
+            text("SELECT set_config('app.sso_provider', :p, true)"), {"p": f"org-a-{tag}"}
+        )
+        rows = (await conn.execute(text("SELECT tenant_id FROM tenancy.sso_connections"))).all()
+        assert [r[0] for r in rows] == [a.tenant_id]
+        assert (await conn.execute(text("SELECT count(*) FROM tenancy.sso_domains"))).scalar() == 0
+
+
+async def test_a_verified_domain_belongs_to_one_organisation(app_engine, make_tenant):
+    import sqlalchemy.exc
+
+    a, b = await make_tenant(), await make_tenant()
+    domain = f"shared-{uuid.uuid4().hex[:8]}.example"
+    await _sso(
+        app_engine,
+        a,
+        provider=f"p-{uuid.uuid4().hex[:8]}",
+        status="draft",
+        domains=[(domain, True)],
+    )
+    with pytest.raises(sqlalchemy.exc.IntegrityError):
+        await _sso(
+            app_engine,
+            b,
+            provider=f"p-{uuid.uuid4().hex[:8]}",
+            status="draft",
+            domains=[(domain, True)],
+        )
