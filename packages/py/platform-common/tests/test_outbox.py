@@ -27,9 +27,26 @@ async def _enqueue(app_engine, tenant) -> uuid.UUID:
             return await enqueue(conn, "ingest", msg)
 
 
+async def test_a_short_outage_does_not_kill_young_rows(app_engine, make_tenant):
+    tenant = await make_tenant()
+    oid = await _enqueue(app_engine, tenant)
+    for _ in range(5):  # many sweeps (several replicas) during a short SQS outage
+        await deliver(app_engine, tenant.tenant_id, {"ingest": DownQueue()}, max_attempts=3)
+    ok = InMemoryQueue()
+    assert await deliver(app_engine, tenant.tenant_id, {"ingest": ok}, max_attempts=3) == 1
+    async with tenant_transaction(app_engine, tenant.tenant_id) as conn:
+        dead = await conn.scalar(text("SELECT dead_at FROM app.outbox WHERE id = :i"), {"i": oid})
+    assert dead is None
+
+
 async def test_rows_die_after_max_attempts_and_are_not_retried(app_engine, make_tenant):
     tenant = await make_tenant()
     oid = await _enqueue(app_engine, tenant)
+    async with tenant_transaction(app_engine, tenant.tenant_id) as conn:
+        await conn.execute(
+            text("UPDATE app.outbox SET created_at = now() - interval '2 days' WHERE id = :i"),
+            {"i": oid},
+        )
     queues = {"ingest": DownQueue()}
     for _ in range(3):
         await deliver(app_engine, tenant.tenant_id, queues, max_attempts=3)

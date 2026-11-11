@@ -192,12 +192,19 @@ async def process_one(queue: Queue, received: Received, handler: Handler) -> boo
 
 
 async def consume_forever(
-    queue: Queue, handler: Handler, *, stop: asyncio.Event, wait_seconds: int = 10
+    queue: Queue,
+    handler: Handler,
+    *,
+    stop: asyncio.Event,
+    wait_seconds: int = 10,
+    max_messages: int = 10,
 ) -> None:
-    """Long-poll loop used by workers (cancel via ``stop``)."""
+    """Long-poll loop used by workers (cancel via ``stop``). Slow handlers pass
+    ``max_messages=1``: messages of a batch wait unprocessed while earlier ones run, and
+    must not outlive the queue's visibility timeout."""
     while not stop.is_set():
         try:
-            batch = await queue.receive(wait_seconds=wait_seconds)
+            batch = await queue.receive(wait_seconds=wait_seconds, max_messages=max_messages)
         except Exception:
             log.exception("queue_receive_failed")
             with contextlib.suppress(TimeoutError):

@@ -3,10 +3,14 @@
 Customer files are untrusted (CLAUDE.md rule 5). Size, entry and decompression limits live in
 the parsers; this adds the last line of defence: the parse runs in a separate interpreter
 (``python -I``) with ``RLIMIT_AS`` (memory), ``RLIMIT_CPU``, a wall-clock timeout and a
-minimal environment, so a hostile file can neither exhaust the worker nor read its secrets
-(database URLs, cloud credentials). A child that is killed, times out or exceeds a limit is a
-``ParseError`` (``parse.resource_limit`` / ``parse.timeout``): the worker marks the file failed
-instead of crashing and redelivering the message forever.
+minimal environment. The child runs as the same user, so the worker makes itself
+non-dumpable first (``harden_parent``: its ``/proc/<pid>/environ`` is then readable by root
+only) - a child taken over by a hostile file cannot read the worker's secrets from there.
+This is a resource and secrets boundary, not a network jail. ``ProjectSize`` bounds what a
+worker loads for one project before anything is read from storage. A child that is
+killed, times out or exceeds a limit is a ``ParseError`` (``parse.resource_limit`` /
+``parse.timeout``): the worker marks the file failed instead of crashing and redelivering
+the message forever.
 
 Limits come from ``SandboxLimits`` (defaults overridable with ``BOMAGENT_PARSE_MEMORY_MB``,
 ``BOMAGENT_PARSE_CPU_SECONDS``, ``BOMAGENT_PARSE_TIMEOUT_SECONDS``). Setting
@@ -32,6 +36,51 @@ MiB = 1024 * 1024
 #: cap on the child's reply (a ParsedDesign is small; anything bigger is a misbehaving child)
 MAX_REPLY_BYTES = 128 * MiB
 _ENV_KEEP = ("LANG", "LC_ALL", "TZ")
+
+
+#: per-project bounds (the parent holds all files of a project in memory before parsing)
+MAX_PROJECT_FILES = 50
+MAX_PROJECT_BYTES = 256 * MiB
+
+
+@dataclass
+class ProjectSize:
+    """Running check of a project's files; raises ``project.too_large`` before loading more."""
+
+    max_files: int = MAX_PROJECT_FILES
+    max_bytes: int = MAX_PROJECT_BYTES
+    files: int = 0
+    total: int = 0
+
+    def add(self, name: str, size: int) -> None:
+        self.files += 1
+        self.total += size
+        if self.files > self.max_files or self.total > self.max_bytes:
+            raise ParseError(
+                f"the project is too large to parse at {name!r} (at most {self.max_files}"
+                f" files and {self.max_bytes // MiB} MiB per project)",
+                code="project.too_large",
+            )
+
+
+_hardened = False
+
+
+def harden_parent() -> None:
+    """Make this process non-dumpable (Linux ``PR_SET_DUMPABLE`` = 0), once.
+
+    Its ``/proc`` entries (environ, mem) become root-owned, so a same-user child cannot
+    read the worker's environment (database password, container credential URI).
+    """
+    global _hardened  # noqa: PLW0603 - process-wide, idempotent
+    if _hardened or not sys.platform.startswith("linux"):
+        return
+    import ctypes
+
+    libc = ctypes.CDLL(None, use_errno=True)
+    if libc.prctl(4, 0, 0, 0, 0) != 0:  # PR_SET_DUMPABLE
+        raise OSError(ctypes.get_errno(), "prctl(PR_SET_DUMPABLE, 0) failed")
+    _hardened = True
 
 
 @dataclass(frozen=True)
@@ -84,6 +133,7 @@ def parse_files_sandboxed(
     if os.environ.get("BOMAGENT_PARSE_SANDBOX", "").lower() == "inprocess":
         return parse_files(files)
     limits = limits or SandboxLimits.from_env()
+    harden_parent()
     cmd = [
         sys.executable,
         "-I",

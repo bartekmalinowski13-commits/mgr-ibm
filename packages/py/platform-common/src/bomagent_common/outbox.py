@@ -2,8 +2,9 @@
 
 ``enqueue`` inside the business transaction; ``deliver`` after commit (best effort) and
 periodically from a relay for whatever is still pending. A row whose delivery failed
-``MAX_ATTEMPTS`` times is marked dead (``dead_at``, with ``last_error``) and no longer
-retried; sent rows are deleted after a retention period (``cleanup_sent``).
+``MAX_ATTEMPTS`` times and that is older than ``GIVE_UP_AFTER_S`` is marked dead
+(``dead_at``, with ``last_error``) and no longer retried; sent rows are deleted after a
+retention period (``cleanup_sent``).
 """
 
 from __future__ import annotations
@@ -20,6 +21,9 @@ from bomagent_common.messaging import Message, Queue
 
 log = get_logger(__name__)
 MAX_ATTEMPTS = 10
+#: a row is given up only when it failed MAX_ATTEMPTS times *and* is older than this, so a
+#: short SQS outage swept by several API replicas does not dead-letter fresh messages
+GIVE_UP_AFTER_S = 24 * 3600
 SENT_RETENTION_DAYS = 7
 
 
@@ -44,6 +48,7 @@ async def deliver(
     older_than_s: float = 0.0,
     batch: int = 100,
     max_attempts: int = MAX_ATTEMPTS,
+    give_up_after_s: float = GIVE_UP_AFTER_S,
 ) -> int:
     """Send pending messages of one tenant; returns how many were sent. Rows are locked
     with SKIP LOCKED, so concurrent relays never send the same row at the same time."""
@@ -69,10 +74,11 @@ async def deliver(
                     await conn.execute(
                         text(
                             "UPDATE app.outbox SET attempts = attempts + 1, last_error = :e,"
-                            " dead_at = CASE WHEN attempts + 1 >= :max THEN now() END"
+                            " dead_at = CASE WHEN attempts + 1 >= :max AND created_at <"
+                            " now() - make_interval(secs => :ttl) THEN now() END"
                             " WHERE id = :i RETURNING dead_at IS NOT NULL"
                         ),
-                        {"e": error, "i": row.id, "max": max_attempts},
+                        {"e": error, "i": row.id, "max": max_attempts, "ttl": give_up_after_s},
                     )
                 ).scalar()
                 if dead:

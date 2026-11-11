@@ -20,7 +20,8 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # pin the content with --build-arg RDS_BUNDLE_SHA256=<hex> for reproducible builds.
 FROM ${PYTHON_IMAGE} AS rds-ca
 ARG RDS_BUNDLE_URL=https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem
-ARG RDS_BUNDLE_SHA256=
+# pinned 2026-11-11 (114 certificates); update deliberately when AWS publishes a new bundle
+ARG RDS_BUNDLE_SHA256=90a6f1a7978a1b1b096dca6c57511ca48d3b8cf052f8e704baf358f34ea2f21b
 RUN mkdir -p /out && python - <<'PY'
 import hashlib, os, urllib.request
 data = urllib.request.urlopen(os.environ["RDS_BUNDLE_URL"], timeout=60).read()

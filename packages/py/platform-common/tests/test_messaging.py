@@ -69,6 +69,33 @@ async def test_consume_forever_stops_on_event(ctx):
     assert handled == [0, 1, 2]
 
 
+async def test_consume_forever_can_take_one_message_at_a_time(ctx):
+    """Slow handlers (parsing, agent runs) take one message per receive, so later messages
+    of a batch never outlive the queue's visibility timeout while they wait."""
+    queue = InMemoryQueue()
+    for i in range(2):
+        await queue.send(Message.create("x.y", ctx, {"i": i}))
+    stop = asyncio.Event()
+    taken: list[int] = []
+    receive = queue.receive
+
+    async def counting_receive(**kw):
+        batch = await receive(**kw)
+        taken.append(len(batch))
+        return batch
+
+    queue.receive = counting_receive  # type: ignore[method-assign]
+
+    async def handler(msg: Message) -> None:
+        if msg.payload["i"] == 1:
+            stop.set()
+
+    await asyncio.wait_for(
+        consume_forever(queue, handler, stop=stop, wait_seconds=0, max_messages=1), timeout=5
+    )
+    assert taken[:2] == [1, 1]
+
+
 async def test_sqs_roundtrip_with_moto(ctx, monkeypatch):
     monkeypatch.setenv("AWS_ACCESS_KEY_ID", "testing")
     monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "testing")

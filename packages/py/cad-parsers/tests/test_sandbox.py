@@ -85,3 +85,28 @@ def test_inprocess_mode(monkeypatch):
     monkeypatch.setenv("BOMAGENT_PARSE_SANDBOX", "inprocess")
     assert parse_files_sandboxed(_files()).components
     assert KICAD_FIXTURES.exists()
+
+
+def test_project_size_is_bounded_before_files_are_loaded():
+    from bomagent_cad.sandbox import ProjectSize
+
+    budget = ProjectSize(max_files=2, max_bytes=10)
+    budget.add("a", 4)
+    budget.add("b", 6)
+    with pytest.raises(ParseError) as too_many:
+        budget.add("c", 0)
+    assert too_many.value.code == "project.too_large"
+    with pytest.raises(ParseError) as too_big:
+        ProjectSize(max_files=5, max_bytes=10).add("x", 11)
+    assert too_big.value.code == "project.too_large"
+
+
+@pytest.mark.skipif(sys.platform != "linux", reason="prctl is Linux only")
+def test_the_parent_is_not_dumpable_so_the_child_cannot_read_its_proc_entries():
+    import ctypes
+
+    from bomagent_cad.sandbox import harden_parent
+
+    harden_parent()
+    libc = ctypes.CDLL(None, use_errno=True)
+    assert libc.prctl(3, 0, 0, 0, 0) == 0  # PR_GET_DUMPABLE

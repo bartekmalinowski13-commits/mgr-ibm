@@ -9,6 +9,7 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, Header, Request, UploadFile
 from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncConnection
 
 from bomagent_api import idempotency
 from bomagent_api.auth import OrgContext
@@ -16,6 +17,7 @@ from bomagent_api.authz import require
 from bomagent_api.pagination import clamp, encode_cursor, page_clause
 from bomagent_api.plans import check_new_project, check_storage, plan_of
 from bomagent_api.schemas import FileInfo, Page, Project, ProjectCreate, problem_responses
+from bomagent_cad.sandbox import MAX_PROJECT_BYTES, MAX_PROJECT_FILES
 from bomagent_common.audit import AuditEvent, emit_audit
 from bomagent_common.db import tenant_transaction
 from bomagent_common.logging import get_logger
@@ -32,6 +34,35 @@ router = APIRouter(
 )
 log = get_logger(__name__)
 MAX_UPLOAD = 64 * 1024 * 1024
+
+
+async def check_project_size(
+    conn: AsyncConnection, project_id: uuid.UUID, new_bytes: int, previous: Any
+) -> None:
+    """Workers hold a whole project in memory to parse it: bound files and bytes per project
+    (same limits the workers enforce, ``bomagent_cad.sandbox``)."""
+    count, total = (
+        await conn.execute(
+            text(
+                "SELECT count(*), COALESCE(sum(size_bytes), 0) FROM projects.files"
+                " WHERE project_id = :p"
+            ),
+            {"p": project_id},
+        )
+    ).one()
+    if previous is None:
+        count += 1
+    total = int(total) - (previous.size_bytes if previous is not None else 0) + new_bytes
+    if count > MAX_PROJECT_FILES or total > MAX_PROJECT_BYTES:
+        raise ProblemError(
+            413,
+            "Content Too Large",
+            f"a project holds at most {MAX_PROJECT_FILES} files and"
+            f" {MAX_PROJECT_BYTES // (1024 * 1024)} MiB",
+            slug="project-too-large",
+        )
+
+
 _SAFE_NAME = re.compile(r"[^A-Za-z0-9._\-]")
 PROJECT_COLS = "id, name, description, created_by, created_at"
 
@@ -170,6 +201,7 @@ async def upload_file(
             if previous is not None:
                 await refuse_if_run_active(conn, project_id)
             await check_storage(conn, len(data), previous.size_bytes if previous else 0)
+            await check_project_size(conn, project_id, len(data), previous)
             # the client's content type is never stored or served back
             await store.put(key, data, "application/octet-stream")
             await conn.execute(

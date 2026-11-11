@@ -83,6 +83,23 @@ async def test_storage_quota_blocks_uploads_and_counts_replacements_once(
     assert len(store.objects) == 1  # the rejected upload left no object behind
 
 
+async def test_a_project_is_bounded_in_files_and_bytes(client, monkeypatch, store):
+    from bomagent_api.routers import projects
+
+    monkeypatch.setattr(projects, "MAX_PROJECT_FILES", 2)
+    monkeypatch.setattr(projects, "MAX_PROJECT_BYTES", 30)
+    owner = await _owner(client)
+    pid = await _project(client, owner)
+    assert (await _upload(client, owner, pid, "a.kicad_sch", b"1" * 10)).status_code == 201
+    assert (await _upload(client, owner, pid, "b.kicad_sch", b"1" * 10)).status_code == 201
+    third = await _upload(client, owner, pid, "c.kicad_sch", b"1")
+    assert third.status_code == 413
+    assert third.json()["type"].endswith("project-too-large")
+    too_big = await _upload(client, owner, pid, "a.kicad_sch", b"1" * 25)  # replace: 25 + 10
+    assert too_big.status_code == 413
+    assert (await _upload(client, owner, pid, "a.kicad_sch", b"1" * 20)).status_code == 201
+
+
 async def test_concurrent_uploads_of_one_name_leave_one_row_and_one_object(client, store):
     owner = await _owner(client)
     pid = await _project(client, owner)

@@ -49,7 +49,13 @@ def _make_lifespan(settings: Settings, handler: Handler) -> Lifespan:
                 endpoint_url=settings.aws_endpoint_url,
             )
             task = asyncio.create_task(
-                consume_forever(queue, handler, stop=stop, wait_seconds=settings.queue_wait_seconds)
+                consume_forever(
+                    queue,
+                    handler,
+                    stop=stop,
+                    wait_seconds=settings.queue_wait_seconds,
+                    max_messages=1,  # slow handlers: see consume_forever
+                )
             )
             log.info("consumer_started", queue="ingest")
         try:
