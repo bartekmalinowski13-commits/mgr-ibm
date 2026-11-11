@@ -87,6 +87,12 @@ describe("identity", () => {
     });
   });
 
+  it("users cannot change their own e-mail (SSO enforcement relies on it)", () => {
+    identity.hasResourceProperties("AWS::Cognito::UserPoolClient", {
+      WriteAttributes: ["name"],
+    });
+  });
+
   it("pool verifies e-mail, has a strong password policy and threat protection", () => {
     identity.hasResourceProperties("AWS::Cognito::UserPool", {
       AutoVerifiedAttributes: ["email"],

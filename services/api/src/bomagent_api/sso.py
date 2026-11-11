@@ -23,6 +23,7 @@ import asyncio
 import contextlib
 import secrets
 import uuid
+from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from typing import Any, Literal, Protocol
 
@@ -169,6 +170,28 @@ class CognitoIdentityProviders:
             await asyncio.to_thread(self._remove_sync, provider_name)
 
 
+# The app client's provider list is read-modify-written; API replicas serialise on this
+# Postgres advisory lock (an in-process lock alone loses updates across tasks).
+PROVIDER_LOCK_KEY = 0x5B0_5503
+
+
+@contextlib.asynccontextmanager
+async def provider_change_lock(engine: AsyncEngine) -> AsyncIterator[None]:
+    async with engine.begin() as conn:
+        await conn.execute(text("SELECT pg_advisory_xact_lock(:k)"), {"k": PROVIDER_LOCK_KEY})
+        yield
+
+
+def safe_error(exc: Exception, secret: str | None) -> str:
+    """Broker failure for the admin: error code and message, never the client secret."""
+    response = getattr(exc, "response", None)
+    code = response.get("Error", {}).get("Code") if isinstance(response, dict) else None
+    message = f"{code or type(exc).__name__}: {exc}"
+    if secret:
+        message = message.replace(secret, "***")
+    return message[:500]
+
+
 # ------------------------------------------------------------------ DNS
 class TxtResolver(Protocol):
     async def txt(self, name: str) -> list[str]: ...
@@ -267,24 +290,39 @@ async def join_on_first_sign_in(
 
 
 async def require_sso_if_enforced(
-    engine: AsyncEngine, tenant_id: uuid.UUID, email: str, provider: str | None, roles: Any
+    engine: AsyncEngine,
+    tenant_id: uuid.UUID,
+    sub: str,
+    email: str,
+    provider: str | None,
+    roles: Any,
 ) -> None:
-    """403 ``sso-required`` for members from enforced domains signing in another way."""
+    """403 ``sso-required`` for members from enforced domains signing in another way.
+
+    The domain comes from the token **and** from the membership stored on our side: a
+    member cannot step out of enforcement by changing the e-mail of their password
+    account in Cognito (or by presenting a token without an e-mail).
+    """
     if "owner" in roles:
         return  # break-glass: owners keep access if the identity provider fails
-    domain = email_domain(email)
-    if domain is None:
-        return
     async with tenant_transaction(engine, tenant_id) as conn:
+        stored = await conn.scalar(
+            text("SELECT email FROM tenancy.memberships WHERE user_sub = :s"), {"s": sub}
+        )
+        domains = sorted(
+            {d for d in (email_domain(email or ""), email_domain(stored or "")) if d is not None}
+        )
+        if not domains:
+            return
         row = (
             await conn.execute(
                 text(
                     "SELECT c.provider_name FROM tenancy.sso_connections c"
                     " JOIN tenancy.sso_domains d ON d.tenant_id = c.tenant_id"
-                    " WHERE c.enforce AND c.status = 'active' AND d.domain = :d"
+                    " WHERE c.enforce AND c.status = 'active' AND d.domain = ANY(:d)"
                     " AND d.verified_at IS NOT NULL"
                 ),
-                {"d": domain},
+                {"d": domains},
             )
         ).first()
     if row is not None and provider != row.provider_name:

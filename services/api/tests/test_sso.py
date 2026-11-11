@@ -164,6 +164,13 @@ async def test_enforcement_requires_sso_for_the_domain_but_not_for_owners(client
     blocked = await c.get("/v1/projects", headers=password | {"X-Org-Id": org_id})
     assert blocked.status_code == 403
     assert blocked.json()["type"].endswith("sso-required")
+    # the member changes the e-mail of their password account (Cognito UpdateUserAttributes)
+    # or the token carries none: the stored membership e-mail still decides (review HIGH-1)
+    for other in (f"vera-{s}@gmail.example", ""):
+        moved = await _token(c, f"v-{s}", other)
+        resp = await c.get("/v1/projects", headers=moved | {"X-Org-Id": org_id})
+        assert resp.status_code == 403, other
+        assert resp.json()["type"].endswith("sso-required")
     # owners keep access with a password (break-glass when the IdP is down)
     assert (await c.get("/v1/projects", headers=admin)).status_code == 200
 
@@ -187,6 +194,19 @@ async def test_rules_for_admins_domains_and_providers(client, app):
     taken = await c.post(f"/v1/sso/domains/{domain}/verify", headers=b)
     assert taken.status_code == 409
 
+    # enforcement without a verified domain is refused before Cognito is touched
+    c_org = await _org(c, f"c-{s}", f"owner@c-{s}.example")
+    early = await c.put(
+        "/v1/sso",
+        headers=c_org,
+        json={"protocol": "saml", "metadata_url": "https://idp.example/c", "enforce": True},
+    )
+    assert early.status_code == 409
+    assert not any(
+        p.metadata_url == "https://idp.example/c"
+        for p in app.state.identity_providers.providers.values()
+    )
+
     # enforcement needs a working connection
     app.state.identity_providers.fail_with = "metadata could not be fetched"
     failed = await c.put(
@@ -200,6 +220,10 @@ async def test_rules_for_admins_domains_and_providers(client, app):
         json={"protocol": "saml", "metadata_url": "https://idp.example/x", "enforce": True},
     )
     assert refused.status_code == 409
+    # a refused change is still recorded (status failed, enforcement off) and audited
+    after = (await c.get("/v1/sso", headers=a)).json()["connection"]
+    assert after["status"] == "failed"
+    assert after["enforce"] is False
     app.state.identity_providers.fail_with = None
     assert (await c.get("/v1/sso/discover", params={"email": f"x@{domain}"})).json()["sso"] is False
 
@@ -256,3 +280,16 @@ async def test_local_dns_endpoint_is_local_only(client, app_engine, platform_eng
         assert (
             await c.post("/v1/sso/dev/dns", json={"name": "a", "value": "b"})
         ).status_code == 404
+
+
+def test_broker_errors_never_carry_the_client_secret():
+    from bomagent_api.sso import safe_error
+
+    class ClientError(Exception):
+        response = {"Error": {"Code": "InvalidParameterException"}}  # noqa: RUF012
+
+    msg = safe_error(ClientError("bad client_secret s3cr3t-value"), "s3cr3t-value")
+    assert msg.startswith("InvalidParameterException: ")
+    assert "s3cr3t-value" not in msg
+    assert safe_error(RuntimeError("x" * 900), None).startswith("RuntimeError: ")
+    assert len(safe_error(RuntimeError("x" * 900), None)) == 500

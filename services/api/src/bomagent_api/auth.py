@@ -272,6 +272,7 @@ async def org_context(
     await require_sso_if_enforced(
         request.app.state.engine,
         org_id,
+        principal.sub,
         principal.email,
         principal.identity_provider,
         member["roles"],

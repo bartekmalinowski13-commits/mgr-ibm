@@ -25,7 +25,9 @@ from bomagent_api.sso import (
     StaticTxtResolver,
     discover,
     new_token,
+    provider_change_lock,
     provider_name_for,
+    safe_error,
 )
 from bomagent_common.audit import AuditEvent, emit_audit
 from bomagent_common.db import tenant_transaction
@@ -120,18 +122,22 @@ async def put_sso(request: Request, ctx: OrgContext, body: SsoConnectionIn) -> S
         oidc_issuer=body.oidc_issuer if body.protocol == "oidc" else None,
         oidc_client_id=body.oidc_client_id if body.protocol == "oidc" else None,
     )
+    not_ready = ProblemError(
+        409,
+        "Conflict",
+        "enforcement needs a working connection and at least one verified domain",
+        slug="sso-not-ready",
+    )
+    if body.enforce and not verified:
+        raise not_ready  # checked before Cognito is changed
     try:
-        await request.app.state.identity_providers.apply(connection, body.oidc_client_secret)
+        async with provider_change_lock(engine):
+            await request.app.state.identity_providers.apply(connection, body.oidc_client_secret)
         status, error = "active", None
     except Exception as exc:  # the broker's message is shown to the admin, not raised
-        status, error = "failed", f"{type(exc).__name__}: {exc}"[:500]
-    if body.enforce and (status != "active" or not verified):
-        raise ProblemError(
-            409,
-            "Conflict",
-            "enforcement needs a working connection and at least one verified domain",
-            slug="sso-not-ready",
-        )
+        status, error = "failed", safe_error(exc, body.oidc_client_secret)
+    # whatever Cognito now holds is recorded and audited, even when the request is refused
+    enforce = body.enforce and status == "active"
     async with tenant_transaction(engine) as conn:
         await conn.execute(
             text(
@@ -149,7 +155,7 @@ async def put_sso(request: Request, ctx: OrgContext, body: SsoConnectionIn) -> S
                 "i": connection.oidc_issuer,
                 "c": connection.oidc_client_id,
                 "r": body.default_role,
-                "e": body.enforce,
+                "e": enforce,
                 "s": status,
                 "err": error,
                 "u": ctx.actor_id,
@@ -168,11 +174,13 @@ async def put_sso(request: Request, ctx: OrgContext, body: SsoConnectionIn) -> S
                     "oidc_issuer": connection.oidc_issuer,
                     "oidc_client_id": connection.oidc_client_id,
                     "default_role": body.default_role,
-                    "enforce": body.enforce,
+                    "enforce": enforce,
                     "status": status,
                 },
             ),
         )
+    if body.enforce and not enforce:
+        raise not_ready
     return await _settings(request)
 
 
@@ -180,7 +188,8 @@ async def put_sso(request: Request, ctx: OrgContext, body: SsoConnectionIn) -> S
 async def delete_sso(request: Request, ctx: OrgContext) -> Response:
     require(ctx, "sso.manage")
     name = provider_name_for(ctx.tenant_id)
-    await request.app.state.identity_providers.remove(name)
+    async with provider_change_lock(request.app.state.engine):
+        await request.app.state.identity_providers.remove(name)
     async with tenant_transaction(request.app.state.engine) as conn:
         gone = await conn.execute(text("DELETE FROM tenancy.sso_connections RETURNING protocol"))
         if gone.first() is None:

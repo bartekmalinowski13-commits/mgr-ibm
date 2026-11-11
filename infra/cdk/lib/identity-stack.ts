@@ -61,6 +61,9 @@ export class IdentityStack extends BaseStack {
       userPoolClientName: "bomagent-web",
       generateSecret: false,
       authFlows: { userSrp: true },
+      // e-mail is read-only for users: a member must not move out of an SSO-enforced
+      // domain by editing their own attribute (security review, SSO HIGH-1)
+      writeAttributes: new cognito.ClientAttributes().withStandardAttributes({ fullname: true }),
       oAuth: {
         flows: { authorizationCodeGrant: true },
         scopes: [cognito.OAuthScope.OPENID, cognito.OAuthScope.EMAIL, cognito.OAuthScope.PROFILE],
