@@ -34,7 +34,7 @@ from bomagent_common.problems import ProblemError
 router = APIRouter(
     prefix="/v1/sso", tags=["sso"], responses=problem_responses(400, 401, 403, 404, 409, 422, 429)
 )
-public = APIRouter(prefix="/v1/sso", tags=["sso"], responses=problem_responses(422))
+public = APIRouter(prefix="/v1/sso", tags=["sso"], responses=problem_responses(400, 422, 429))
 COLS = (
     "protocol, provider_name, metadata_url, oidc_issuer, oidc_client_id, default_role,"
     " enforce, status, error"
