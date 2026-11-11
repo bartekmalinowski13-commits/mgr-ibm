@@ -121,6 +121,8 @@ async def test_full_flow_and_tenant_boundaries(env):
     assert events.headers["content-type"].startswith("text/event-stream")
     assert "event: end" in events.text
     assert '"status": "completed"' in events.text
+    # progress names the last finished step (live step display)
+    assert '"step": "' in events.text
 
     bom = (await c.get(f"/v1/runs/{run_id}/bom", headers=alice)).json()
     assert bom["version"] == 1

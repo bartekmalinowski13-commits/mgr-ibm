@@ -99,3 +99,34 @@ async def test_open_weight_model_and_unknown_runtime(retriever):
     assert chat.calls[0].model.license_class.value == "open-weight"
     with pytest.raises(ValueError, match="unknown runtime"):
         runtime_for("A", context_factory(chat, retriever), runtime="nope")
+
+
+@pytest.mark.parametrize("variant", ["A", "B"])
+async def test_every_finished_step_is_reported_as_it_happens(variant, retriever):
+    """Live progress (SSE): the callback sees each step once, with the usage so far."""
+    seen = []
+
+    async def on_step(step, usage):
+        seen.append((step.node, usage.llm_calls))
+
+    factory = context_factory(FakeChat(heuristic_responder), retriever, on_step=on_step)
+    result = await runtime_for(variant, factory).run(
+        RunInput(
+            design=design("pulse-ox"), config=RunConfig(variant=variant, model_id="fake-closed")
+        )
+    )
+    assert [node for node, _ in seen] == [s.node for s in result.trace]
+    calls = [c for _, c in seen]
+    assert calls == sorted(calls)  # usage only grows
+    assert calls[-1] <= result.usage.llm_calls
+
+
+async def test_a_failing_progress_callback_does_not_break_the_run(retriever):
+    async def broken(step, usage):
+        raise RuntimeError("database unavailable")
+
+    factory = context_factory(FakeChat(heuristic_responder), retriever, on_step=broken)
+    result = await runtime_for("B", factory).run(
+        RunInput(design=design("pulse-ox"), config=RunConfig(variant="B", model_id="fake-closed"))
+    )
+    assert result.status == "completed"

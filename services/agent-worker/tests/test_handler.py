@@ -253,3 +253,40 @@ async def test_result_of_a_reaped_run_is_discarded_and_failed_spend_is_metered(
         ).one()
     assert runs == 1
     assert calls == 2 * result.usage.llm_calls
+
+
+async def test_steps_reach_the_database_while_the_run_is_running(app_engine, make_tenant):
+    """Live progress: each finished step is stored before the run ends (SSE polls it)."""
+    tenant = await make_tenant()
+    store = InMemoryObjectStore(enforce_tenant=False)
+    rid = await _registered_run(app_engine, store, tenant)
+    worker = await _worker(app_engine, store)
+    worker.allow_unregistered = False
+    observed: list[tuple[str, int, int]] = []
+    original = worker._progress
+
+    async def spy(*args, **kwargs):
+        await original(*args, **kwargs)
+        async with tenant_transaction(app_engine, tenant.tenant_id) as conn:
+            status, steps, calls = (
+                await conn.execute(
+                    text(
+                        "SELECT status, jsonb_array_length(trace),"
+                        " coalesce((usage->>'llm_calls')::int, 0) FROM runs.runs WHERE id = :i"
+                    ),
+                    {"i": rid},
+                )
+            ).one()
+        observed.append((status, steps, calls))
+
+    worker._progress = spy
+    message = Message.create(RUN_REQUESTED, tenant, {"run_id": str(rid)})
+    with tenant_scope(tenant):
+        result = await worker.execute(message)
+    assert result is not None
+    assert observed, "no progress was written"
+    assert all(status == "running" for status, _, _ in observed)
+    assert [steps for _, steps, _ in observed] == list(range(1, len(observed) + 1))
+    assert len(observed) == len(result.trace)
+    status, *_ = await _state(app_engine, tenant, rid)
+    assert status == "completed"

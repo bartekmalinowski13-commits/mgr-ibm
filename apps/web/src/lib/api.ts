@@ -81,6 +81,8 @@ export interface RunProgress {
   status: string;
   usage: Record<string, number>;
   steps: number;
+  /** last finished step (node name), while the run is running */
+  step?: string | null;
 }
 
 /**

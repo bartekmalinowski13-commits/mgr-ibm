@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import time
 from collections.abc import Awaitable, Callable
 from contextvars import ContextVar
@@ -24,11 +25,13 @@ from bomagent_bom.model import (
     ProvenanceKind,
     Requirements,
     Severity,
+    Usage,
 )
 from bomagent_llm.catalog import Catalog, ModelSpec
 from bomagent_llm.chat import ChatClient, ChatRequest, LlmError, Message, structured
 
 tracer = trace.get_tracer("bomagent.agents")
+log = logging.getLogger(__name__)
 # calls made inside the current step; a ContextVar so concurrent fan-out branches
 # (separate asyncio tasks) do not count each other's calls
 _step_calls: ContextVar[list[int] | None] = ContextVar("bomagent_step_calls", default=None)
@@ -53,6 +56,9 @@ class AgentContext:
     issues: list[Finding] = field(default_factory=list)
     budget_hit: bool = False
     failed: bool = False
+    #: called after every finished step with the usage so far (live progress, SSE);
+    #: a failing callback is logged and never breaks the run
+    on_step: Callable[[TraceStep, Usage], Awaitable[None]] | None = None
 
     def __post_init__(self) -> None:
         self.budget = Budget(self.config)
@@ -178,9 +184,15 @@ class AgentContext:
                 return await fn()
         finally:
             _step_calls.reset(token)
-            self.trace.append(
-                TraceStep(node=node, duration_s=time.perf_counter() - start, llm_calls=counter[0])
+            finished = TraceStep(
+                node=node, duration_s=time.perf_counter() - start, llm_calls=counter[0]
             )
+            self.trace.append(finished)
+            if self.on_step is not None:
+                try:
+                    await self.on_step(finished, self.budget.usage.model_copy())
+                except Exception:  # progress is best-effort; the result is what counts
+                    log.warning("step progress callback failed (node %s)", node, exc_info=True)
 
 
 def agent_provenance(

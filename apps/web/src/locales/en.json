@@ -176,6 +176,8 @@
     "exported": "Exported CSV",
     "version": "Version {{version}}",
     "findings": "{{count}} validation findings",
+    "lastStep": "Last finished step: {{step}}",
+    "starting": "Starting the agents…",
     "timeline": "Run steps",
     "stepCalls_one": "{{count}} LLM call",
     "stepCalls_other": "{{count}} LLM calls",

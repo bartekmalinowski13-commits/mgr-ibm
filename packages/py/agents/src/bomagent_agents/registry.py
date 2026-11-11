@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 
-from bomagent_agents.contracts import RunInput, VariantRuntime
+from bomagent_agents.contracts import RunInput, TraceStep, VariantRuntime
 from bomagent_agents.retrieval import Retriever
 from bomagent_agents.runtime_base import AgentContext
 from bomagent_agents.variant_a import LangGraphVariantA
 from bomagent_agents.variant_b import LangGraphVariantB
+from bomagent_bom.model import Usage
 from bomagent_llm.catalog import Catalog, load_catalog
 from bomagent_llm.chat import ChatClient
 
@@ -16,7 +17,11 @@ RUNTIMES = ("langgraph_a", "langgraph_b", "claude_agent_sdk_a")
 
 
 def context_factory(
-    chat: ChatClient, retriever: Retriever, catalog: Catalog | None = None, tenant_id: str = ""
+    chat: ChatClient,
+    retriever: Retriever,
+    catalog: Catalog | None = None,
+    tenant_id: str = "",
+    on_step: Callable[[TraceStep, Usage], Awaitable[None]] | None = None,
 ) -> Callable[[RunInput], AgentContext]:
     cat = catalog or load_catalog()
 
@@ -34,6 +39,7 @@ def context_factory(
             requirements=run.requirements,
             run_id=str(run.run_id),
             tenant_id=tenant_id,
+            on_step=on_step,
         )
 
     return make

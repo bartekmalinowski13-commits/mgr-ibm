@@ -176,6 +176,8 @@
     "exported": "Wyeksportowano CSV",
     "version": "Wersja {{version}}",
     "findings": "{{count}} uwag walidacji",
+    "lastStep": "Ostatni zakończony krok: {{step}}",
+    "starting": "Uruchamianie agentów…",
     "timeline": "Kroki przebiegu",
     "stepCalls_one": "{{count}} wywołanie LLM",
     "stepCalls_few": "{{count}} wywołania LLM",

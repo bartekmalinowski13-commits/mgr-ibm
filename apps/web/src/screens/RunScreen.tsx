@@ -141,11 +141,16 @@ export function RunScreen() {
           </p>
         ) : null}
         {status === "running" ? (
-          <div aria-hidden className="flex gap-1.5">
-            {Array.from({ length: Math.max(1, live?.steps ?? 0) }, (_, i) => (
-              // biome-ignore lint/suspicious/noArrayIndexKey: one dot per finished step
-              <span key={i} className="size-2.5 rounded-full bg-llm motion-safe:animate-pulse" />
-            ))}
+          <div className="flex flex-col gap-2">
+            <div aria-hidden className="flex flex-wrap gap-1.5">
+              {Array.from({ length: Math.max(1, live?.steps ?? 0) }, (_, i) => (
+                // biome-ignore lint/suspicious/noArrayIndexKey: one dot per finished step
+                <span key={i} className="size-2.5 rounded-full bg-llm motion-safe:animate-pulse" />
+              ))}
+            </div>
+            <p aria-live="polite" className="text-sm text-muted">
+              {live?.step ? t("run.lastStep", { step: live.step }) : t("run.starting")}
+            </p>
           </div>
         ) : null}
       </section>

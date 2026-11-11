@@ -254,7 +254,13 @@ async def run_events(request: Request, ctx: OrgContext, run_id: uuid.UUID) -> St
                         {"i": run_id},
                     )
                 ).one()
-            snapshot = {"status": row.status, "usage": row.usage, "steps": len(row.trace)}
+            snapshot = {
+                "status": row.status,
+                "usage": row.usage,
+                "steps": len(row.trace),
+                # the agent worker appends every finished step (live progress)
+                "step": row.trace[-1].get("node") if row.trace else None,
+            }
             if snapshot != last:
                 yield f"event: progress\ndata: {json.dumps(snapshot)}\n\n"
                 last = snapshot

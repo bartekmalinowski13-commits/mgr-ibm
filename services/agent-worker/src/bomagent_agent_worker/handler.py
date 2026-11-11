@@ -16,6 +16,7 @@ version 1 in ``bom.versions`` and ``run.<status>`` in the tenant's audit chain.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import uuid
 from collections.abc import Callable
@@ -25,7 +26,7 @@ from typing import Any
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
-from bomagent_agents.contracts import RunConfig, RunInput, RunOutput
+from bomagent_agents.contracts import RunConfig, RunInput, RunOutput, TraceStep
 from bomagent_agents.registry import context_factory, runtime_for
 from bomagent_agents.retrieval import KbRetriever, Retriever
 from bomagent_bom.model import Requirements, Usage
@@ -151,6 +152,23 @@ class RunWorker:
                 await self._fail(message, run_id, exc, spent.get("usage"))
             raise
 
+    async def _progress(
+        self, tenant_id: uuid.UUID, run_id: uuid.UUID, step: TraceStep, usage: Usage
+    ) -> None:
+        """Append a finished step to the running run (the API's SSE stream polls it)."""
+        async with tenant_transaction(self.engine, tenant_id) as conn:
+            await conn.execute(
+                text(
+                    "UPDATE runs.runs SET trace = trace || CAST(:s AS jsonb),"
+                    " usage = CAST(:u AS jsonb) WHERE id = :i AND status = 'running'"
+                ),
+                {
+                    "s": json.dumps([step.model_dump(mode="json")]),
+                    "u": usage.model_dump_json(),
+                    "i": run_id,
+                },
+            )
+
     async def _run(
         self, message: Message, run_id: uuid.UUID, p: dict[str, Any], spent: dict[str, Usage]
     ) -> RunOutput:
@@ -173,10 +191,18 @@ class RunWorker:
             config=config,
             requirements=Requirements.model_validate(p.get("requirements") or {}),
         )
+        # live progress: steps finish concurrently (fan-out), writes stay in order
+        progress_lock = asyncio.Lock()
+
+        async def on_step(step: TraceStep, usage: Usage) -> None:
+            async with progress_lock:
+                await self._progress(message.tenant_id, run_id, step, usage)
+
         factory = context_factory(
             self.chat,
             self._retriever(message.tenant_id, config.kb_snapshot_id),
             tenant_id=str(message.tenant_id),
+            on_step=on_step if p["registered"] else None,
         )
         result = await runtime_for(config.variant, factory, runtime=runtime).run(run)
         spent["usage"] = result.usage
