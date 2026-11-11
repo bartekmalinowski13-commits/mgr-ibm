@@ -33,3 +33,4 @@ infra/cdk/cdk.out/
 # Local outputs
 evals/reports/local/
 deploy/gateway/config.yaml
+.claude/worktrees/
