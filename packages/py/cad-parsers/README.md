@@ -21,6 +21,14 @@ Unsupported formats (Allegro `.brd`, Altium, OrCAD, DWG, XLSX) produce an action
 instead of a guess (`docs/plans/M7-formats.md`).
 
 ## Safety
+Every parser error is a `ParseError` with a stable code: `parse_files` converts anything
+else a parser or library raises into `parse.internal`, so a hostile file never crashes the
+worker or loops its queue message. Archives are sniffed cheaply (zip entry count from the
+end-of-central-directory record, tar headers in a 16 MB prefix). Invalid designators,
+unknown DNP values, duplicate BOM sections and quantity mismatches are skipped or kept,
+and always reported as limitations. Workers run `parse_files` in a thread. Regression
+and fuzz tests: `tests/test_hostile_inputs.py`.
+
 `sexpr.parse` is iterative with limits on size (64 MB), depth (512) and token count; no
 recursion on file content; UTF-8 decoding is strict; files are never executed.
 

@@ -142,7 +142,10 @@ class DxfParser:
 
     @staticmethod
     def _attribute_rows(doc) -> list[dict[str, str]]:  # type: ignore[no-untyped-def]
-        rows = []
+        """Rows from block attributes. A block is a parts-list row only if it is used at
+        least twice or carries a part number / quantity: a single title block (with
+        NO / TITLE tags) must not pass for a one-line parts list."""
+        by_block: dict[str, list[dict[str, str]]] = {}
         for layout in doc.layouts:
             for insert in layout.query("INSERT"):
                 row: dict[str, str] = {}
@@ -151,7 +154,11 @@ class DxfParser:
                     if column and attrib.dxf.text.strip():
                         row.setdefault(column, attrib.dxf.text.strip())
                 if "item" in row and ({"mpn", "description"} & row.keys()):
-                    rows.append(row)
+                    by_block.setdefault(insert.dxf.name, []).append(row)
+        rows: list[dict[str, str]] = []
+        for block_rows in by_block.values():
+            if len(block_rows) >= 2 or any({"mpn", "quantity"} & r.keys() for r in block_rows):
+                rows += block_rows
         return rows
 
     @staticmethod
@@ -187,19 +194,34 @@ class DxfParser:
                 continue
             header_line, columns = header
             tolerance = max(t.height for t in header_line)
-            for line in lines:
-                if line is header_line:
-                    continue
-                row: dict[str, str] = {}
-                for t in line:
-                    column = None
-                    for x, name in columns:
-                        if t.x + tolerance >= x:
-                            column = name
-                    if column:
-                        row.setdefault(column, t.text)
-                if _ITEM.match(row.get("item", "")) and ({"mpn", "description"} & row.keys()):
+            left = min(x for x, _ in columns) - tolerance
+            h = lines.index(header_line)
+            # only lines next to the header (rows go up or down from it, both occur in
+            # practice); the first gap or non-row line ends the table in that direction
+            for direction in (1, -1):
+                prev_y = header_line[0].y
+                i = h + direction
+                while 0 <= i < len(lines):
+                    line = lines[i]
+                    if abs(line[0].y - prev_y) > 3.5 * tolerance:
+                        break
+                    row: dict[str, str] = {}
+                    for t in line:
+                        if t.x < left:
+                            continue
+                        column = None
+                        for x, name in columns:
+                            if t.x + tolerance >= x:
+                                column = name
+                        if column:
+                            row.setdefault(column, t.text)
+                    if not (
+                        _ITEM.match(row.get("item", "")) and ({"mpn", "description"} & row.keys())
+                    ):
+                        break
                     rows.append(row)
+                    prev_y = line[0].y
+                    i += direction
         return rows
 
     @staticmethod

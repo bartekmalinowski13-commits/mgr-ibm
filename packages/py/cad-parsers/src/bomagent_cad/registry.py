@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import logging
+
 from bomagent_bom.model import ParsedDesign
-from bomagent_cad.base import FileRef, FormatParser, UnsupportedFormatError
+from bomagent_cad.base import FileRef, FormatParser, ParseError, UnsupportedFormatError
 from bomagent_cad.csv_bom import CsvBomParser
 from bomagent_cad.dxf import DxfParser
 from bomagent_cad.edif import EdifParser
@@ -11,6 +13,8 @@ from bomagent_cad.ipc2581 import Ipc2581Parser
 from bomagent_cad.kicad import KicadParser
 from bomagent_cad.odbpp import OdbppParser
 from bomagent_cad.pdf_bom import PdfBomParser
+
+log = logging.getLogger(__name__)
 
 # extension -> (hint code for the UI i18n catalogue, English hint)
 UNSUPPORTED_HINTS: dict[str, tuple[str, str]] = {
@@ -75,4 +79,17 @@ def detect(files: list[FileRef], parsers: list[FormatParser] | None = None) -> F
 
 
 def parse_files(files: list[FileRef], parsers: list[FormatParser] | None = None) -> ParsedDesign:
-    return detect(files, parsers).parse(files)
+    """Detect and parse. Files are untrusted: whatever a parser or library raises on a
+    malformed input becomes a ``ParseError`` (``parse.internal``), so a bad upload is
+    reported to the user instead of crashing and redelivering the worker's message."""
+    try:
+        return detect(files, parsers).parse(files)
+    except ParseError:
+        raise
+    except MemoryError:
+        raise
+    except Exception as exc:
+        log.warning("parser raised %s on %s", type(exc).__name__, [f.name for f in files])
+        raise ParseError(
+            f"the file could not be read ({type(exc).__name__})", code="parse.internal"
+        ) from exc

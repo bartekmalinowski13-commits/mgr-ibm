@@ -25,7 +25,7 @@ from defusedxml import DefusedXmlException
 from defusedxml.ElementTree import fromstring
 
 from bomagent_bom.model import Component, ParsedDesign
-from bomagent_cad.base import FileRef, ParseError
+from bomagent_cad.base import FileRef, ParseError, valid_refdes
 
 MAX_COMPONENTS = 100_000
 SUFFIXES = {".xml", ".cvg", ".ipc2581"}
@@ -55,7 +55,7 @@ def load_xml(file: FileRef) -> Element:
         raise ParseError(
             f"{file.name}: DTDs and entity declarations are not accepted", code="xml.forbidden"
         ) from exc
-    except XmlParseError as exc:
+    except (XmlParseError, LookupError, ValueError) as exc:  # LookupError: unknown encoding
         raise ParseError(f"{file.name}: not well-formed XML ({exc})", code="xml.malformed") from exc
     return root
 
@@ -67,7 +67,9 @@ class Ipc2581Parser:
     def sniff(self, file: FileRef) -> float:
         if file.suffix not in SUFFIXES:
             return 0.0
-        return 0.95 if b"<IPC-2581" in file.data[:4096] else 0.0
+        head = file.data[:8192]
+        markers = (b"<IPC-2581", "<IPC-2581".encode("utf-16-le"), "<IPC-2581".encode("utf-16-be"))
+        return 0.95 if any(m in head for m in markers) else 0.0
 
     def parse(self, files: list[FileRef]) -> ParsedDesign:
         candidates = [f for f in files if self.sniff(f) > 0.5]
@@ -86,6 +88,10 @@ class Ipc2581Parser:
         limitations: list[str] = []
         boms = list(_iter(root, "Bom"))
         if boms:
+            if len(boms) > 1:
+                limitations.append(
+                    f"{len(boms)} BOM sections; only the first ({boms[0].get('name', '?')}) is read"
+                )
             components = self._from_bom(boms[0], avl, placements, limitations)
             confidence = 1.0
         else:
@@ -96,7 +102,11 @@ class Ipc2581Parser:
                     footprint=el.get("packageRef", ""),
                 )
                 for ref, el in sorted(placements.items())
+                if valid_refdes(ref)
             ]
+            skipped = [ref for ref in placements if not valid_refdes(ref)]
+            if skipped:
+                limitations.append(f"{len(skipped)} placements without a valid designator skipped")
             limitations.append(
                 "no BOM section: parts come from placements only (no values, MPNs or"
                 " populate flags) - export IPC-2581 with the BOM function enabled"
@@ -181,9 +191,17 @@ class Ipc2581Parser:
             refs = list(_children(item, "RefDes"))
             if not refs:
                 limitations.append(f"BOM item {number or '?'} lists no designators")
+            declared = item.get("quantity", "")
+            if declared.isdigit() and int(declared) != len(refs):
+                limitations.append(
+                    f"BOM item {number or '?'}: quantity {declared} but {len(refs)} designators"
+                )
             for ref in refs:
                 name = ref.get("name", "").strip()
                 if not name:
+                    continue
+                if not valid_refdes(name):
+                    limitations.append(f"{name!r} is not a designator - skipped")
                     continue
                 if name in seen:
                     limitations.append(f"{name} appears in more than one BOM item")

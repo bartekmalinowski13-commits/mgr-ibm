@@ -12,6 +12,7 @@ span several files); every file row gets ``parsed``/``failed`` and the design su
 
 from __future__ import annotations
 
+import asyncio
 import json
 import uuid
 from dataclasses import dataclass
@@ -53,7 +54,8 @@ class IngestWorker:
                 raise ValueError("file outside the tenant prefix")
             files.append(FileRef(row.name, await self.store.get(row.object_key)))
         try:
-            design = parse_files(files)
+            # parsing is CPU-bound: off the event loop (queue polling, health checks stay live)
+            design = await asyncio.to_thread(parse_files, files)
             status, fmt = "parsed", design.source_format
             summary = {
                 "design": design.design_name,

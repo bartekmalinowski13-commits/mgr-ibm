@@ -82,7 +82,21 @@ class PdfBomParser:
         from pypdf import PdfReader
         from pypdf.errors import PyPdfError
 
-        errors = (PyPdfError, ValueError, KeyError, TypeError, AttributeError)
+        # everything pypdf is known to raise on hostile or damaged files
+        errors = (
+            PyPdfError,
+            ValueError,
+            KeyError,
+            TypeError,
+            AttributeError,
+            AssertionError,
+            IndexError,
+            LookupError,
+            EOFError,
+            RecursionError,
+            ZeroDivisionError,
+            OverflowError,
+        )
         try:
             reader = PdfReader(io.BytesIO(file.data), strict=False)
             encrypted, page_count = reader.is_encrypted, len(reader.pages)
@@ -95,8 +109,38 @@ class PdfBomParser:
         if page_count > MAX_PAGES:
             raise ParseError(f"{file.name}: more than {MAX_PAGES} pages", code="file.too_large")
         out: list[list[_Chunk]] = []
-        for page in reader.pages:
+        try:
+            pages = list(reader.pages)
+        except errors as exc:
+            raise ParseError(
+                f"{file.name}: not a readable PDF ({exc})", code="pdf.malformed"
+            ) from exc
+        for page in pages:
             chunks: list[_Chunk] = []
+            # pypdf joins text shown by several operators of one text object (cells
+            # placed with Tm/Td) into one string; the operators are seen first, each with
+            # its own position, so a joined string is split back when the pieces match
+            pending: list[tuple[float, float, str]] = []
+
+            def operator(
+                op: bytes,
+                args: list[object],
+                cm: list[float],
+                tm: list[float],
+                pending: list[tuple[float, float, str]] = pending,
+            ) -> None:
+                if op not in (b"Tj", b"TJ", b"'", b'"') or not args:
+                    return
+                shown = args[0] if op == b"TJ" else args[-1]
+                parts = shown if isinstance(shown, list) else [shown]
+                piece = "".join(
+                    p.decode("latin-1") if isinstance(p, bytes) else p
+                    for p in parts
+                    if isinstance(p, (str, bytes))
+                )
+                x = tm[4] * cm[0] + tm[5] * cm[2] + cm[4]
+                y = tm[4] * cm[1] + tm[5] * cm[3] + cm[5]
+                pending.append((x, y, piece))
 
             def visit(
                 text: str,
@@ -105,15 +149,22 @@ class PdfBomParser:
                 _font: object,
                 size: float,
                 chunks: list[_Chunk] = chunks,
+                pending: list[tuple[float, float, str]] = pending,
             ) -> None:
+                pieces = [(x, y, t.strip()) for x, y, t in pending if t.strip()]
+                pending.clear()
                 if not text.strip():
+                    return
+                height = float(size or 8.0)
+                if len(pieces) > 1 and " ".join(t for _, _, t in pieces) == " ".join(text.split()):
+                    chunks.extend(_Chunk(x, y, height, t) for x, y, t in pieces)
                     return
                 x = tm[4] * cm[0] + tm[5] * cm[2] + cm[4]
                 y = tm[4] * cm[1] + tm[5] * cm[3] + cm[5]
-                chunks.append(_Chunk(x, y, float(size or 8.0), text.strip()))
+                chunks.append(_Chunk(x, y, height, text.strip()))
 
             try:
-                page.extract_text(visitor_text=visit)
+                page.extract_text(visitor_text=visit, visitor_operand_before=operator)
             except errors as exc:
                 raise ParseError(
                     f"{file.name}: not a readable PDF ({exc})", code="pdf.malformed"
@@ -138,12 +189,14 @@ class PdfBomParser:
         header: list[tuple[float, str]] | None = None
         rows: list[dict[str, str]] = []
         for chunks in pages:
+            last_y: float | None = None  # y of the previous table line on this page
             for line in self._lines(chunks):
                 named = [(c.x, _column(c.text)) for c in line]
                 found = {name for _, name in named if name}
                 if "refdes" in found and ({"value", "mpn"} & found):
                     header = [(x, name) for x, name in named if name]  # repeated: re-anchored
                     tolerance = max(c.size for c in line)
+                    last_y = line[0].y
                     continue
                 if header is None:
                     continue
@@ -156,17 +209,28 @@ class PdfBomParser:
                     if column:
                         row.setdefault(column, []).append(c.text)
                 cells = {k: " ".join(v) for k, v in row.items()}
-                if "refdes" in cells:
+                adjacent = last_y is not None and last_y - line[0].y <= 2.2 * tolerance
+                if "refdes" in cells and adjacent:
                     rows.append(cells)
-                elif rows and cells:  # wrapped cell: continues the previous row
+                    last_y = line[0].y
+                elif rows and cells and adjacent:  # wrapped cell: continues the previous row
                     for k, v in cells.items():
                         rows[-1][k] = f"{rows[-1].get(k, '')} {v}".strip()
+                    last_y = line[0].y
+                else:
+                    last_y = None  # a gap ends the table (footers, notes) until a header
         if header is None or not rows:
             raise ParseError(
                 f"{file.name}: no BOM table found (expected a header with e.g. 'Designator'"
                 " and 'Value' or 'MPN')",
                 code="pdf.no_bom_table",
             )
+        return self._components(file, rows, limitations)
+
+    @staticmethod
+    def _components(
+        file: FileRef, rows: list[dict[str, str]], limitations: list[str]
+    ) -> list[Component]:
         components: list[Component] = []
         seen: set[str] = set()
         for cells in rows:
@@ -183,7 +247,12 @@ class PdfBomParser:
                 )
                 if cells.get(column)
             }
-            dnp = bool(parse_dnp(cells.get("dnp", ""), "dnp")) if cells.get("dnp") else False
+            dnp_flag = parse_dnp(cells.get("dnp", ""), "dnp") if cells.get("dnp") else False
+            if dnp_flag is None:
+                limitations.append(
+                    f"{cells['refdes']}: DNP value {cells['dnp']!r} not understood - fitted"
+                )
+            dnp = bool(dnp_flag)
             for ref in refs:
                 if ref in seen:
                     limitations.append(f"{ref} listed more than once")

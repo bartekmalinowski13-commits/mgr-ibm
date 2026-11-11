@@ -27,6 +27,9 @@ down_revision = "0009"
 branch_labels = None
 depends_on = None
 
+#: lower-case DNS name with at least one dot
+DOMAIN_RE = r"^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$"
+
 UPGRADE = [
     """
     CREATE TABLE tenancy.sso_connections (
@@ -39,7 +42,8 @@ UPGRADE = [
         default_role   text NOT NULL DEFAULT 'viewer'
                        CHECK (default_role IN ('engineer', 'reviewer', 'viewer')),
         enforce        boolean NOT NULL DEFAULT false,
-        status         text NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'active', 'failed')),
+        status         text NOT NULL DEFAULT 'draft'
+                       CHECK (status IN ('draft', 'active', 'failed')),
         error          text,
         created_by     text NOT NULL,
         updated_at     timestamptz NOT NULL DEFAULT now(),
@@ -47,10 +51,10 @@ UPGRADE = [
         CHECK (protocol <> 'oidc' OR (oidc_issuer IS NOT NULL AND oidc_client_id IS NOT NULL))
     )
     """,
-    """
+    f"""
     CREATE TABLE tenancy.sso_domains (
         tenant_id   uuid NOT NULL REFERENCES tenancy.tenants (id) ON DELETE CASCADE,
-        domain      text NOT NULL CHECK (domain ~ '^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$'),
+        domain      text NOT NULL CHECK (domain ~ '{DOMAIN_RE}'),
         token       text NOT NULL CHECK (length(token) >= 32),
         verified_at timestamptz,
         created_at  timestamptz NOT NULL DEFAULT now(),

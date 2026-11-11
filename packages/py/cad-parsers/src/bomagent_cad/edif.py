@@ -16,7 +16,7 @@ from pathlib import Path
 
 from bomagent_bom.dnp import parse_dnp
 from bomagent_bom.model import Component, ParsedDesign
-from bomagent_cad.base import FileRef, ParseError
+from bomagent_cad.base import FileRef, ParseError, valid_refdes
 from bomagent_cad.sexpr import SexprError, SList, parse
 
 MAX_COMPONENTS = 100_000
@@ -95,17 +95,34 @@ class EdifParser:
         limitations: list[str] = []
         components: list[Component] = []
         names: dict[str, str] = {}
-        for inst in _walk(root, "instance"):
+        seen: set[str] = set()
+        top = self._top_cell(root)
+        scope = top if top is not None else root
+        instances = list(_walk(scope, "instance"))
+        nested = sum(1 for _ in _walk(root, "instance")) - len(instances)
+        if top is None:
+            limitations.append("no design statement: every instance in the file is read")
+        elif nested:
+            limitations.append(
+                f"{nested} instances inside library or hierarchical cells are not expanded"
+            )
+        for inst in instances:
             if len(inst) < 2:
                 continue
             ident, refdes = _ident(inst[1])
-            if refdes in names.values():
+            if not valid_refdes(refdes):
+                limitations.append(f"{refdes!r} is not a designator - skipped")
+                continue
+            if refdes in seen:
                 limitations.append(f"{refdes} is instantiated more than once")
                 continue
+            seen.add(refdes)
             names[ident] = refdes
             cell = next(_walk(inst, "cellRef"), None)
             lib_id = _ident(cell[1])[1] if cell is not None and len(cell) > 1 else ""
-            component = self._component(refdes, lib_id, inst)
+            component, unknown_dnp = self._component(refdes, lib_id, inst)
+            if unknown_dnp is not None:
+                limitations.append(f"{refdes}: DNP value {unknown_dnp!r} not understood - fitted")
             components.append(component)
             if len(components) > MAX_COMPONENTS:
                 raise ParseError(f"{file.name}: too many components", code="file.too_large")
@@ -115,18 +132,7 @@ class EdifParser:
             limitations.append(
                 "no footprint property on any instance - add PCB_FOOTPRINT to the export"
             )
-        nets: dict[str, list[str]] = {}
-        for net in _walk(root, "net"):
-            if len(net) < 2:
-                continue
-            _, net_name = _ident(net[1])
-            refs = []
-            for port in _walk(net, "portRef"):
-                inst_ref = next(_walk(port, "instanceRef"), None)
-                if inst_ref is not None and len(inst_ref) > 1:
-                    ident, _ = _ident(inst_ref[1])
-                    refs.append(names.get(ident, ident))
-            nets[net_name] = refs
+        nets = self._nets(root, names)
         confidence = 1.0 if not limitations else max(0.6, 1.0 - 0.1 * len(limitations))
         design_name = _ident(root[1])[1] if len(root) > 1 else Path(file.name).stem
         return ParsedDesign(
@@ -141,9 +147,45 @@ class EdifParser:
         )
 
     @staticmethod
-    def _component(refdes: str, lib_id: str, inst: SList) -> Component:
+    def _nets(root: SList, names: dict[str, str]) -> dict[str, list[str]]:
+        """Net name -> designators, from ``net/joined/portRef/instanceRef``."""
+        nets: dict[str, list[str]] = {}
+        for net in _walk(root, "net"):
+            if len(net) < 2:
+                continue
+            _, net_name = _ident(net[1])
+            refs = []
+            for port in _walk(net, "portRef"):
+                inst_ref = next(_walk(port, "instanceRef"), None)
+                if inst_ref is not None and len(inst_ref) > 1:
+                    ident, _ = _ident(inst_ref[1])
+                    refs.append(names.get(ident, ident))
+            nets[net_name] = refs
+        return nets
+
+    @staticmethod
+    def _top_cell(root: SList) -> SList | None:
+        """The cell named by ``(design X (cellRef TOP (libraryRef LIB)))``."""
+        design = next(root.children("design"), None)
+        ref = next(_walk(design, "cellRef"), None) if design is not None else None
+        if ref is None or len(ref) < 2:
+            return None
+        cell_name = _ident(ref[1])[0]
+        lib_ref = next(ref.children("libraryRef"), None)
+        lib_name = _ident(lib_ref[1])[0] if lib_ref is not None and len(lib_ref) > 1 else None
+        for library in root.children("library"):
+            if lib_name is not None and (len(library) < 2 or _ident(library[1])[0] != lib_name):
+                continue
+            for cell in library.children("cell"):
+                if len(cell) > 1 and _ident(cell[1])[0] == cell_name:
+                    return cell
+        return None
+
+    @staticmethod
+    def _component(refdes: str, lib_id: str, inst: SList) -> tuple[Component, str | None]:
         value = footprint = ""
         dnp = False
+        unknown_dnp: str | None = None
         fields: dict[str, str] = {}
         for prop in inst.children("property"):
             name, raw = _property(prop)
@@ -158,10 +200,12 @@ class EdifParser:
                 fields.setdefault("Manufacturer", raw)
             elif key in DNP:
                 flag = parse_dnp(raw, "populate" if key == "populate" else "dnp")
+                if flag is None:
+                    unknown_dnp = raw
                 dnp = bool(flag)
             elif name:
                 fields[name] = raw
-        return Component(
+        component = Component(
             refdes=refdes,
             value=value,
             footprint=footprint,
@@ -169,3 +213,4 @@ class EdifParser:
             fields=fields,
             dnp=dnp,
         )
+        return component, unknown_dnp

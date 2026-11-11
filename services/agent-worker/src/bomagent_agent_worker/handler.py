@@ -179,7 +179,8 @@ class RunWorker:
         if not keys or not all(key_belongs_to(message.tenant_id, k) for k in keys):
             raise RejectedRunError("design files must be under the tenant prefix")
         files = [FileRef(k.rsplit("/", 1)[-1], await self.store.get(k)) for k in keys]
-        design = parse_files(files)
+        # parsing is CPU-bound: off the event loop
+        design = await asyncio.to_thread(parse_files, files)
         config = RunConfig(
             variant=p["variant"],
             model_id=p.get("model_id", "fake-closed"),
