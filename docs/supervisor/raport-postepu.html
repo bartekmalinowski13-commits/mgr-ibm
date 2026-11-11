@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<title>Raport postępu – praca magisterska</title>
+<style>
+  @page { size: A4; margin: 18mm 16mm; }
+  body { font-family: -apple-system, "Helvetica Neue", Arial, sans-serif; font-size: 10.5pt; line-height: 1.45; color: #1a1a1a; }
+  h1 { font-size: 18pt; margin: 0 0 2mm; }
+  h2 { font-size: 12.5pt; margin: 7mm 0 2mm; border-bottom: 1px solid #ccc; padding-bottom: 1mm; }
+  .meta { color: #555; margin-bottom: 4mm; }
+  table { border-collapse: collapse; width: 100%; font-size: 9.5pt; }
+  th, td { border: 1px solid #ccc; padding: 1.5mm 2mm; text-align: left; vertical-align: top; }
+  th { background: #f2f2f2; }
+  figure { margin: 4mm 0; page-break-inside: avoid; }
+  figure img { width: 100%; border: 1px solid #ddd; }
+  figcaption { font-size: 9pt; color: #555; margin-top: 1mm; }
+  .note { background: #fff7e0; border-left: 3px solid #e0a800; padding: 2mm 3mm; font-size: 9.5pt; }
+  ul { margin: 1mm 0; padding-left: 5mm; }
+</style>
+</head>
+<body>
+<h1>Raport postępu pracy magisterskiej</h1>
+<div class="meta">
+  <strong>Temat:</strong> System wieloagentowy LLM a system hybrydowy do generowania zestawień materiałowych (BOM) urządzeń biomedycznych<br>
+  <strong>Autor:</strong> Bartosz Malinowski, PG WETI · <strong>Stan na:</strong> 11 listopada 2026
+</div>
+
+<h2>1. Cel i pytanie badawcze</h2>
+<p>Praca porównuje dwa warianty generowania i walidacji BOM z plików projektowych (KiCad, PDF, DXF i inne):</p>
+<ul>
+  <li><strong>Wariant A – 100% LLM:</strong> agenci LLM wykonują całość: ekstrakcję, dobór numerów części (MPN), walidację i kompozycję zestawienia.</li>
+  <li><strong>Wariant B – hybryda:</strong> deterministyczne reguły (parsowanie, normalizacja, grupowanie, walidacja, w tym flagi IEC 60601) oraz agent LLM z wyszukiwaniem w bazie wiedzy (RAG) tylko dla pozycji nierozstrzygniętych przez reguły.</li>
+</ul>
+<p>Porównanie obejmuje jakość (precyzja, czułość i F1 pozycji, dokładność pól, halucynacje MPN), skuteczność walidacji na wstrzykniętych błędach, powtarzalność, koszt i czas. Do istotności statystycznej służą test permutacyjny par (jednostką jest projekt) i bootstrap z 95% przedziałem ufności.</p>
+
+<h2>2. Co jest zrobione</h2>
+<p>Oba warianty działają w ramach jednej platformy, która jest zarazem stanowiskiem badawczym i prototypem produktu SaaS (wielu klientów, dane w UE, pełny audyt). Główne elementy:</p>
+<table>
+  <tr><th>Obszar</th><th>Stan</th></tr>
+  <tr><td>Rdzeń domenowy: model BOM z pochodzeniem każdego pola, normalizacja, reguły walidacji, metryki oceny</td><td>gotowe, przetestowane</td></tr>
+  <tr><td>Parsery formatów: KiCad 6–9, CSV, IPC-2581, EDIF, ODB++, listy części DXF, tabele BOM w PDF</td><td>gotowe</td></tr>
+  <tr><td>Baza wiedzy (datasheety): wyszukiwanie hybrydowe wektorowe + pełnotekstowe, izolacja per organizacja</td><td>gotowe</td></tr>
+  <tr><td>Agenci LLM: wariant A i B (LangGraph), adapter Claude Agent SDK, budżety tokenów, wersjonowane prompty</td><td>gotowe</td></tr>
+  <tr><td>Aplikacja webowa i API: projekty, przebiegi na żywo, BOM z pochodzeniem, poprawki, porównanie A/B, log audytu</td><td>gotowe</td></tr>
+  <tr><td>Narzędzie eksperymentu: macierz wariant × model × projekt × powtórzenia, statystyka, wykresy i tabele do rozdziału 7</td><td>gotowe; brak danych do pełnego eksperymentu</td></tr>
+  <tr><td>Infrastruktura chmurowa (AWS, region UE) jako kod</td><td>gotowa, niewdrożona</td></tr>
+</table>
+<p>Jakość kodu: ok. 420 testów automatycznych (jednostkowe, integracyjne, izolacji danych między organizacjami, kontraktowe, E2E z kontrolą dostępności WCAG 2.2 AA). Pokrycie kodu: 97% w pakietach domenowych i 90% w serwisach.</p>
+
+<h2>3. Jak to wygląda</h2>
+<figure><img src="img/03-nowy-przebieg.png"><figcaption>Rys. 1. Uruchomienie przebiegu: wybór szablonu urządzenia (EKG noszony), projektu i wariantu (A, B lub oba).</figcaption></figure>
+<figure><img src="img/04-bom-wynik.png"><figcaption>Rys. 2. Wynik wariantu B: kroki przebiegu (reguły bez LLM i wywołania agenta), liczba wywołań i tokenów, zestawienie BOM oraz pasek „kto zdecydował” (reguła albo agent LLM).</figcaption></figure>
+<figure><img src="img/05-pochodzenie.png"><figcaption>Rys. 3. Pochodzenie każdego pola pozycji BOM (odczyt z pliku, reguła z wersją, agent z cytatem z bazy wiedzy) i ręczna poprawka, która tworzy nową wersję zestawienia.</figcaption></figure>
+<figure><img src="img/06-audyt.png"><figcaption>Rys. 4. Log audytu z łańcuchem skrótów i weryfikacją integralności.</figcaption></figure>
+
+<div class="note"><strong>Uwaga do zrzutów:</strong> demo działa na atrapie modelu LLM, więc liczby na zrzutach pokazują działanie systemu, a nie wyniki badawcze. Pomiary na prawdziwych modelach wykonam po skompletowaniu zbioru ewaluacyjnego (punkt 4).</div>
+
+<h2>4. Następne kroki</h2>
+<ul>
+  <li><strong>Zbiór ewaluacyjny:</strong> co najmniej 6 otwartych projektów urządzeń biomedycznych w KiCad (na licencjach otwartych) z ręcznie zweryfikowanymi BOM referencyjnymi. Przy 6 projektach test permutacyjny pozwala osiągnąć p = 0,031; przy 3 tylko 0,25.</li>
+  <li><strong>Dostęp do modeli w UE:</strong> modele zamknięte (Anthropic przez AWS Bedrock w Frankfurcie, OpenAI przez Azure EU) i otwarte (open-weight), a następnie pełny eksperyment A vs B.</li>
+  <li><strong>Pisanie:</strong> rozdział z wynikami (wykresy i tabele generuje narzędzie eksperymentu) oraz dyskusja kompromisu jakość/koszt/audytowalność między wariantami.</li>
+</ul>
+<p>Chętnie omówię na konsultacjach dobór projektów do zbioru ewaluacyjnego i zakres porównania modeli.</p>
+</body>
+</html>
