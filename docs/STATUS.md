@@ -1,5 +1,7 @@
 # Status projektu
 
+> **Continue here:** `docs/HANDOFF.md` - remaining work in order, owner-side blockers, environment notes (2026-11-11).
+
 _Aktualizuje Claude Code po każdym kamieniu milowym (patrz `docs/prompts/CLAUDE_CODE_MASTER_PROMPT.md` §5)._
 
 ## 2026-11-10 – stan: M0–M4 gotowe (bez SSO), M5 – pierwsza część (gałąź `claude/code-master-prompt-part-2-5651f9`)
