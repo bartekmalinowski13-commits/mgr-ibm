@@ -1,104 +1,89 @@
-# Status projektu
+# Project status
 
-> **Continue here:** `docs/HANDOFF.md` - remaining work in order, owner-side blockers, environment notes (2026-11-11).
+> **Continue here:** `docs/HANDOFF.md` - remaining work in order, owner-side blockers, local demo, environment notes.
 
-_Aktualizuje Claude Code po każdym kamieniu milowym (patrz `docs/prompts/CLAUDE_CODE_MASTER_PROMPT.md` §5)._
+_Updated by Claude Code after every milestone (see `docs/prompts/CLAUDE_CODE_MASTER_PROMPT.md` §5)._
 
-## 2026-11-10 – stan: M0–M4 gotowe (bez SSO), M5 – pierwsza część (gałąź `claude/code-master-prompt-part-2-5651f9`)
+## 2026-11-11 - M0-M5 and M7 done, M6 code done (not deployed), M8 tool done (real experiment waits for data)
 
-> **Gdzie jest kod:** cała praca jest na gałęzi `claude/code-master-prompt-part-2-5651f9` (środowisko sesji pozwalało wypychać tylko tam – patrz `docs/DECISIONS_LOG.md`). **Nic nie jest scalone do `main`.** Do review: PR z tej gałęzi do `main` (squash) – commity są podzielone per kamień milowy.
+> **Where the code is:** all work is on branch `claude/code-master-prompt-part-2-5651f9` (the
+> session environment could push only there - see `docs/DECISIONS_LOG.md`). **Nothing is merged
+> to `main`.** For review: a PR from this branch to `main` (squash); commits are split per
+> milestone and per fix.
 
-### Co jest gotowe
+### What is done
 
-| KM | Zakres | Commit | Stan |
-|---|---|---|---|
-| M0 | monorepo (uv 15 pakietów + pnpm/biome), justfile, pre-commit, ruff/mypy --strict/import-linter, `platform-common` (kontekst tenanta, RLS, audyt z łańcuchem skrótów, OTel, structlog z redakcją, problem+json, kolejki SQS z kontekstem tenanta/śladu, magazyn S3 z prefiksem tenanta), migracja 0001 (role bez BYPASSRLS, tenants, audit), szkielety 4 serwisów z `/healthz` `/readyz`, `deploy/compose` (Postgres+pgvector, moto, LiteLLM + fake LLM, otel-lgtm, Langfuse, Ollama), GitHub Actions (przypięte SHA), Dependabot, szablony | `88211a8`, poprawki po review `158a34c` | ✅ (kryterium `just up && just smoke` potwierdzone w CI) |
-| M1 | `bom-core` (model z pochodzeniem per pole, normalizacja wartości/jednostek, obudowy, grupowanie, eksport CSV/JSON, JSON Schema), `cad-parsers` (KiCad 6–9 + CSV BOM, podpowiedzi dla formatów nieobsługiwanych), `rules` core@1.0.0 (w tym flagi IEC 60601), `eval` (P/R/F1, dokładność pól, pokrycie i halucynacje MPN, wstrzykiwanie błędów, powtarzalność), CLI `bomagent parse|bom|eval`, 3 fixture'y KiCad (CC0) | `1d5d335`, poprawki po review `06f838f` | ✅ |
-| M2 | `llm` (katalog modeli EU closed/open-weight z bramką weryfikacji, embeddingi gateway/hashing), migracja 0002 (`kb.*` z RLS global/tenant), `kb` (ekstrakcja PDF, chunking, hybryda pgvector+FTS+RRF+reranker, snapshoty, korekty jako wiedza tenanta, flagowanie prompt injection), `kb-indexer` (handler SQS), 18 syntetycznych datasheetów + zestaw zapytań | `4e21c4d` | ✅ |
-| M3 | `llm.chat` (gateway z structured output, fałszywy dostawca z kasetami), `agents`: wersjonowane prompty, kontrakt `VariantRuntime`, budżety, `langgraph_b` (hybryda: reguły + agent MPN z RAG tylko dla nierozstrzygniętych + pętla naprawy), `langgraph_a` (100 % LLM), adapter `claude_agent_sdk_a`, MPN tylko z dowodów KB; `fake_server` do compose; CLI `bomagent run --variant A\|B`; `agent-worker` (SQS → wynik w S3 + audyt) | `6c8b783`, `f3ef61d`, poprawki po review w commicie „fix(agents)” | ✅ |
-| M4 (część) | migracja 0003 (członkostwa, projekty, pliki, przebiegi, niezmienne wersje BOM, klucze idempotencji – wszystko z RLS; logowanie przez `app.user_sub` bez obejścia RLS), API `/v1` (OIDC JWT + lokalny mock IdP tylko local/test, `X-Org-Id` z członkostwem i rolami z bazy, RBAC, projekty, upload plików → ingest-worker, przebiegi 202 → agent-worker + SSE, BOM JSON/CSV, edycja pozycji → nowa wersja + audyt + korekta w KB, audyt + weryfikacja łańcucha), OpenAPI 3.1 (`services/api/openapi.json`) + testy kontraktowe Schemathesis, klient TS `@bomagent/api-client` z kontrolą dryfu w CI + członkowie i zaproszenia (migracja 0004), złożone FK per tenant (0005), poprawki po security review | `600b6a9`, `c1ca0d9`, `0af9249`, `7f00117`, `377ef94`, `31f63b1` | ✅ (oprócz SSO); gotowe też: klucze API (0006), limity planów, rate limiting i metering (0007), transactional outbox + reaper przebiegów (0008); brak: konfiguracja SSO per organizacja (zależy od Cognito – M6) |
-| M5 (część) | `apps/web` (React/Vite/TanStack, tokeny z UX_GUIDELINES): logowanie lokalne, onboarding + dołączanie kodem, przełącznik organizacji, Start z szablonami, projekty + upload, modal Nowy przebieg (A/B/oba), przebieg na żywo (SSE), BOM z paskiem pochodzenia i panelem (uzasadnienie, źródła KB, uwagi, poprawka → nowa wersja), eksport CSV, log audytu, ustawienia (członkowie, zaproszenia, klucze API, zużycie); `packages/ts/ui`; E2E Playwright + axe; `tools/devstack.py` | `f23ec19` + kolejne | ✅ (oprócz logowania Cognito – M6); także porównanie wariantów A/B, ocena względem BOM referencyjnego (`POST /v1/runs/{id}/evaluation`), baza wiedzy (`/v1/kb/documents`) i oś kroków przebiegu (`GET /v1/runs/{id}/trace`); otwarte: oś kroków przebiegu, Cognito/PKCE, zrzuty w PR |
-| M6 | `infra/cdk`: 10 stacków (network, data, identity, compute, WAF us-east-1, edge, observability, kopia backupu eu-west-1, security baseline, CI/CD OIDC), cdk-nag bez niepotwierdzonych uwag, 27 testów asercji, `cdk synth` bez poświadczeń; SCP; logowanie Cognito (PKCE) w `apps/web`; pipeline `main.yml` → `deploy-env.yml` + `tools/deploy.sh` (wyłączony do `AWS_DEPLOY_ENABLED`); runbooki. Po review infrastruktury: zadanie `dbbootstrap` (role, hasła, pgvector), wymagane repozytorium GitHub w roli OIDC + uprawnienia dla `deploy.sh`, WAF bez odwołań między regionami (SCP), reguły WAF nie blokują uploadów, izolacja sieciowa ingest-workera, obrazy na runnerze arm64, prod wymaga domeny i certyfikatów | `12e774a`…`1ca067a` + kolejne | ✅ kod gotowy, **nie wdrożony** (wdrożenie: Ty, wg `docs/platform/runbooks/`); odłożone uwagi review – `DECISIONS_LOG` |
-| M8 (część) | `bomagent experiment run <config.yaml>`: macierz {A,B} × modele × projekty × powtórzenia, ocena każdej odpowiedzi wobec BOM referencyjnego, test permutacyjny par (jednostka = projekt) + bootstrap 95 %, powtarzalność, `manifest.json` (commit, wersje promptów, pakiet reguł, katalog modeli); pilot na fałszywym LLM w `evals/reports/pilot-fake/`. Step 2 (English from here on): validation effectiveness on injected errors (each variant's validator on the same faulty reference BOMs, paired), SVG figures (`figures/`) and CSV tables (`tables/`) for chapter 7 | `d3e23aa` + next | 🟡 tool complete; missing: evaluation set of ≥ 6 designs with verified reference BOMs, runs on real models |
-| M7 | kolejne formaty | – | ❌ nie rozpoczęte |
+| Milestone | Scope | State |
+|---|---|---|
+| M0 | monorepo (uv workspace + pnpm/biome), justfile, pre-commit, ruff / mypy --strict / import-linter, `platform-common` (tenant context, RLS, hash-chained audit, OTel, structlog with redaction, problem+json, SQS with tenant/trace context, S3 with tenant prefix), migration 0001 (roles without BYPASSRLS), 4 service skeletons with `/healthz` `/readyz`, `deploy/compose`, GitHub Actions (pinned SHAs), Dependabot | ✅ |
+| M1 | `bom-core` (model with per-field provenance, normalisation, packages, grouping, CSV/JSON export), `cad-parsers` (KiCad 6-9 + CSV BOM), `rules` core@1.0.0 (incl. IEC 60601 flags), `eval` (P/R/F1, field accuracy, MPN coverage and hallucinations, error injection, repeatability), CLI `bomagent parse/bom/eval`, 3 KiCad fixtures (CC0) | ✅ |
+| M2 | `llm` (EU model catalogue with a verification gate, embeddings), migration 0002 (`kb.*` with global/tenant RLS), `kb` (PDF extraction, chunking, hybrid pgvector + FTS + RRF + reranker, snapshots, corrections as tenant knowledge, prompt-injection flags), `kb-indexer` | ✅ |
+| M3 | `llm.chat` (gateway with structured output, fake provider with cassettes), `agents`: versioned prompts, `VariantRuntime` contract, budgets, `langgraph_b` (hybrid), `langgraph_a` (100 % LLM), `claude_agent_sdk_a` adapter, MPNs only from KB evidence; `agent-worker` | ✅ |
+| M4 | API `/v1` (OIDC JWT, local mock IdP only in local/test, memberships and roles from the DB, RBAC, projects, uploads, runs + SSE, BOM JSON/CSV, corrections -> new version + audit + KB, audit verification), OpenAPI 3.1 + Schemathesis, TS client, members and invitations, composite tenant FKs, API keys, plan limits, rate limiting and metering, transactional outbox + run reaper, **SSO per organisation** (verified domains, SAML/OIDC federated in Cognito, discovery, membership on first SSO sign-in, enforcement) | ✅ |
+| M5 | `apps/web` (React/Vite/TanStack): sign-in (local + Cognito PKCE, e-mail first for SSO), onboarding, organisation switcher, templates, projects + upload, new run (A/B/both), live run steps (SSE), BOM with provenance panel and corrections, CSV export, A/B comparison, evaluation against a reference BOM, knowledge base, audit log, settings (members, invitations, API keys, usage, SSO); Playwright E2E + axe | ✅ |
+| M6 | `infra/cdk`: 10 stacks, cdk-nag clean, assertion tests, `cdk synth` without credentials; SCPs; pipeline `main.yml` -> `deploy-env.yml` + `tools/deploy.sh` (disabled until `AWS_DEPLOY_ENABLED`); runbooks | ✅ code, **not deployed** (owner's step, `docs/platform/runbooks/`) |
+| M7 | formats: IPC-2581, EDIF, ODB++, DXF parts lists, PDF BOM tables (cross-format consistency, XXE / entity expansion / path traversal / decompression bombs tested, hostile-input fuzz tests) | ✅ except PDF schematics/scans (OCR, vision) and native Altium/OrCAD/DWG (spikes + ADR first) |
+| M8 | `bomagent experiment run <config.yaml>`: {A,B} x models x designs x repetitions, scoring against reference BOMs, paired permutation test + bootstrap CI, repeatability, manifest, validation effectiveness on injected errors, SVG figures + CSV tables for chapter 7; pilot on the fake LLM in `evals/reports/pilot-fake/` | 🟡 tool complete; needs >= 6 designs with verified reference BOMs and EU models enabled |
 
-Plany i brainstorming: `docs/plans/M0-foundation.md`, `M1-domain-core.md`, `M2-knowledge-base.md`, `M4-platform-backend.md`.
+### Session 2026-11-11 (continuation)
 
-### Jak uruchomić
+- CI fix for the SSO commit (public discovery documents 400/429) - CI green again.
+- **Local demo without Docker or LLM keys:** `just demo` (API + seeded tenant + web app on
+  http://localhost:5173) - see `docs/HANDOFF.md`, "Local demo".
+- **SSO security review:** 1 HIGH, 3 MEDIUM, 5 LOW, no cross-tenant issue. Fixed: HIGH-1
+  (enforcement bypass by changing the account e-mail - now checked against the stored
+  membership; e-mail not writable by users), MEDIUM-2 (Cognito app-client updates serialised
+  across replicas), LOW-5 (Cognito touched only after preconditions; refused changes recorded
+  and audited), OIDC secret never in error text. Rest in `DECISIONS_LOG.md`.
+- **LangGraph checkpoints in PostgreSQL** with RLS (migration 0012, `TenantCheckpointSaver`),
+  used by the agent worker for API runs.
+- **Claude Agent SDK adapter:** run budget (turns, time, tokens) and KB snapshot recorded.
+- In progress at the time of writing (see `docs/HANDOFF.md`): deferred M4 low items, parsing in
+  a resource-limited subprocess, `sslmode=verify-full` to RDS, translation of the remaining
+  Polish documents.
 
-```bash
-uv run bomagent experiment run evals/experiments/pilot-fake.yaml   # raport: evals/reports/pilot-fake/report.md
-```
+### How to run
 
 ```bash
 just bootstrap                       # uv sync --all-packages + pnpm install + pre-commit
-# testy z bazą: Postgres 16 + pgvector; albo Docker (Testcontainers), albo:
-export BOMAGENT_TEST_DATABASE_URL=postgresql+psycopg://postgres:<hasło>@localhost:5432/postgres
-just test                            # unit + integracyjne + izolacji, z pokryciem
-just test-isolation                  # tylko testy izolacji tenantów (blokujące w CI)
+just demo                            # local demo: http://localhost:5173 (docs/HANDOFF.md)
+# tests with a database: PostgreSQL 16 + pgvector; either Docker (Testcontainers) or:
+export BOMAGENT_TEST_DATABASE_URL=postgresql+psycopg://postgres:<password>@localhost:5432/postgres
+just test                            # unit + integration + isolation, with coverage
+just test-isolation                  # tenant isolation only (blocking in CI)
 just lint                            # ruff, mypy --strict, import-linter, biome
-uv run bomagent parse evals/fixtures/kicad/ecg-frontend --summary
-uv run bomagent bom evals/fixtures/kicad/ecg-frontend --format json --out /tmp/bom.json
-uv run bomagent eval /tmp/bom.json evals/fixtures/kicad/ecg-frontend/reference_bom.csv
-uv run bomagent run evals/fixtures/kicad/ecg-frontend --variant A --reference evals/fixtures/kicad/ecg-frontend/reference_bom.csv
+just openapi                         # regenerate openapi.json + TS client types
+just e2e                             # Playwright + axe (with the API running on :8000)
 uv run bomagent run evals/fixtures/kicad/ecg-frontend --variant B --reference evals/fixtures/kicad/ecg-frontend/reference_bom.csv
-just up && just smoke                # pełny stos dockerowy (niezweryfikowane lokalnie)
-# aplikacja webowa lokalnie (bez Dockera): API + workery + nowa baza, potem Vite
-BOMAGENT_DEV_ADMIN_URL=postgresql+psycopg://postgres:<hasło>@localhost:5432/postgres uv run python tools/devstack.py
-pnpm --filter @bomagent/web dev       # http://127.0.0.1:5173
-just e2e                              # Playwright + axe (przy działającym API na :8000)
-# samo API lokalnie (mock IdP): token deweloperski z POST /v1/dev/token, potem nagłówki Authorization + X-Org-Id
-BOMAGENT_ENVIRONMENT=local BOMAGENT_AUTH_MODE=local BOMAGENT_DATABASE_URL=... uv run python -m bomagent_api   # :8000, /docs
-just openapi                         # regeneracja openapi.json + typów klienta TS
+uv run bomagent experiment run evals/experiments/pilot-fake.yaml   # report: evals/reports/pilot-fake/report.md
 ```
 
-### Wyniki testów (2026-11-10, lokalnie, Python 3.13, PostgreSQL 16.15 + pgvector 0.6)
-- **423 testy Python zielone** + 4 scenariusze E2E Playwright (axe: 0 naruszeń WCAG 2.2 AA) + vitest (web 4, api-client 2); wcześniej: **416 testów zielonych** (unit + integracyjne + izolacji, w tym izolacja projektów/przebiegów/BOM/audytu/zaproszeń i klucze obce między tenantami) + 25 podtestów kontraktowych Schemathesis; pominięte z założenia tylko smoke/e2e.
-- Pokrycie: `packages/py/*` **97,4 %** (próg 85 %), serwisy **89,7 %** (próg 75 %).
-- Klient TS: typecheck, vitest, biome, brak dryfu względem `openapi.json`.
-- ruff, ruff format, mypy --strict (95 plików), import-linter (2 kontrakty) – czyste.
-- M3 z fałszywym LLM (hydraulika, nie wynik naukowy): B na eeg-2ch – 4 wywołania LLM, pokrycie MPN 100 %; A – ok. 4× więcej wywołań (ekstrakcja, MPN dla wszystkich pozycji, walidacja, kompozycja).
-- Retrieval (M2) na syntetycznym korpusie: recall@5 = 1,00, recall@1 = 0,89 (18 zapytań).
-- Smoke natywnie (serwisy uruchomione bez Dockera): `/healthz` + `/readyz` z bazą dla 4 serwisów – zielone.
-- Drugi review M4 (klucze, limity, outbox): brak wysokich; 5 średnich naprawionych (`c57cb6d`), niskie odłożone w `DECISIONS_LOG.md`.
-- Security review subagentem M4: brak krytycznych; 2 wysokie (FK między tenantami, ponowne dostarczenie `run.requested`) i średnie naprawione; odłożone pozycje w `DECISIONS_LOG.md`.
-- Review subagentem po M0, M1 i M3 – wszystkie uwagi wysokiej wagi naprawione (commity `158a34c`, `06f838f` i „fix(agents): address M3 review”).
+### Test results (2026-11-11, local, Python 3.13, PostgreSQL 16 + pgvector)
 
-### Czego nie zrobiono / znane ograniczenia
-- **Docker niedostępny w sesji:** stos dockerowy uruchamiany tylko w CI – tam przechodzi (`just up-core` + `just smoke` z trace w Tempo, przebieg Actions #27 dla `2fdcdc9`). Pełne `just up` z Langfuse (profil) nie było jeszcze uruchamiane nigdzie.
-- **CI (GitHub Actions):** wszystkie 8 jobów zielone (lint/typy/granice, unit + integracyjne z Testcontainers + progi pokrycia, izolacja tenantów, kontrakt (pusty do M4), TS, compose + smoke, gitleaks + Trivy, cdk (pusty do M6)). Wcześniejsze przebiegi nie startowały (błąd składni workflow) – naprawione w `b9542d9`, `2fdcdc9`.
-- Checkpointy LangGraph są w pamięci (nie w Postgresie) – standardowe tabele checkpointów nie mają RLS; decyzja w `DECISIONS_LOG.md`.
-- Adapter Claude Agent SDK przetestowany tylko z atrapą pętli `query` (SDK nie instalowany w workspace).
-- Ślad w Langfuse niezweryfikowany lokalnie (LiteLLM → OTel → Langfuse działa tylko w stosie dockerowym).
-- Pluginy **superpowers / frontend-design** niedostępne w sesji – proces prowadzony ręcznie (brainstorm → plan w `docs/plans` → TDD → review subagentem → weryfikacja).
-- `kicad-cli` (weryfikacja krzyżowa parsera) niedostępny – parser testowany na własnych fixture'ach.
-- Pakiet reguł `core@1.0.0` zmienił się w poprawkach po review, ale nie był jeszcze użyty w żadnym eksperymencie – wersja nie została podbita.
+- Full Python suite: **509 passed** before the checkpointer commit (contract tests: 42
+  Schemathesis subtests); agents + worker + isolation suites green after it. CI (8 jobs) green
+  on `f72c058`.
+- Coverage thresholds (packages 85 %, services 75 %) met in CI.
+- ruff, ruff format, mypy --strict, import-linter (2 contracts), biome, TS typecheck - clean.
 
-### Decyzje do Twojej akceptacji (pełna lista: `docs/DECISIONS_LOG.md`)
-1. Praca na gałęzi sesji zamiast `feat/*` + brak scalania do `main`.
-2. moto (Apache-2.0) jako emulator S3/SQS zamiast LocalStack (wymaga konta od 03.2026).
-3. ADR-0016: jeden pakiet migracji z ręcznym DDL i 3 rolami bazy.
-4. pypdf zamiast PyMuPDF (AGPL), Docling opcjonalnie.
-5. `vector(1024)`; modele w katalogu wyłączone do czasu ręcznej weryfikacji dostępności w regionie UE.
-6. Definicje metryk do pracy (halucynacja = MPN spoza katalogu; dokładność pól liczona na wszystkich pozycjach referencji) – `packages/py/eval/README.md`.
+### Known limitations
 
-### Czego potrzebuję od Ciebie (wg ważności)
-1. Review i scalenie gałęzi do `main` (PR), włączenie ochrony gałęzi z wymaganym checkiem `tenant isolation (blocking)`.
-2. Do eksperymentu (M8): wybór otwartych projektów biomedycznych KiCad z licencją i ręczne BOM-y referencyjne; datasheety do korpusu globalnego (nie commitujemy ich – prawa autorskie).
-3. Konta i klucze (dopiero dla przebiegów na prawdziwych modelach): AWS (Bedrock w `eu-central-1`, profile EU), Azure OpenAI (Data Zone EU), opcjonalnie Mistral – ID modeli wpisuje się w `packages/py/llm/src/bomagent_llm/catalog/models.yaml` i ustawia `enabled/verified`.
-4. Decyzja o koncie AWS / Organizations przed M6 (CDK).
-5. **Do wystawienia aplikacji pod linkiem (M4–M6):** konto AWS z dostępem do Bedrock w regionie UE, domena (Route 53 lub dostęp do DNS), rola IAM dla GitHub OIDC (przygotuję szablon), weryfikacja domeny w Amazon SES (maile), decyzja: konta lokalne (e-mail + hasło, Cognito) czy od razu SSO. Hostowanie: AWS `eu-central-1` – SPA na S3 + CloudFront + WAF, API/workery na ECS Fargate, Aurora PostgreSQL, logowanie Amazon Cognito. Wdrożenie uruchamiasz Ty z pipeline'u (ja nie tworzę zasobów w chmurze). Pierwszy admin powstanie przy wdrożeniu – hasło ustawiasz z maila, nie przekazujesz mi go.
+- Docker is not available in the cloud session: the compose stack runs only in CI.
+- The Claude Agent SDK adapter is tested with a scripted stand-in for the SDK's `query` loop.
+- Langfuse tracing is unverified locally (only in the Docker stack).
+- Automatic resume of a crashed run from its last checkpoint is not wired (the reaper fails
+  stuck runs).
+- `kicad-cli` cross-check not available; parsers are tested on own fixtures.
+- Rule pack `core@1.0.0` changed in review fixes but was not used in any experiment yet -
+  version not bumped.
 
-### Następne kroki (dla kolejnej sesji: „kontynuuj”)
-1. M8 (your side first): evaluation set of ≥ 6 designs with reference BOMs and EU models enabled → the real run (`evals/experiments/*.yaml`); figures and tables are generated by the same command.
-2. M7 (plan: `docs/plans/M7-formats.md`): IPC-2581, EDIF and ODB++ done (cross-format consistency with the KiCad fixtures; XXE, entity expansion, path traversal, links and decompression bombs tested); DXF parts lists and PDF BOM tables done - M7 complete except PDF schematics/scans (OCR, vision model) and native Altium/OrCAD/DWG (spikes + ADR first).
-3. SSO per organisation: done (`docs/plans/M4-sso.md` - verified domains, SAML/OIDC federated in Cognito, discovery at sign-in, membership on first SSO sign-in, optional enforcement; settings tab and E2E). Live run steps over SSE: done (the agent worker appends each finished step to the run; the stream and the run screen show the last finished step).
-4. Niskie uwagi z review M4 (DECISIONS_LOG), checkpointy LangGraph w Postgresie z RLS, budżet/snapshot KB w adapterze Agent SDK.
-5. **Language (owner's decision, 2026-11-10):** all new repository documentation is written in English only. When all milestones are done, translate the existing Polish documents (`docs/`, `CLAUDE.md`, READMEs) to English in one pass - thesis documents (`docs/thesis/`) stay Polish.
+### What I need from the owner
 
-### Local preview
-`just bootstrap`, then `uv run python tools/devstack.py --port 8000` (API + workers + in-memory queues, fresh database) and `pnpm --filter @bomagent/web exec vite --port 5173`; open http://localhost:5173, sign in with any e-mail and name (local mock identity provider), create an organisation, upload the KiCad files from `evals/fixtures/kicad/ecg-frontend/`.
+See `docs/HANDOFF.md`, "Blocked on the owner" (merge, experiment data, EU model access, AWS +
+domain) and the assumptions awaiting acceptance (`docs/DECISIONS_LOG.md`, last column "yes").
 
-## 2026-11-09 – stan wyjściowy
-- Gotowe: szablon pracy (DOCX), struktura pracy, diagram wariantów A/B, prototyp przepływu UI (HTML), architektura produkcyjna, 15 ADR, wytyczne UX, roadmapa M0–M8, prompt dla Claude Code.
-- Kodu aplikacji jeszcze nie ma – start od M0.
+## 2026-11-09 - starting point
+
+- Done: thesis template (DOCX), thesis structure, A/B variant diagram, UI flow prototype (HTML),
+  production architecture, 15 ADRs, UX guidelines, roadmap M0-M8, Claude Code prompt.
+- No application code yet - start from M0.

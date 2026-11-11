@@ -64,35 +64,28 @@ user without a password, set `BOMAGENT_DEV_ADMIN_URL=postgresql+psycopg://user:p
 
 ## Next tasks for Claude Code (in this order)
 
-1. **CI check** of the SSO commit; fix red jobs (reproduce locally first).
-2. **Security review of SSO** - it was started and stopped at handoff, no findings yet.
-   Run a fresh read-only review subagent over: migration
-   `packages/py/db-migrations/src/bomagent_migrations/versions/0010_sso.py`,
-   `services/api/src/bomagent_api/sso.py`, `services/api/src/bomagent_api/routers/sso.py`,
-   the SSO parts of `services/api/src/bomagent_api/auth.py`, the web login/settings
-   changes and the API role's `cognito-idp` permissions in `infra/cdk/lib/compute-stack.ts`.
-   Focus: cross-tenant membership via another organisation's provider, RLS lookup
-   policies (`app.sso_domain` / `app.sso_provider`), enforcement bypass, account
-   linking (same e-mail via password and federation), OIDC secret leakage, the Cognito
-   `UpdateUserPoolClient` read-modify-write (fields reset, races across API replicas),
-   local-only endpoints (`/v1/sso/dev/dns`, dev token `identity_provider`). Fix all
-   CRITICAL/HIGH, log the rest in `DECISIONS_LOG.md`.
-3. **Deferred review items** (each listed in `docs/DECISIONS_LOG.md` with "Odłożone" /
-   "deferred"): M4 low items (storage quota per plan, upload races, idempotency hash
-   scope, per-IP limits for paths without an organisation, outbox retry limit and
-   cleanup, composite FKs in `kb.*` and `api_keys.replaced_by`); M6 review leftovers
-   (malware-scan enforcement before parsing, LiteLLM read-only FS test, Cognito e-mail
-   via SES, global KB in AWS, `sslmode=verify-full` with the RDS CA bundle); parser
-   leftovers (subprocess CPU/memory limit per parse, EDIF hierarchy expansion).
-4. **LangGraph checkpoints in Postgres with RLS** and the KB snapshot/budget in the
-   Agent SDK adapter (`docs/STATUS.md`, next steps 4).
-5. **Owner's decisions to record:** everything marked "tak/yes" in the last column of
-   `docs/DECISIONS_LOG.md` is waiting for acceptance - list them for the owner in the
-   final report instead of deciding silently.
-6. **Last: translation.** All new documents are English (owner's decision 2026-11-10).
-   When everything else is done, translate the remaining Polish documents (`docs/`
-   except `docs/thesis/`, `CLAUDE.md`, module READMEs, runbooks, `STATUS.md`,
-   `DECISIONS_LOG.md`) to English in one pass; UI stays PL + EN.
+State after the second session (2026-11-11, evening):
+
+1. ~~CI check of the SSO commit~~ - done (`e17256d`), CI green on `f72c058`.
+2. ~~Security review of SSO~~ - done; HIGH-1, MEDIUM-2, LOW-5 fixed (`bc81e4f`), the rest
+   logged in `DECISIONS_LOG.md` ("SSO security review - deferred").
+3. **Deferred review items** - in progress in two agent worktrees (if a new session finds
+   them unmerged, redo from `DECISIONS_LOG.md`):
+   - M4 low items (storage quota per plan, upload races, idempotency hash with method/path,
+     outbox retry limit + cleanup, composite FKs in `kb.*` and `api_keys.replaced_by`) -
+     migration `0011_m4_hardening.py` (revision 0011, down 0010); when merged, re-chain
+     `0012_graph_checkpoints.py` to `down_revision = "0011"`;
+   - parsing in a resource-limited subprocess (RLIMIT_AS / RLIMIT_CPU, minimal env) and
+     `sslmode=verify-full` with the RDS CA bundle (setting + Dockerfile + CDK env);
+   - still open after that: malware-scan enforcement before parsing (GuardDuty tag), LiteLLM
+     read-only FS test, Cognito e-mail via SES, global KB in AWS, EDIF hierarchy expansion,
+     SSO MEDIUM-3/4 and LOW-6..9.
+4. ~~LangGraph checkpoints in Postgres with RLS; budget/KB snapshot in the Agent SDK
+   adapter~~ - done (`98d43c7`, `1b5547d`); a review subagent was running at handoff.
+5. **Owner's decisions:** the list for the owner is below ("Assumptions awaiting your
+   acceptance"); keep it in sync with `DECISIONS_LOG.md`.
+6. **Translation** - in progress (agent worktree). `STATUS.md` and this file are already
+   English; `DECISIONS_LOG.md` is translated last (it is still being appended to).
 
 ## Blocked on the owner (Claude Code cannot do these)
 
