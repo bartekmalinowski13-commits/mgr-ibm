@@ -1,15 +1,15 @@
-# ADR-0008: Baza wiedzy: pgvector, zakres globalny + przestrzenie per tenant
+# ADR-0008: Knowledge base: pgvector, global scope + per-tenant spaces
 
-Status: Zaakceptowany · 2026-11-09
+Status: Accepted · 2026-11-09
 
-## Kontekst
-Jedna wspólna baza wiedzy, ale organizacje nie mogą widzieć ani uczyć się z danych innych.
+## Context
+A single shared knowledge base, but organizations must not see or learn from each other's data.
 
-## Decyzja
-pgvector + pełnotekstowe wyszukiwanie Postgresa (hybryda) + reranker. Kolumna `scope` (`global`|`tenant`), RLS: `tenant_id = current OR scope = 'global'`. Zapis do `global` tylko przez pipeline platformy. Poprawki użytkowników = wiedza tenanta. Snapshot KB zapisywany przy każdym przebiegu.
+## Decision
+pgvector + Postgres full-text search (hybrid) + a reranker. A `scope` column (`global`|`tenant`), RLS: `tenant_id = current OR scope = 'global'`. Writes to `global` only by the platform pipeline. User corrections = tenant knowledge. A KB snapshot is stored with every run.
 
-## Konsekwencje
-Jedna baza danych do utrzymania, transakcyjna spójność z resztą danych, izolacja tym samym mechanizmem co reszta. Gdy wektory przekroczą ~50 mln – ADR o migracji (OpenSearch Serverless).
+## Consequences
+One database to maintain, transactional consistency with the rest of the data, isolation by the same mechanism as everything else. When vectors exceed ~50 million – an ADR on migration (OpenSearch Serverless).
 
-## Rozważane alternatywy
-OpenSearch Serverless (osobny system, wyższy koszt minimalny); Pinecone (podprocesor spoza AWS).
+## Alternatives considered
+OpenSearch Serverless (a separate system, higher minimum cost); Pinecone (a sub-processor outside AWS).

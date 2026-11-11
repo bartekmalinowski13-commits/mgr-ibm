@@ -1,15 +1,15 @@
-# ADR-0009: Ingestia: wtyczki parserów w izolowanym workerze
+# ADR-0009: Ingestion: parser plugins in an isolated worker
 
-Status: Zaakceptowany · 2026-11-09
+Status: Accepted · 2026-11-09
 
-## Kontekst
-Wymagane formaty: KiCad, Altium, Cadence OrCAD/Allegro, PDF, DXF/DWG; część formatów jest zamknięta i binarna.
+## Context
+Required formats: KiCad, Altium, Cadence OrCAD/Allegro, PDF, DXF/DWG; some of the formats are closed and binary.
 
-## Decyzja
-Interfejs wtyczki `FormatParser` (wykrywanie, parsowanie, poziom pewności). Kolejność ścieżek: format otwarty → parser natywny; format zamknięty → parser open source po spike’u (z oceną licencji) → eksport neutralny z narzędzia klienta (IPC-2581, ODB++, EDIF, CSV BOM). Worker bez sieci, read-only, non-root, limity zasobów, skan malware przed parsowaniem.
+## Decision
+A `FormatParser` plugin interface (detection, parsing, confidence level). Order of paths: open format → native parser; closed format → open-source parser after a spike (with a licence assessment) → neutral export from the customer's tool (IPC-2581, ODB++, EDIF, CSV BOM). A worker without network, read-only, non-root, resource limits, malware scan before parsing.
 
-## Konsekwencje
-Bezpieczne przetwarzanie niezaufanych plików, łatwe dodawanie formatów. Uczciwość wobec klienta: UI mówi, gdy potrzebny jest eksport.
+## Consequences
+Safe processing of untrusted files, easy addition of formats. Honesty towards the customer: the UI says when an export is needed.
 
-## Rozważane alternatywy
-Parsowanie w procesie API (ryzyko bezpieczeństwa i stabilności).
+## Alternatives considered
+Parsing in the API process (security and stability risk).

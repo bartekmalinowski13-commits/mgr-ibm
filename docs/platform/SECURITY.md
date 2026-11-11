@@ -1,34 +1,34 @@
-# Bezpieczeństwo, prywatność, zgodność
+# Security, privacy, compliance
 
-Cel: poziom gotowy do audytu u klienta medtech. Docelowo **OWASP ASVS poziom 2** dla aplikacji, kontrolki gotowe pod ISO/IEC 27001 / SOC 2, wsparcie identyfikowalności klientów działających w ISO 13485.
+Goal: a level ready for an audit at a medtech customer. Target **OWASP ASVS level 2** for the application, controls ready for ISO/IEC 27001 / SOC 2, support for the traceability needs of customers operating under ISO 13485.
 
-## Pozycja regulacyjna (do potwierdzenia z doradcą)
-Platforma jest narzędziem wspomagającym projektowanie (inżynieria), a nie oprogramowaniem przeznaczonym do diagnozy lub terapii – najpewniej **nie jest wyrobem medycznym** w rozumieniu MDR 2017/745. Klienci jednak używają jej w procesie projektowym objętym ISO 13485, więc dostarczamy: log audytu, pochodzenie każdej pozycji BOM, wersjonowanie, eksport dowodów. Ewentualna walidacja narzędzia po stronie klienta (ISO 13485 §4.1.6) – dokumentacja walidacyjna jako przyszły produkt.
+## Regulatory position (to be confirmed with an advisor)
+The platform is a design-support (engineering) tool, not software intended for diagnosis or therapy – most likely it **is not a medical device** within the meaning of MDR 2017/745. Customers do, however, use it in a design process covered by ISO 13485, so we provide: an audit log, provenance of every BOM item, versioning, evidence export. Any tool validation on the customer's side (ISO 13485 §4.1.6) – validation documentation as a future product.
 
-## RODO
-- Przetwarzanie i przechowywanie wyłącznie w UE (ADR-0002, ADR-0006).
-- Rola: procesor dla danych klientów; umowa DPA; publiczna lista podprocesorów (AWS; Microsoft – Azure OpenAI; Mistral; – każdy z przetwarzaniem w UE).
-- Minimalizacja: dane osobowe tylko użytkowników (imię, e-mail, logi dostępu). Pliki projektowe to tajemnica przedsiębiorstwa klienta – traktowane jak dane najwyższej poufności.
-- Retencja konfigurowalna per organizacja; eksport i trwałe usunięcie danych organizacji (offboarding) z potwierdzeniem w logu audytu.
+## GDPR
+- Processing and storage exclusively in the EU (ADR-0002, ADR-0006).
+- Role: processor for customer data; DPA agreement; public list of sub-processors (AWS; Microsoft – Azure OpenAI; Mistral; – each with processing in the EU).
+- Minimization: personal data only of users (name, e-mail, access logs). Design files are the customer's trade secret – treated as data of the highest confidentiality.
+- Retention configurable per organization; export and permanent deletion of the organization's data (offboarding) with confirmation in the audit log.
 
-## Model zagrożeń (skrót, STRIDE)
-| Zagrożenie | Kontrola |
+## Threat model (summary, STRIDE)
+| Threat | Control |
 |---|---|
-| Dostęp do danych innej organizacji | RLS + kontekst tenanta + ABAC S3 + testy izolacji w CI (blokują merge) |
-| Złośliwy plik (zip bomb, XXE, exploit parsera) | skan malware, limity rozmiaru/czasu, parser w izolowanym zadaniu bez sieci, non-root, read-only FS, bezpieczne parsery XML (defusedxml) |
-| Prompt injection z plików/datasheetów | treść dokumentów zawsze jako dane (oddzielone od instrukcji), narzędzia agentów z minimalnymi uprawnieniami i tylko w kontekście tenanta, wyjście LLM walidowane schematem, agent nie wykonuje kodu ani nie robi żądań sieciowych |
-| Wyciek danych do dostawcy LLM spoza UE | tylko LLM Gateway, allowlista egress, katalog modeli z atrybutem rezydencji, testy konfiguracji |
-| Przejęcie konta | SSO, MFA dla adminów, krótkie tokeny, odświeżanie z rotacją, wykrywanie anomalii logowania (Cognito advanced security) |
-| Nadużycie kosztów (LLM) | budżety i limity per tenant i per przebieg, rate limiting |
-| Podmiana zależności / obrazu | lockfile, Renovate/Dependabot, Trivy, SBOM (Syft), podpis obrazów (cosign), akcje GitHub przypięte do SHA |
-| Wyciek sekretów | Secrets Manager, gitleaks w CI i pre-commit, brak sekretów w logach (filtry) |
-| Manipulacja logiem audytu | append-only + hash chain + S3 Object Lock w osobnym koncie log-archive |
+| Access to another organization's data | RLS + tenant context + S3 ABAC + isolation tests in CI (block merge) |
+| Malicious file (zip bomb, XXE, parser exploit) | malware scan, size/time limits, parser in an isolated task without network, non-root, read-only FS, safe XML parsers (defusedxml) |
+| Prompt injection from files/datasheets | document content always as data (separated from instructions), agent tools with minimal permissions and only within the tenant context, LLM output validated against a schema, the agent does not execute code or make network requests |
+| Data leak to a non-EU LLM provider | LLM Gateway only, egress allowlist, model catalogue with a residency attribute, configuration tests |
+| Account takeover | SSO, MFA for admins, short-lived tokens, refresh with rotation, login anomaly detection (Cognito advanced security) |
+| Cost abuse (LLM) | budgets and limits per tenant and per run, rate limiting |
+| Dependency / image tampering | lockfile, Renovate/Dependabot, Trivy, SBOM (Syft), image signing (cosign), GitHub actions pinned to SHA |
+| Secret leakage | Secrets Manager, gitleaks in CI and pre-commit, no secrets in logs (filters) |
+| Audit log tampering | append-only + hash chain + S3 Object Lock in a separate log-archive account |
 
-## Infrastruktura
-WAF (zestawy AWS Managed Rules + rate limiting) na CloudFront; TLS 1.2+ wszędzie; szyfrowanie w spoczynku KMS (Aurora, S3, SQS, logi); bazy w podsieciach prywatnych; VPC endpoints; GuardDuty (w tym Malware Protection for S3 i Runtime Monitoring dla ECS), Security Hub (AWS FSBP, CIS), AWS Config, IAM Access Analyzer, CloudTrail organizacji; SCP: regiony tylko UE, zakaz wyłączania CloudTrail/GuardDuty, zakaz publicznych bucketów.
+## Infrastructure
+WAF (AWS Managed Rules sets + rate limiting) on CloudFront; TLS 1.2+ everywhere; encryption at rest with KMS (Aurora, S3, SQS, logs); databases in private subnets; VPC endpoints; GuardDuty (including Malware Protection for S3 and Runtime Monitoring for ECS), Security Hub (AWS FSBP, CIS), AWS Config, IAM Access Analyzer, organization CloudTrail; SCPs: EU regions only, no disabling of CloudTrail/GuardDuty, no public buckets.
 
-## Aplikacja
-Walidacja wejścia (Pydantic), CSP i nagłówki bezpieczeństwa, ochrona CSRF dla sesji cookie, CORS tylko dla własnych domen, limity zapytań per tenant i klucz API, idempotencja, brak treści plików i promptów w logach aplikacyjnych (w Langfuse tylko w przestrzeni tenanta i z retencją), skan DAST (OWASP ZAP baseline) na stagingu.
+## Application
+Input validation (Pydantic), CSP and security headers, CSRF protection for cookie sessions, CORS only for own domains, request limits per tenant and API key, idempotency, no file content or prompts in application logs (in Langfuse only within the tenant space and with retention), DAST scan (OWASP ZAP baseline) on staging.
 
-## Procesy
-Przegląd bezpieczeństwa każdej migracji zmieniającej polityki RLS; kwartalny przegląd uprawnień; plan reakcji na incydenty (runbook w `docs/runbooks/`); testy penetracyjne przed pierwszym klientem produkcyjnym.
+## Processes
+Security review of every migration that changes RLS policies; quarterly permission review; incident response plan (runbook in `docs/runbooks/`); penetration tests before the first production customer.

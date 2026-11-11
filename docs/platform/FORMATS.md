@@ -1,23 +1,23 @@
-# Obsługiwane formaty wejściowe
+# Supported input formats
 
-Zasada: **nie udajemy, że parsujemy coś, czego nie parsujemy.** Każdy parser zwraca `ParsedDesign` z polem `confidence` i listą `limitations`, a UI pokazuje użytkownikowi, czego brakuje i jaki eksport poprawi wynik.
+Principle: **we do not pretend to parse something we do not parse.** Every parser returns a `ParsedDesign` with a `confidence` field and a list of `limitations`, and the UI shows the user what is missing and which export would improve the result.
 
-Założenie interpretacyjne: „Guidance” z wymagań = **Cadence** (OrCAD Capture / Allegro PCB).
+Interpretive assumption: "Guidance" from the requirements = **Cadence** (OrCAD Capture / Allegro PCB).
 
-| Format | Rozszerzenia | Ścieżka v1 | Co wyciągamy | Uwagi i ryzyka |
+| Format | Extensions | v1 path | What we extract | Notes and risks |
 |---|---|---|---|---|
-| KiCad 6–9 | `.kicad_sch`, `.kicad_pcb`, `.kicad_pro`, netlista | parser S-expression (własny lub biblioteka open source) + `kicad-cli` (`sch export bom/netlist`) jako weryfikacja | symbole, pola (Reference, Value, Footprint, MPN, Manufacturer, DNP), arkusze hierarchiczne, netlista, footprinty z PCB | format otwarty – priorytet M1, baza eksperymentu pracy |
-| Altium Designer | `.SchDoc`, `.PcbDoc`, `.PrjPcb` | spike: parser struktury OLE (biblioteki open source, ocena licencji); fallback: eksport BOM CSV / netlista / IPC-2581 / ODB++ | komponenty i parametry ze schematu | format zamknięty binarny; w ADR wynik spike’u |
-| Cadence OrCAD Capture | `.DSN`, `.OLB` | spike: parser open source (np. projekty z rodziny OpenOrCadParser – ocena dojrzałości i licencji); fallback: netlista (Allegro/Telesis), EDIF, BOM z CIS | komponenty, właściwości części | format zamknięty |
-| Cadence Allegro PCB | `.brd` | **eksport neutralny**: IPC-2581 (Allegro eksportuje natywnie), ODB++, raporty ASCII (extracta) | footprinty, refdesy, rozmieszczenie | brak wiarygodnego otwartego parsera `.brd` – komunikat w UI |
-| IPC-2581 | `.xml`, `.cvg` | parser XML (schemat IPC-2581) | BOM, komponenty, footprinty | format otwarty, rekomendowany eksport dla wszystkich narzędzi |
-| ODB++ | `.tgz` | parser struktury katalogów | komponenty, footprinty | otwarta specyfikacja |
-| EDIF | `.edf`, `.edif` | parser S-expression | netlista, instancje | neutralny format netlist |
-| PDF – schematy | `.pdf` | tekst wektorowy (PyMuPDF), dla rastrów OCR + model wizyjny | refdesy, wartości, oznaczenia | niższa pewność; pozycje oznaczane do przeglądu |
-| PDF – BOM / datasheety | `.pdf` | ekstrakcja tabel (Docling / pdfplumber) | tabele BOM, parametry komponentów do KB | datasheety zasilają bazę wiedzy |
-| DXF | `.dxf` | `ezdxf` | tabele BOM / tabliczki rysunkowe, bloki z atrybutami (części mechaniczne obudowy) | BOM mechaniczny, uzupełnia elektroniczny |
-| DWG | `.dwg` | konwersja do DXF w izolowanym kontenerze (ODA File Converter – licencja do sprawdzenia, lub LibreDWG – GPLv3, ocena prawna dla SaaS), dalej jak DXF | jak DXF | ADR po ocenie licencji |
-| CSV/XLSX BOM | `.csv`, `.xlsx` | mapowanie kolumn z podglądem | pozycje BOM | import BOM referencyjnych i istniejących zestawień |
+| KiCad 6–9 | `.kicad_sch`, `.kicad_pcb`, `.kicad_pro`, netlist | S-expression parser (custom or open-source library) + `kicad-cli` (`sch export bom/netlist`) as verification | symbols, fields (Reference, Value, Footprint, MPN, Manufacturer, DNP), hierarchical sheets, netlist, footprints from the PCB | open format – priority M1, basis of the thesis experiment |
+| Altium Designer | `.SchDoc`, `.PcbDoc`, `.PrjPcb` | spike: OLE structure parser (open-source libraries, licence assessment); fallback: BOM CSV export / netlist / IPC-2581 / ODB++ | components and parameters from the schematic | closed binary format; the spike result goes in an ADR |
+| Cadence OrCAD Capture | `.DSN`, `.OLB` | spike: open-source parser (e.g. projects from the OpenOrCadParser family – assessment of maturity and licence); fallback: netlist (Allegro/Telesis), EDIF, BOM from CIS | components, part properties | closed format |
+| Cadence Allegro PCB | `.brd` | **neutral export**: IPC-2581 (Allegro exports it natively), ODB++, ASCII reports (extracta) | footprints, refdes, placement | no reliable open `.brd` parser – message in the UI |
+| IPC-2581 | `.xml`, `.cvg` | XML parser (IPC-2581 schema) | BOM, components, footprints | open format, recommended export for all tools |
+| ODB++ | `.tgz` | directory structure parser | components, footprints | open specification |
+| EDIF | `.edf`, `.edif` | S-expression parser | netlist, instances | neutral netlist format |
+| PDF – schematics | `.pdf` | vector text (PyMuPDF), for rasters OCR + vision model | refdes, values, designators | lower confidence; items marked for review |
+| PDF – BOM / datasheets | `.pdf` | table extraction (Docling / pdfplumber) | BOM tables, component parameters for the KB | datasheets feed the knowledge base |
+| DXF | `.dxf` | `ezdxf` | BOM tables / title blocks, blocks with attributes (mechanical enclosure parts) | mechanical BOM, complements the electronic one |
+| DWG | `.dwg` | conversion to DXF in an isolated container (ODA File Converter – licence to be checked, or LibreDWG – GPLv3, legal assessment for SaaS), then as DXF | as DXF | ADR after the licence assessment |
+| CSV/XLSX BOM | `.csv`, `.xlsx` | column mapping with preview | BOM items | import of reference BOMs and existing bills of materials |
 
 ## Implementation status
 
@@ -33,14 +33,14 @@ Założenie interpretacyjne: „Guidance” z wymagań = **Cadence** (OrCAD Capt
 | PDF schematics, scanned PDFs (OCR / vision model) | planned after v1 | - |
 | Altium, OrCAD native, Allegro `.brd`, DWG, XLSX | not parsed - the upload returns an export hint | - |
 
-## Kontrakt wtyczki
+## Plugin contract
 ```python
 class FormatParser(Protocol):
-    format_id: str                       # np. "kicad", "ipc2581"
-    def sniff(self, file: FileRef) -> float: ...          # 0..1, czy to ten format
+    format_id: str                       # e.g. "kicad", "ipc2581"
+    def sniff(self, file: FileRef) -> float: ...          # 0..1, whether this is that format
     def parse(self, files: list[FileRef]) -> ParsedDesign: ...
 ```
-`ParsedDesign`: komponenty (refdes, wartość, footprint, pola, DNP), sieci (opcjonalnie), arkusze, `source_format`, `confidence`, `limitations[]`, sumy kontrolne plików wejściowych.
+`ParsedDesign`: components (refdes, value, footprint, fields, DNP), nets (optional), sheets, `source_format`, `confidence`, `limitations[]`, checksums of the input files.
 
-## Testy
-Dla każdego formatu: zestaw plików wzorcowych w `evals/fixtures/<format>/` (licencje otwarte!) z oczekiwanym `ParsedDesign` (snapshot), testy property-based dla normalizacji wartości (np. `4k7` = `4.7 kΩ`), testy odporności (pliki uszkodzone, ogromne, złośliwe – zip bomb, XXE w XML).
+## Tests
+For each format: a set of reference files in `evals/fixtures/<format>/` (open licences!) with the expected `ParsedDesign` (snapshot), property-based tests for value normalization (e.g. `4k7` = `4.7 kΩ`), robustness tests (corrupted, huge, malicious files – zip bomb, XXE in XML).

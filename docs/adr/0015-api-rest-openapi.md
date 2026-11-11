@@ -1,15 +1,15 @@
 # ADR-0015: API: REST + OpenAPI 3.1 + SSE
 
-Status: Zaakceptowany · 2026-11-09
+Status: Accepted · 2026-11-09
 
-## Kontekst
-Klient web, przyszłe integracje klientów (API publiczne), streaming postępu przebiegów.
+## Context
+A web client, future customer integrations (public API), streaming of run progress.
 
-## Decyzja
-REST `/v1`, OpenAPI 3.1 generowane z FastAPI i commitowane jako kontrakt; klient TS generowany. SSE dla postępu przebiegu. Idempotency-Key dla POST, paginacja kursorem, błędy RFC 9457, limity zapytań per tenant i klucz API.
+## Decision
+REST `/v1`, OpenAPI 3.1 generated from FastAPI and committed as the contract; a generated TS client. SSE for run progress. Idempotency-Key for POST, cursor pagination, RFC 9457 errors, request limits per tenant and API key.
 
-## Konsekwencje
-Prosty, dobrze wspierany kontrakt; testy kontraktowe (Schemathesis).
+## Consequences
+A simple, well-supported contract; contract tests (Schemathesis).
 
-## Rozważane alternatywy
-GraphQL (złożoność autoryzacji per pole); WebSockets (SSE wystarcza do jednokierunkowego streamingu).
+## Alternatives considered
+GraphQL (per-field authorization complexity); WebSockets (SSE is enough for one-way streaming).

@@ -1,15 +1,15 @@
-# ADR-0010: Obserwowalność: OpenTelemetry + Langfuse
+# ADR-0010: Observability: OpenTelemetry + Langfuse
 
-Status: Zaakceptowany · 2026-11-09
+Status: Accepted · 2026-11-09
 
-## Kontekst
-Wymagana pełna obserwowalność i monitoring, na otwartych standardach.
+## Context
+Full observability and monitoring required, on open standards.
 
-## Decyzja
-OTel SDK w każdym serwisie, ADOT Collector, Amazon Managed Prometheus + Managed Grafana + CloudWatch/X-Ray w chmurze; `grafana/otel-lgtm` lokalnie. Langfuse self-hosted dla śladów LLM. Atrybut `tenant_id` na spanach. SLO + alarmy.
+## Decision
+OTel SDK in every service, ADOT Collector, Amazon Managed Prometheus + Managed Grafana + CloudWatch/X-Ray in the cloud; `grafana/otel-lgtm` locally. Self-hosted Langfuse for LLM traces. A `tenant_id` attribute on spans. SLOs + alarms.
 
-## Konsekwencje
-Brak uzależnienia od jednego dostawcy obserwowalności; te same dane zasilają metryki pracy magisterskiej.
+## Consequences
+No lock-in to a single observability vendor; the same data feeds the master's thesis metrics.
 
-## Rozważane alternatywy
-Datadog/New Relic (koszt, podprocesor danych); tylko CloudWatch (słabsze śledzenie LLM).
+## Alternatives considered
+Datadog/New Relic (cost, a data sub-processor); CloudWatch only (weaker LLM tracing).
