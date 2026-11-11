@@ -124,3 +124,26 @@ async def test_adapter_flags_a_run_over_the_token_budget(retriever):
     assert out.status == "budget_exceeded"
     assert any(f.rule_id == "run.budget" for f in out.bom.findings)
     assert out.bom.items  # the submitted BOM is kept for inspection
+
+
+async def test_a_timed_out_run_keeps_the_usage_of_the_turns_it_made(retriever):
+    import asyncio
+
+    @dataclass
+    class AssistantMessage:
+        usage: dict = field(default_factory=lambda: {"input_tokens": 700, "output_tokens": 50})
+
+    async def two_turns_then_hang(prompt, options):
+        yield AssistantMessage()
+        yield AssistantMessage()
+        await asyncio.sleep(5)
+        yield ResultMessage()
+
+    factory = context_factory(FakeChat(heuristic_responder), retriever)
+    run = run_input()
+    run.config = RunConfig(variant="A", timeout_s=0.1)
+    out = await ClaudeAgentSdkVariantA(factory, query_fn=two_turns_then_hang).run(run)
+    assert out.status == "budget_exceeded"
+    assert out.usage.llm_calls == 2  # metered even though no final result arrived
+    assert out.usage.input_tokens == 1400
+    assert out.usage.output_tokens == 100

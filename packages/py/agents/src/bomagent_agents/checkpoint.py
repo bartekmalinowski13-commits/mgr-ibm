@@ -28,6 +28,7 @@ from langgraph.checkpoint.base import (
     get_checkpoint_id,
     get_checkpoint_metadata,
 )
+from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
@@ -54,7 +55,9 @@ _UPSERT_WRITES = _INSERT_WRITES + (
 
 class TenantCheckpointSaver(BaseCheckpointSaver[str]):
     def __init__(self, engine: AsyncEngine, tenant_id: uuid.UUID) -> None:
-        super().__init__()
+        # strict deserialisation: only LangGraph's safe types are rebuilt from the bytes
+        # (no import of arbitrary classes, no pickle) - the state is plain dicts and lists
+        super().__init__(serde=JsonPlusSerializer(allowed_msgpack_modules=None))
         self.engine, self.tenant_id = engine, tenant_id
 
     @staticmethod
@@ -67,7 +70,7 @@ class TenantCheckpointSaver(BaseCheckpointSaver[str]):
             text(
                 "SELECT task_id, channel, value_type, value FROM runs.graph_writes"
                 " WHERE run_id = :r AND checkpoint_ns = :ns AND checkpoint_id = :c"
-                " ORDER BY task_id, idx"
+                " ORDER BY task_path, task_id, idx"
             ),
             {"r": run_id, "ns": row.checkpoint_ns, "c": row.checkpoint_id},
         )
@@ -198,9 +201,13 @@ class TenantCheckpointSaver(BaseCheckpointSaver[str]):
             return
         # regular writes are kept once (a retried task does not overwrite them); special
         # channels (errors, interrupts: negative idx) take the latest value
-        sql = _UPSERT_WRITES if all(r["i"] < 0 for r in rows) else _KEEP_WRITES
+        keep = [r for r in rows if r["i"] >= 0]
+        upsert = [r for r in rows if r["i"] < 0]
         async with tenant_transaction(self.engine, self.tenant_id) as conn:
-            await conn.execute(text(sql), rows)
+            if keep:
+                await conn.execute(text(_KEEP_WRITES), keep)
+            if upsert:
+                await conn.execute(text(_UPSERT_WRITES), upsert)
 
     async def adelete_thread(self, thread_id: str) -> None:
         run_id = uuid.UUID(str(thread_id))

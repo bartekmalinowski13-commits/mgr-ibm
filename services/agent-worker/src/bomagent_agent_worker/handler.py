@@ -200,19 +200,23 @@ class RunWorker:
             async with progress_lock:
                 await self._progress(message.tenant_id, run_id, step, usage)
 
+        saver = TenantCheckpointSaver(self.engine, message.tenant_id) if p["registered"] else None
         factory = context_factory(
             self.chat,
             self._retriever(message.tenant_id, config.kb_snapshot_id),
             tenant_id=str(message.tenant_id),
             on_step=on_step if p["registered"] else None,
-            # graph state in the tenant's own rows (RLS); CLI runs have no run row
-            checkpointer=(
-                (lambda _run: TenantCheckpointSaver(self.engine, message.tenant_id))
-                if p["registered"]
-                else None
-            ),
+            # graph state in the tenant's own rows (RLS) while the run executes; CLI runs
+            # have no run row and keep the in-memory checkpointer
+            checkpointer=(lambda _run: saver) if saver is not None else None,
         )
-        result = await runtime_for(config.variant, factory, runtime=runtime).run(run)
+        try:
+            result = await runtime_for(config.variant, factory, runtime=runtime).run(run)
+        finally:
+            # resume from a checkpoint is not wired yet: keep customer design state no
+            # longer than the run itself (data minimisation)
+            if saver is not None:
+                await saver.adelete_thread(str(run_id))
         spent["usage"] = result.usage
         base = (message.tenant_id, "runs", str(run_id))
         await self.store.put(

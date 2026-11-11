@@ -28,7 +28,11 @@ only the architecture differs (`docs/thesis/ARCHITEKTURA_WARIANTOW.md`).
   for runs started through the API (`context_factory(..., checkpointer=...)`); the CLI,
   experiments and unit tests keep the in-memory checkpointer. Each run executes once (the
   worker claims `queued -> running`); resuming a crashed run from its last checkpoint is
-  not wired yet - the reaper fails stuck runs.
+  not wired yet - the reaper fails stuck runs - so the worker deletes a run's checkpoints
+  when the run ends (data minimisation). Deserialisation is strict (LangGraph's safe types
+  only, no pickle, no arbitrary class import).
+- The SDK adapter meters usage per assistant turn, so a run stopped by the time budget is
+  still billed for the turns it made.
 - Claude Agent SDK adapter: agent turns are capped by the run's LLM-call budget, the loop
   stops at the time budget, token overruns are reported as `budget_exceeded`, and the BOM
   records the run's KB snapshot like the LangGraph runtimes.

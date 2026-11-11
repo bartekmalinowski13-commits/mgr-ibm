@@ -173,7 +173,18 @@ class ClaudeAgentSdkVariantA:
             async for message in query_fn(
                 prompt="Create the BOM for this design.", options=options
             ):
-                if type(message).__name__ == "ResultMessage":
+                kind = type(message).__name__
+                if kind == "AssistantMessage":
+                    # running total per turn: a run stopped by the time budget never sees
+                    # the final ResultMessage, and its spend must still be metered
+                    u = getattr(message, "usage", None) or {}
+                    usage = usage + Usage(
+                        llm_calls=1,
+                        input_tokens=int(u.get("input_tokens", 0)),
+                        output_tokens=int(u.get("output_tokens", 0)),
+                        cached_input_tokens=int(u.get("cache_read_input_tokens", 0)),
+                    )
+                if kind == "ResultMessage":  # authoritative totals of the whole loop
                     u = getattr(message, "usage", None) or {}
                     usage = Usage(
                         llm_calls=int(getattr(message, "num_turns", 0) or 0),

@@ -187,12 +187,12 @@ async def test_registered_run_uses_database_and_redelivery_is_a_no_op(app_engine
         ).one()
     assert runs == 1  # metered once despite the redelivery
     assert calls == result.usage.llm_calls
-    # the graph checkpointed into the tenant's own rows (RLS), not in memory
+    # checkpoints lived in the tenant's rows during the run and are gone after it
     async with tenant_transaction(app_engine, tenant.tenant_id) as conn:
         checkpoints = await conn.scalar(
             text("SELECT count(*) FROM runs.graph_checkpoints WHERE run_id = :r"), {"r": rid}
         )
-    assert (checkpoints or 0) > 1
+    assert checkpoints == 0
 
 
 async def test_failed_run_is_marked_failed_and_unknown_runs_rejected(app_engine, make_tenant):
