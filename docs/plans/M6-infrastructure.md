@@ -1,28 +1,28 @@
-# M6 – Infrastruktura (`infra/cdk`)
+# M6 – Infrastructure (`infra/cdk`)
 
-Zasada nadrzędna (CLAUDE.md §6): **kod + `cdk synth` + testy**. Żadnego `cdk deploy`, żadnych zasobów w chmurze z sesji Claude Code. Wdrożenie uruchamia człowiek z pipeline'u (joby wyłączone do `vars.AWS_DEPLOY_ENABLED == 'true'`).
+Overriding rule (CLAUDE.md §6): **code + `cdk synth` + tests**. No `cdk deploy`, no cloud resources from a Claude Code session. The deployment is run by a human from the pipeline (jobs disabled unless `vars.AWS_DEPLOY_ENABLED == 'true'`).
 
-## Brainstorming (pytania → odpowiedzi z dokumentów)
-| Pytanie | Odpowiedź | Źródło |
+## Brainstorming (questions → answers from the documents)
+| Question | Answer | Source |
 |---|---|---|
-| Narzędzie | AWS CDK v2 (TypeScript) + cdk-nag (AwsSolutions, HIPAA Security jako punkt odniesienia) | ADR-0013, ARCHITECTURE §12 |
-| Stacki | network, data, identity, compute, observability, edge, security-baseline (+ cicd: rola GitHub OIDC) | ADR-0013, ARCHITECTURE §13 |
-| Region | `eu-central-1`; kopie AWS Backup do `eu-west-1`; WAF dla CloudFront musi powstać w `us-east-1` (usługa globalna – wyjątek dopuszczony w ADR-0002) | ADR-0002, ARCHITECTURE §12 |
-| Konta | Organizations (management, security, log-archive, shared-services, dev/staging/prod) zakłada człowiek; repo zawiera tylko polityki SCP (`infra/cdk/policies/`) do zastosowania i stacki obciążeniowe dla kont dev/staging/prod | ARCHITECTURE §12 |
-| Synth bez poświadczeń | żadnych `fromLookup`; konto i parametry z kontekstu (`cdk.json`, zmienne CI) z kontem-zaślepką `000000000000` w synth | CLAUDE.md §6 |
-| Baza | Aurora PostgreSQL 16 Serverless v2, szyfrowanie KMS, podsieci izolowane, IAM auth, Performance Insights z KMS, backtrack niedostępny dla PG – PITR + AWS Backup | ADR-0004, ADR-0008 |
-| Kolejki | SQS ingest/runs/kb + DLQ (maxReceiveCount 5), SSE-KMS, polityka TLS-only | ADR-0003 |
-| Parsery | ingest-worker w podsieci izolowanej (bez NAT), tylko VPC endpoints S3/SQS/Logs/ECR; read-only root FS, non-root | ADR-0009, CLAUDE.md §5 |
-| LLM | LiteLLM jako serwis ECS z endpointem VPC do Bedrock; wyjście do Azure OpenAI EU / Mistral przez NAT (allowlista domen – Network Firewall jako opcja, poza zakresem v1 – patrz DECISIONS_LOG) | ADR-0006 |
-| API za CloudFront | ALB w podsieciach publicznych, ruch tylko z CloudFront (zarządzana lista prefiksów przekazana parametrem – bez lookupów) + nagłówek-sekret origin; WAF (AWS Managed Rules + rate limit) na CloudFront | SECURITY.md |
-| SPA | S3 prywatny + OAC, nagłówki bezpieczeństwa (CSP, HSTS) przez Response Headers Policy | UX/SECURITY |
-| Logowanie | Cognito User Pool (weryfikacja e-maila, MFA TOTP opcjonalne → wymagane dla adminów w aplikacji, threat protection), klient SPA bez sekretu z PKCE (authorization code), domena Hosted UI | ADR-0005 |
-| Obserwowalność | grupy logów z KMS i retencją, alarmy (DLQ > 0, 5xx ALB, CPU, wiek wiadomości), SNS | ADR-0010 |
-| Bezpieczeństwo konta | GuardDuty (S3 Malware Protection, Runtime Monitoring ECS), Security Hub (FSBP, CIS), IAM Access Analyzer, CloudTrail konta jeśli brak organizacyjnego (flaga) | SECURITY.md |
+| Tool | AWS CDK v2 (TypeScript) + cdk-nag (AwsSolutions, HIPAA Security as a reference point) | ADR-0013, ARCHITECTURE §12 |
+| Stacks | network, data, identity, compute, observability, edge, security-baseline (+ cicd: GitHub OIDC role) | ADR-0013, ARCHITECTURE §13 |
+| Region | `eu-central-1`; AWS Backup copies to `eu-west-1`; the WAF for CloudFront must be created in `us-east-1` (a global service – an exception allowed in ADR-0002) | ADR-0002, ARCHITECTURE §12 |
+| Accounts | Organizations (management, security, log-archive, shared-services, dev/staging/prod) is set up by a human; the repo contains only the SCP policies (`infra/cdk/policies/`) to apply and the workload stacks for the dev/staging/prod accounts | ARCHITECTURE §12 |
+| Synth without credentials | no `fromLookup`; account and parameters from context (`cdk.json`, CI variables) with the placeholder account `000000000000` in synth | CLAUDE.md §6 |
+| Database | Aurora PostgreSQL 16 Serverless v2, KMS encryption, isolated subnets, IAM auth, Performance Insights with KMS, backtrack unavailable for PG – PITR + AWS Backup | ADR-0004, ADR-0008 |
+| Queues | SQS ingest/runs/kb + DLQ (maxReceiveCount 5), SSE-KMS, TLS-only policy | ADR-0003 |
+| Parsers | ingest-worker in an isolated subnet (no NAT), only VPC endpoints S3/SQS/Logs/ECR; read-only root FS, non-root | ADR-0009, CLAUDE.md §5 |
+| LLM | LiteLLM as an ECS service with a VPC endpoint to Bedrock; egress to Azure OpenAI EU / Mistral via NAT (domain allowlist – Network Firewall as an option, out of v1 scope – see DECISIONS_LOG) | ADR-0006 |
+| API behind CloudFront | ALB in public subnets, traffic only from CloudFront (the managed prefix list passed as a parameter – no lookups) + a secret origin header; WAF (AWS Managed Rules + rate limit) on CloudFront | SECURITY.md |
+| SPA | private S3 + OAC, security headers (CSP, HSTS) via a Response Headers Policy | UX/SECURITY |
+| Login | Cognito User Pool (e-mail verification, optional TOTP MFA → required for admins in the application, threat protection), SPA client without a secret with PKCE (authorization code), Hosted UI domain | ADR-0005 |
+| Observability | log groups with KMS and retention, alarms (DLQ > 0, ALB 5xx, CPU, message age), SNS | ADR-0010 |
+| Account security | GuardDuty (S3 Malware Protection, ECS Runtime Monitoring), Security Hub (FSBP, CIS), IAM Access Analyzer, account CloudTrail if there is no organization one (flag) | SECURITY.md |
 
-## Plan zadań
-1. Szkielet `infra/cdk` (pakiet `@bomagent/infra`, konfiguracja środowisk, aspekty: cdk-nag + tagi), test „synth wszystkich stacków bez błędów cdk-nag”.
-2. network → data → identity → compute → edge (+ waf w us-east-1) → observability → security-baseline → cicd; dla każdego: testy asercji (najważniejsze własności bezpieczeństwa), potem kod.
-3. `policies/scp-*.json` (tylko UE, zakaz wyłączania CloudTrail/GuardDuty, zakaz publicznych bucketów).
-4. Logowanie Cognito (PKCE) w `apps/web` (konfiguracja z `/config.json` generowanego przy wdrożeniu).
-5. `just synth`, CI (job `cdk`), runbooki w `docs/platform/runbooks/`.
+## Task plan
+1. The `infra/cdk` skeleton (the `@bomagent/infra` package, environment configuration, aspects: cdk-nag + tags), a test "synth of all stacks without cdk-nag errors".
+2. network → data → identity → compute → edge (+ waf in us-east-1) → observability → security-baseline → cicd; for each: assertion tests (the most important security properties), then code.
+3. `policies/scp-*.json` (EU only, no disabling CloudTrail/GuardDuty, no public buckets).
+4. Cognito login (PKCE) in `apps/web` (configuration from `/config.json` generated at deployment).
+5. `just synth`, CI (the `cdk` job), runbooks in `docs/platform/runbooks/`.

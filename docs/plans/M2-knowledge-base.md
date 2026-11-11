@@ -1,25 +1,25 @@
-# M2 – Baza wiedzy (plan)
+# M2 – Knowledge base (plan)
 
-Źródła: ROADMAP M2, ADR-0006, ADR-0008, SECURITY.md (prompt injection), TESTING.md.
+Sources: ROADMAP M2, ADR-0006, ADR-0008, SECURITY.md (prompt injection), TESTING.md.
 
-## Brainstorming – pytania i odpowiedzi
-| Pytanie | Decyzja | Uzasadnienie |
+## Brainstorming – questions and answers
+| Question | Decision | Rationale |
 |---|---|---|
-| Wymiar wektorów | `vector(1024)` | Titan Text Embeddings V2 i Cohere Embed v3 (Bedrock) dają 1024; indeks HNSW wymaga stałego wymiaru |
-| Jak zapewnić powtarzalność (`kb_snapshot_id`)? | dokumenty niemutowalne (`supersedes`), snapshot = lista id aktywnych dokumentów | eksperyment da się odtworzyć dopóki dokumentów nie skasowano |
-| Kto pisze do korpusu globalnego? | tylko rola `bomagent_platform` (polityka RLS), wiadomości tylko od pseudo-tenanta platformy | ADR-0008 |
-| Docling – zależność obowiązkowa? | opcjonalna (obraz kb-indexer), testy na pypdf | Docling ciągnie torch (GB); PyMuPDF odrzucony (AGPL) |
-| Reranker | leksykalny (deterministyczny), interfejs pod reranker z gateway | bez sieci w CI; ten sam kontrakt dla rerankera modelowego |
-| Fałszywe embeddingi | haszowanie cech (słowa + trigramy) | deterministyczne testy retrieval bez modelu |
-| Prompt injection w datasheetach | sanityzacja + flaga `injection_suspect`, takie fragmenty na końcu rankingu | SECURITY.md |
-| Katalog MPN | `kb.parts` z ekstrakcji (sekcje „Ordering information”) + korekty użytkowników | podstawa metryki halucynacji MPN |
+| Vector dimension | `vector(1024)` | Titan Text Embeddings V2 and Cohere Embed v3 (Bedrock) produce 1024; an HNSW index requires a fixed dimension |
+| How to ensure reproducibility (`kb_snapshot_id`)? | immutable documents (`supersedes`), snapshot = list of active document ids | an experiment can be reproduced as long as the documents have not been deleted |
+| Who writes to the global corpus? | only the `bomagent_platform` role (RLS policy), messages only from the platform pseudo-tenant | ADR-0008 |
+| Docling – a mandatory dependency? | optional (kb-indexer image), tests on pypdf | Docling pulls in torch (GB); PyMuPDF rejected (AGPL) |
+| Reranker | lexical (deterministic), interface ready for a reranker from the gateway | no network in CI; the same contract for a model-based reranker |
+| Fake embeddings | feature hashing (words + trigrams) | deterministic retrieval tests without a model |
+| Prompt injection in datasheets | sanitisation + `injection_suspect` flag, such fragments go to the end of the ranking | SECURITY.md |
+| MPN catalog | `kb.parts` from extraction ("Ordering information" sections) + user corrections | basis of the MPN hallucination metric |
 
-## Zadania (TDD) – stan
-1. `llm`: katalog modeli (EU, closed/open-weight, weryfikacja przed włączeniem), embeddingi gateway/hashing – ✅
-2. Migracja 0002 (`kb.documents/chunks/parts/snapshots`, RLS global/tenant, trigger właściciela dokumentu) – ✅
-3. `kb`: ekstrakcja, chunking, części, bezpieczeństwo, store + retrieval hybrydowy + RRF + reranker, snapshoty, korekty – ✅
-4. `kb-indexer`: handler SQS (tenant/global), wiring z ustawień – ✅
-5. Fixture'y: 18 syntetycznych datasheetów (CC0) + zestaw 18 zapytań – ✅
+## Tasks (TDD) – status
+1. `llm`: model catalog (EU, closed/open-weight, verification before enabling), gateway/hashing embeddings – ✅
+2. Migration 0002 (`kb.documents/chunks/parts/snapshots`, global/tenant RLS, document-owner trigger) – ✅
+3. `kb`: extraction, chunking, parts, security, store + hybrid retrieval + RRF + reranker, snapshots, corrections – ✅
+4. `kb-indexer`: SQS handler (tenant/global), wiring from settings – ✅
+5. Fixtures: 18 synthetic datasheets (CC0) + a set of 18 queries – ✅
 
-## Kryteria akceptacji
-Testy retrieval: recall@5 = 1,00, recall@1 = 0,89 (≥ 0,9 / ≥ 0,6 wymagane w teście). Testy izolacji KB (`tests/isolation/test_kb_isolation.py`) zielone.
+## Acceptance criteria
+Retrieval tests: recall@5 = 1.00, recall@1 = 0.89 (≥ 0.9 / ≥ 0.6 required in the test). KB isolation tests (`tests/isolation/test_kb_isolation.py`) green.

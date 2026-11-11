@@ -1,23 +1,23 @@
-# M3 – Agenci, warianty A i B (plan)
+# M3 – Agents, variants A and B (plan)
 
-Źródła: ROADMAP M3, ADR-0006, ADR-0007, ARCHITEKTURA_WARIANTOW.md, SECURITY.md.
+Sources: ROADMAP M3, ADR-0006, ADR-0007, ARCHITEKTURA_WARIANTOW.md, SECURITY.md.
 
-## Brainstorming – pytania i odpowiedzi
-| Pytanie | Decyzja | Uzasadnienie |
+## Brainstorming – questions and answers
+| Question | Decision | Rationale |
 |---|---|---|
-| Jak zapewnić porównywalność A i B? | ten sam retriever, model, prompt doboru MPN i zasada „MPN tylko z dowodów” | różnice przypisywalne architekturze |
-| Co robi LLM w B? | tylko dobór MPN dla pozycji bez MPN + naprawa po błędach reguł | ARCHITEKTURA_WARIANTOW (tabela kroków) |
-| Co robi kod w A? | wyłącznie konwersja JSON → `BomItem` (bez grupowania/ilości) | „100 % LLM” |
-| Fan-out i współbieżność | LangGraph `Send` + `max_concurrency` z `RunConfig` | R7 (szybkość) |
-| Structured output | JSON Schema w `response_format`, walidacja Pydantic, 1 ponowienie | R7, brak pętli parsowania |
-| Checkpointy | pamięć; Postgres po zaprojektowaniu tabel z RLS | izolacja tenantów > wygoda |
-| Claude Agent SDK | adapter z narzędziami MCP w procesie, bez narzędzi wbudowanych | ADR-0007, SECURITY.md |
+| How to ensure A and B are comparable? | the same retriever, model, MPN-selection prompt and the "MPN only from evidence" rule | differences attributable to the architecture |
+| What does the LLM do in B? | only MPN selection for items without an MPN + repair after rule errors | ARCHITEKTURA_WARIANTOW (step table) |
+| What does code do in A? | only the JSON → `BomItem` conversion (no grouping/quantities) | "100% LLM" |
+| Fan-out and concurrency | LangGraph `Send` + `max_concurrency` from `RunConfig` | R7 (speed) |
+| Structured output | JSON Schema in `response_format`, Pydantic validation, 1 retry | R7, no parsing loop |
+| Checkpoints | memory; Postgres once the tables with RLS are designed | tenant isolation > convenience |
+| Claude Agent SDK | adapter with in-process MCP tools, no built-in tools | ADR-0007, SECURITY.md |
 
-## Zadania – stan
-1. `llm.chat` (gateway + fake + kasety) – ✅
-2. prompty wersjonowane, kontrakt `VariantRuntime`, budżety, retrievery – ✅
+## Tasks – status
+1. `llm.chat` (gateway + fake + cassettes) – ✅
+2. versioned prompts, the `VariantRuntime` contract, budgets, retrievers – ✅
 3. `langgraph_b`, `langgraph_a`, `claude_agent_sdk_a` – ✅
 4. `fake_server` (compose), CLI `bomagent run`, `agent-worker` – ✅
 
-## Kryteria akceptacji
-Przebieg A i B na fixture KiCad z fałszywym LLM daje BOM (testy `packages/py/agents`, `services/agent-worker`); ślad kroków: `RunOutput.trace` + spany OTel `node *` i `chat *` (atrybuty `gen_ai.*`); CLI `bomagent run --variant A|B` działa. Ślad w Langfuse – przez callback OTel w LiteLLM (compose), niezweryfikowany lokalnie (brak Dockera).
+## Acceptance criteria
+A run of A and B on the KiCad fixture with a fake LLM produces a BOM (tests in `packages/py/agents`, `services/agent-worker`); step trace: `RunOutput.trace` + OTel spans `node *` and `chat *` (`gen_ai.*` attributes); the CLI `bomagent run --variant A|B` works. The trace in Langfuse – via the OTel callback in LiteLLM (compose), not verified locally (no Docker).

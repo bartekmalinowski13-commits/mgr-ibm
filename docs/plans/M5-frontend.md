@@ -1,28 +1,28 @@
 # M5 – Frontend (`apps/web`)
 
-## Brainstorming (pytania i odpowiedzi z dokumentów)
-| Pytanie | Odpowiedź | Źródło |
+## Brainstorming (questions and answers from the documents)
+| Question | Answer | Source |
 |---|---|---|
-| Stos | React + Vite + TanStack Router/Query/Table + Tailwind + komponenty w stylu shadcn w `packages/ts/ui` | ADR-0014 |
-| Logowanie lokalnie | mock IdP API (`/v1/dev/token`); w chmurze Cognito Hosted UI + PKCE (M6) | ADR-0005, DECISIONS_LOG |
-| Postęp na żywo | SSE przez `fetch` (EventSource nie wysyła nagłówka Authorization) | ADR-0015 |
-| Lista modeli w modalu | nowy `GET /v1/models` – ta sama reguła co walidacja `POST /v1/runs` | katalog modeli (M2) |
-| E2E bez Dockera | `tools/devstack.py`: API + workery w jednym procesie, nowa baza; w CI stos compose | TESTING.md |
+| Stack | React + Vite + TanStack Router/Query/Table + Tailwind + shadcn-style components in `packages/ts/ui` | ADR-0014 |
+| Local login | mock IdP in the API (`/v1/dev/token`); in the cloud Cognito Hosted UI + PKCE (M6) | ADR-0005, DECISIONS_LOG |
+| Live progress | SSE via `fetch` (EventSource does not send the Authorization header) | ADR-0015 |
+| Model list in the modal | new `GET /v1/models` – the same rule as the `POST /v1/runs` validation | model catalog (M2) |
+| E2E without Docker | `tools/devstack.py`: API + workers in one process, a fresh database; in CI the compose stack | TESTING.md |
 
-## Plan wizualny (skill frontend-design, przegląd vs „generyczny” wzorzec)
-- **Paleta:** papier `#ECEFF2` (chłodna szarość, nie krem), powierzchnie `#FFFFFF`, atrament `#18212B` (akcja główna – nie zielony, żeby nie mylić z regułą), linie `#D3D9DF`, fiolet LLM `#5B3FD6`, zieleń soldermaski `#13704A`, bursztyn `#A35A00`, czerwień `#B42318`.
-- **Typografia:** Bricolage Grotesque 800 tylko w powitaniu i tytułach; IBM Plex Sans w interfejsie; Plex Mono wyłącznie dla danych technicznych (oznaczenia, MPN, obudowy) – nie dla etykiet.
-- **Jedyny odważny element:** pasek pochodzenia (4 px) przy każdym wierszu BOM w kolorze tego, kto zdecydował (agent / reguła / plik / człowiek), powtórzony w pasku „Kto zdecydował” i w szkicach potoku na kartach wariantów w modalu. Reszta spokojna: promienie wg hierarchii (panel 18 > karta 12 > kontrolka 8), bez etykiet WIELKIMI LITERAMI, bez gradientów, bez strzałek w przyciskach.
-- **Zmiany po przeglądzie:** zrezygnowałem z dużych liczb w kartach statystyk w stanie pustym (zamiast „0” – zaproszenie do działania, jak w UX_GUIDELINES), a panel pozycji jest szufladą poniżej 1536 px, bo przy panelu obok tabeli kolumna MPN była ucinana.
+## Visual plan (frontend-design skill, review vs a "generic" pattern)
+- **Palette:** paper `#ECEFF2` (cool grey, not cream), surfaces `#FFFFFF`, ink `#18212B` (primary action – not green, so it is not confused with a rule), lines `#D3D9DF`, LLM violet `#5B3FD6`, solder-mask green `#13704A`, amber `#A35A00`, red `#B42318`.
+- **Typography:** Bricolage Grotesque 800 only in the greeting and titles; IBM Plex Sans in the interface; Plex Mono only for technical data (designators, MPNs, packages) – not for labels.
+- **The one bold element:** a provenance bar (4 px) next to every BOM row in the colour of whoever decided (agent / rule / file / human), repeated in the "Kto zdecydował" ("Who decided") bar and in the pipeline sketches on the variant cards in the modal. The rest is calm: radii by hierarchy (panel 18 > card 12 > control 8), no UPPERCASE labels, no gradients, no arrows in buttons.
+- **Changes after the review:** I dropped the large numbers in the stat cards in the empty state (instead of "0" – a call to action, as in UX_GUIDELINES), and the item panel is a drawer below 1536 px, because with the panel next to the table the MPN column was being cut off.
 
-## Zakres v1 (zrobione)
-Logowanie (lokalne), onboarding (organizacja, dołączenie kodem zaproszenia), shell z przełącznikiem organizacji, Start (powitanie, szablony urządzeń z własnymi ilustracjami SVG, karty z pustymi stanami), Projekty (lista, utworzenie, upload drag & drop, statusy plików), modal Nowy przebieg (projekt, wariant A/B/oba, model z katalogu, wymagania urządzenia), Przebieg na żywo (SSE, liczniki), BOM (tabela, filtr „tylko z uwagami”, panel pochodzenia, poprawka → nowa wersja + wiedza organizacji), eksport CSV, Log audytu (filtr, weryfikacja łańcucha), Ustawienia (członkowie i role, zaproszenia, klucze API z rotacją, zużycie i limity, SSO – informacja), PL/EN.
+## v1 scope (done)
+Login (local), onboarding (organization, joining with an invitation code), a shell with an organization switcher, Start (greeting, device templates with custom SVG illustrations, cards with empty states), Projects (list, creation, drag & drop upload, file statuses), the New run modal (project, variant A/B/both, model from the catalog, device requirements), Live run (SSE, counters), BOM (table, the "tylko z uwagami" ("only with remarks") filter, provenance panel, correction → new version + organization knowledge), CSV export, Audit log (filter, chain verification), Settings (members and roles, invitations, API keys with rotation, usage and limits, SSO – information), PL/EN.
 
-Porównanie wariantów A/B: metryki przebiegów (pozycje, wywołania LLM, tokeny, koszt, uwagi) i różnice per oznaczenie (wartość, producent, MPN) z kolorem pochodzenia.
+Variant A/B comparison: run metrics (items, LLM calls, tokens, cost, remarks) and per-designator differences (value, manufacturer, MPN) with the provenance colour.
 
-Ocena względem BOM referencyjnego: użytkownik wgrywa CSV (≤ 1 MB, nie jest zapisywany), API liczy metryki z `bomagent_eval` (te same co w eksperymencie), zdarzenie audytowe `bom.evaluated`.
+Evaluation against the reference BOM: the user uploads a CSV (≤ 1 MB, not stored), the API computes the metrics with `bomagent_eval` (the same as in the experiment), audit event `bom.evaluated`.
 
-Baza wiedzy: dokumenty organizacji (upload PDF/MD/TXT → S3 → outbox → kb-indexer, statusy, liczba fragmentów) i korpus globalny tylko do odczytu.
+Knowledge base: organization documents (upload PDF/MD/TXT → S3 → outbox → kb-indexer, statuses, number of chunks) and a read-only global corpus.
 
-## Do zrobienia w M5 (kolejne kroki)
-oś kroków przebiegu z rodzajem kroku (wymaga zdarzeń kroków w SSE), logowanie Cognito (PKCE) razem z M6, zrzuty ekranów w PR.
+## To do in M5 (next steps)
+a run step timeline with the step kind (requires step events in SSE), Cognito login (PKCE) together with M6, screenshots in the PR.

@@ -1,23 +1,23 @@
-# M4 – Platforma SaaS: backend (plan i stan)
+# M4 – SaaS platform: backend (plan and status)
 
-Źródła: ROADMAP M4, ADR-0004/0005/0011/0015, SECURITY.md, TESTING.md.
+Sources: ROADMAP M4, ADR-0004/0005/0011/0015, SECURITY.md, TESTING.md.
 
-## Brainstorming – pytania i odpowiedzi
-| Pytanie | Decyzja | Uzasadnienie |
+## Brainstorming – questions and answers
+| Question | Decision | Rationale |
 |---|---|---|
-| Skąd role użytkownika? | z bazy (`tenancy.memberships`), nie z tokenu | rola zmienia się bez ponownego logowania; token IdP nie zna organizacji BOM Agent |
-| Jak znaleźć organizacje użytkownika przy logowaniu bez obejścia RLS? | `app.user_sub` + polityki `member_self`/`member_tenants` (tylko SELECT własnych członkostw) | brak ról z BYPASSRLS (CLAUDE.md) |
-| Kto tworzy tenanta? | rola `bomagent_platform` (onboarding), audyt w nowym tenancie | rola aplikacji nie może tworzyć tenantów |
-| Lokalny IdP | mock RS256 z efemerycznym kluczem, tylko local/test | ADR-0005: aplikacja zależy wyłącznie od OIDC |
-| Edycja BOM | nowa niemutowalna wersja + pochodzenie `user` + korekta MPN jako wiedza tenanta | ISO 13485 identyfikowalność, ADR-0008 |
-| Parsowanie wgranych plików | wyłącznie w ingest-worker (sandbox), API tylko zapisuje i kolejkuje | ADR-0009 |
+| Where do user roles come from? | from the database (`tenancy.memberships`), not from the token | a role changes without re-login; the IdP token does not know BOM Agent organizations |
+| How to find a user's organizations at login without bypassing RLS? | `app.user_sub` + the `member_self`/`member_tenants` policies (SELECT of own memberships only) | no roles with BYPASSRLS (CLAUDE.md) |
+| Who creates a tenant? | the `bomagent_platform` role (onboarding), audit in the new tenant | the application role cannot create tenants |
+| Local IdP | RS256 mock with an ephemeral key, local/test only | ADR-0005: the application depends only on OIDC |
+| BOM editing | a new immutable version + `user` provenance + MPN correction as tenant knowledge | ISO 13485 traceability, ADR-0008 |
+| Parsing uploaded files | only in the ingest-worker (sandbox), the API only stores and enqueues | ADR-0009 |
 
-## Stan
-1. Migracja 0003 + testy izolacji – ✅
-2. API: auth/RBAC/organizacje/projekty/upload/przebiegi/SSE/BOM/edycja/eksport/audyt, OpenAPI 3.1, kontrakt (Schemathesis) – ✅
-3. Workery zapisują do bazy (status przebiegu, wersje BOM, wynik parsowania) – ✅
-4. Klient TS z OpenAPI – kolejny krok
-5. Do zrobienia później: zaproszenia członków, klucze API organizacji, limity/metering, konfiguracja SSO per organizacja (formularz → Cognito), rate limiting.
+## Status
+1. Migration 0003 + isolation tests – ✅
+2. API: auth/RBAC/organizations/projects/upload/runs/SSE/BOM/editing/export/audit, OpenAPI 3.1, contract (Schemathesis) – ✅
+3. Workers write to the database (run status, BOM versions, parsing result) – ✅
+4. TS client from OpenAPI – next step
+5. To do later: member invitations, organization API keys, limits/metering, per-organization SSO configuration (form → Cognito), rate limiting.
 
-## Kryteria akceptacji
-Testy kontraktowe, integracyjne i izolacji zielone; zdarzenie audytowe dla każdej mutacji (sprawdzane w `test_api_flow`).
+## Acceptance criteria
+Contract, integration and isolation tests green; an audit event for every mutation (checked in `test_api_flow`).

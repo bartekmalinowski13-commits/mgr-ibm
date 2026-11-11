@@ -2,38 +2,38 @@
 
 ---
 
-Kontynuujesz pracę nad projektem **BOM Agent** (praca magisterska + produkcyjny SaaS B2B).
+You are continuing work on the **BOM Agent** project (master's thesis + production B2B SaaS).
 
-**Repozytorium:** https://github.com/bartekmalinowski13-commits/mgr-ibm
-**Gałąź robocza:** `claude/code-master-prompt-part-2-5651f9` (cała dotychczasowa praca jest tu; nie scalona do `main`, PR jeszcze nie otwarty — nie otwieraj go, dopóki o to nie poproszę). Pracuj i pushuj tylko na tę gałąź.
+**Repository:** https://github.com/bartekmalinowski13-commits/mgr-ibm
+**Working branch:** `claude/code-master-prompt-part-2-5651f9` (all work so far is here; not merged to `main`, PR not opened yet — do not open it until I ask). Work and push only to this branch.
 
-## Zacznij od czytania (w tej kolejności)
+## Start by reading (in this order)
 
-1. `docs/HANDOFF.md` — **gdzie skończyłem, co zostało do zrobienia (w kolejności), co czeka na mnie, notatki o środowisku**. To główny dokument.
-2. `CLAUDE.md` — zasady nienaruszalne (izolacja tenantów, tylko UE, brak uczenia między organizacjami, sekrety, pliki klientów jako niezaufane, **zakaz wdrażania do AWS z sesji**, brak prawdziwych kluczy LLM w testach, zakaz force-push na `main`).
-3. `docs/STATUS.md` — stan każdego kamienia milowego (M0–M8).
-4. `docs/DECISIONS_LOG.md` — założenia przyjęte bez konsultacji; wiersze z „tak/yes" w ostatniej kolumnie czekają na moją akceptację.
-5. W razie potrzeby: `docs/platform/ARCHITECTURE.md` (źródło prawdy), `docs/adr/`, `docs/platform/SECURITY.md`, `docs/platform/TESTING.md`, `docs/platform/FORMATS.md`, `docs/plans/` (plany M1–M7 i SSO), `docs/platform/runbooks/README.md`.
+1. `docs/HANDOFF.md` — **where I stopped, what remains to be done (in order), what is waiting on me, environment notes**. This is the main document.
+2. `CLAUDE.md` — inviolable rules (tenant isolation, EU only, no learning across organizations, secrets, customer files as untrusted, **no deployments to AWS from a session**, no real LLM keys in tests, no force-push to `main`).
+3. `docs/STATUS.md` — the state of each milestone (M0–M8).
+4. `docs/DECISIONS_LOG.md` — assumptions made without consultation; rows with "yes" in the last column are waiting for my acceptance.
+5. If needed: `docs/platform/ARCHITECTURE.md` (source of truth), `docs/adr/`, `docs/platform/SECURITY.md`, `docs/platform/TESTING.md`, `docs/platform/FORMATS.md`, `docs/plans/` (plans M1–M7 and SSO), `docs/platform/runbooks/README.md`.
 
-## Zadanie
+## Task
 
-Wykonuj otwarte zadania z `docs/HANDOFF.md`, sekcja „Next tasks for Claude Code", **w podanej kolejności**:
+Carry out the open tasks from `docs/HANDOFF.md`, section "Next tasks for Claude Code", **in the given order**:
 
-1. sprawdź CI ostatniego commita (SSO) i napraw to, co czerwone;
-2. ponów **security review SSO** (był przerwany, brak wyników) i napraw wszystkie CRITICAL/HIGH;
-3. odłożone uwagi z review (lista w `DECISIONS_LOG.md`);
-4. checkpointy LangGraph w Postgresie z RLS, budżet/snapshot KB w adapterze Agent SDK;
-5. przygotuj listę założeń do mojej akceptacji;
-6. **na końcu**: przetłumacz pozostałe polskie dokumenty na angielski (poza `docs/thesis/`).
+1. check CI for the latest commit (SSO) and fix whatever is red;
+2. repeat the **SSO security review** (it was interrupted, no results) and fix all CRITICAL/HIGH findings;
+3. deferred review remarks (list in `DECISIONS_LOG.md`);
+4. LangGraph checkpoints in Postgres with RLS, KB budget/snapshot in the Agent SDK adapter;
+5. prepare the list of assumptions for my acceptance;
+6. **at the end**: translate the remaining Polish documents into English (except `docs/thesis/`).
 
-Proces dla każdego zadania: TDD → implementacja → review subagentem → weryfikacja (`just lint`, testy, `just openapi` po zmianach API) → aktualizacja `docs/STATUS.md` → commit i push na gałąź roboczą. Nową dokumentację pisz **wyłącznie po angielsku**. Commity: Conventional Commits, po angielsku.
+Process for each task: TDD → implementation → subagent review → verification (`just lint`, tests, `just openapi` after API changes) → update `docs/STATUS.md` → commit and push to the working branch. Write new documentation **in English only**. Commits: Conventional Commits, in English.
 
-## Czego nie rób
+## What not to do
 
-- Nie wdrażaj do AWS i nie twórz zasobów chmurowych.
-- Nie commituj sekretów ani `.env`.
-- Nie decyduj po cichu o rzeczach z listy „czeka na właściciela" (dane eksperymentu, dostęp do modeli UE, konto AWS/domena) — opisz je w raporcie końcowym.
+- Do not deploy to AWS and do not create cloud resources.
+- Do not commit secrets or `.env`.
+- Do not silently decide on items from the "waiting on the owner" list (experiment data, access to EU models, AWS account/domain) — describe them in the final report.
 
-## Na koniec
+## At the end
 
-Zaktualizuj `docs/STATUS.md` i `docs/HANDOFF.md`, a w odpowiedzi podaj: co jest gotowe, co czeka na mnie, które założenia wymagają mojej akceptacji oraz ile % zadania jest ukończone.
+Update `docs/STATUS.md` and `docs/HANDOFF.md`, and in your reply state: what is done, what is waiting on me, which assumptions need my acceptance, and what % of the task is complete.
