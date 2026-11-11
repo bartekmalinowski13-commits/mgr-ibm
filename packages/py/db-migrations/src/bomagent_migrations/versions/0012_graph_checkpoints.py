@@ -11,7 +11,7 @@ These tables carry ``tenant_id`` with the standard RLS policy and reference the 
   worker crash without re-running finished branches).
 
 Revision ID: 0012
-Revises: 0010
+Revises: 0011
 Create Date: 2026-11-11
 """
 
@@ -20,7 +20,7 @@ from alembic import op
 from bomagent_migrations.rls import tenant_table_rls
 
 revision = "0012"
-down_revision = "0010"
+down_revision = "0011"
 branch_labels = None
 depends_on = None
 
