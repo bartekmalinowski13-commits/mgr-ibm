@@ -59,6 +59,9 @@ class AgentContext:
     #: called after every finished step with the usage so far (live progress, SSE);
     #: a failing callback is logged and never breaks the run
     on_step: Callable[[TraceStep, Usage], Awaitable[None]] | None = None
+    #: LangGraph checkpointer for this run (tenant-scoped Postgres in the worker);
+    #: None -> in memory (CLI, experiments, tests)
+    checkpointer: Any = None
 
     def __post_init__(self) -> None:
         self.budget = Budget(self.config)

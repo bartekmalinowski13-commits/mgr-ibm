@@ -215,7 +215,7 @@ class LangGraphVariantA:
         g.add_edge("select_mpn", "validate")
         g.add_edge("validate", "compose")
         g.add_edge("compose", END)
-        return g.compile(checkpointer=InMemorySaver())
+        return g.compile(checkpointer=ctx.checkpointer or InMemorySaver())
 
     async def run(self, run: RunInput) -> RunOutput:
         ctx: AgentContext = self._ctx_factory(run)

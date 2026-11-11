@@ -22,8 +22,16 @@ only the architecture differs (`docs/thesis/ARCHITEKTURA_WARIANTOW.md`).
   anything else is discarded (anti-hallucination by construction).
 - Budgets per run: LLM calls, tokens, wall time (`RunConfig`); exceeding them stops the
   graph and returns the partial BOM with a `run.budget` finding.
-- Checkpointer: in-memory LangGraph checkpointer per run (thread = run id). A PostgreSQL
-  checkpointer needs tenant-isolated tables first - see `docs/DECISIONS_LOG.md`.
+- Checkpointer: `TenantCheckpointSaver` (`checkpoint.py`) keeps LangGraph checkpoints and
+  pending writes in `runs.graph_checkpoints` / `runs.graph_writes` (migration 0012):
+  tenant-scoped with RLS, thread = run id, deleted with the run. The agent worker uses it
+  for runs started through the API (`context_factory(..., checkpointer=...)`); the CLI,
+  experiments and unit tests keep the in-memory checkpointer. Each run executes once (the
+  worker claims `queued -> running`); resuming a crashed run from its last checkpoint is
+  not wired yet - the reaper fails stuck runs.
+- Claude Agent SDK adapter: agent turns are capped by the run's LLM-call budget, the loop
+  stops at the time budget, token overruns are reported as `budget_exceeded`, and the BOM
+  records the run's KB snapshot like the LangGraph runtimes.
 
 ## Fake provider
 `fake_responder.heuristic_responder` + `bomagent_llm.chat.FakeChat` answer

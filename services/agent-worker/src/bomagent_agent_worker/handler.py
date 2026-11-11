@@ -26,6 +26,7 @@ from typing import Any
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
+from bomagent_agents.checkpoint import TenantCheckpointSaver
 from bomagent_agents.contracts import RunConfig, RunInput, RunOutput, TraceStep
 from bomagent_agents.registry import context_factory, runtime_for
 from bomagent_agents.retrieval import KbRetriever, Retriever
@@ -204,6 +205,12 @@ class RunWorker:
             self._retriever(message.tenant_id, config.kb_snapshot_id),
             tenant_id=str(message.tenant_id),
             on_step=on_step if p["registered"] else None,
+            # graph state in the tenant's own rows (RLS); CLI runs have no run row
+            checkpointer=(
+                (lambda _run: TenantCheckpointSaver(self.engine, message.tenant_id))
+                if p["registered"]
+                else None
+            ),
         )
         result = await runtime_for(config.variant, factory, runtime=runtime).run(run)
         spent["usage"] = result.usage

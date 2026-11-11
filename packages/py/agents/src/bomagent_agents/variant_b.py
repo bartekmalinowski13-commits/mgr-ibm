@@ -260,7 +260,7 @@ class LangGraphVariantB:
         g.add_conditional_edges("validate", needs_repair, ["repair", "assemble"])
         g.add_conditional_edges("repair", needs_repair, ["repair", "assemble"])
         g.add_edge("assemble", END)
-        return g.compile(checkpointer=InMemorySaver())
+        return g.compile(checkpointer=ctx.checkpointer or InMemorySaver())
 
     async def run(self, run: RunInput) -> RunOutput:
         ctx: AgentContext = self._ctx_factory(run)

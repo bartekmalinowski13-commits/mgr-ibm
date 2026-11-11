@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
+from typing import Any
 
 from bomagent_agents.contracts import RunInput, TraceStep, VariantRuntime
 from bomagent_agents.retrieval import Retriever
@@ -22,6 +23,7 @@ def context_factory(
     catalog: Catalog | None = None,
     tenant_id: str = "",
     on_step: Callable[[TraceStep, Usage], Awaitable[None]] | None = None,
+    checkpointer: Callable[[RunInput], Any] | None = None,
 ) -> Callable[[RunInput], AgentContext]:
     cat = catalog or load_catalog()
 
@@ -40,6 +42,7 @@ def context_factory(
             run_id=str(run.run_id),
             tenant_id=tenant_id,
             on_step=on_step,
+            checkpointer=checkpointer(run) if checkpointer else None,
         )
 
     return make
