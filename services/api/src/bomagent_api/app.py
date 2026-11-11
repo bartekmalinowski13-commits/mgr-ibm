@@ -70,6 +70,7 @@ class Settings(ServiceSettings):
                 self.database_host,
                 self.database_port,
                 self.database_name,
+                ssl_root_cert=self.db_ssl_root_cert,
             )
         return self
 

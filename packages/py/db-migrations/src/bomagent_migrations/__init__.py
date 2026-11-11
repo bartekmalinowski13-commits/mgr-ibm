@@ -93,6 +93,12 @@ def prepare_database(admin_url: str, passwords: dict[str, str] | None = None) ->
     engine.dispose()
 
 
+def _ssl_query(env: Mapping[str, str]) -> dict[str, str]:
+    if cert := env.get("BOMAGENT_DB_SSL_ROOT_CERT"):
+        return {"sslmode": "verify-full", "sslrootcert": cert}
+    return {"sslmode": env.get("BOMAGENT_DATABASE_SSLMODE", "require")}
+
+
 def admin_url_from_env(env: Mapping[str, str]) -> str:
     """Administrator URL: ``BOMAGENT_ADMIN_DATABASE_URL`` or composed from parts.
 
@@ -108,7 +114,7 @@ def admin_url_from_env(env: Mapping[str, str]) -> str:
         host=env["BOMAGENT_DATABASE_HOST"],
         port=int(env.get("BOMAGENT_DATABASE_PORT", "5432")),
         database=env.get("BOMAGENT_DATABASE_NAME", "bomagent"),
-        query={"sslmode": env.get("BOMAGENT_DATABASE_SSLMODE", "require")},
+        query=_ssl_query(env),
     ).render_as_string(hide_password=False)
 
 

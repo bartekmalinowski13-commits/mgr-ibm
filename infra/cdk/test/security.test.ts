@@ -119,6 +119,28 @@ describe("compute", () => {
     }
   });
 
+  it("every container that reaches the database verifies the server certificate", () => {
+    type Container = {
+      Environment?: { Name: string; Value: string }[];
+      Command?: string[];
+    };
+    const defs = Object.values(compute.findResources("AWS::ECS::TaskDefinition"));
+    let withDb = 0;
+    for (const d of defs) {
+      for (const c of d.Properties.ContainerDefinitions as Container[]) {
+        const env = Object.fromEntries((c.Environment ?? []).map((e) => [e.Name, e.Value]));
+        if (!("BOMAGENT_DATABASE_HOST" in env)) continue;
+        withDb += 1;
+        expect(env.BOMAGENT_DB_SSL_ROOT_CERT).toBe("/etc/ssl/rds/global-bundle.pem");
+        const command = (c.Command ?? []).join(" ");
+        expect(command).not.toContain("sslmode=require");
+      }
+    }
+    expect(withDb).toBeGreaterThanOrEqual(6);
+    const migrate = defs.find((d) => JSON.stringify(d).includes("bomagent-migrate upgrade"));
+    expect(JSON.stringify(migrate)).toContain("sslmode=verify-full");
+  });
+
   it("only the bootstrap task sees the database master secret", () => {
     const defs = compute.findResources("AWS::ECS::TaskDefinition");
     const withAdmin = Object.entries(defs)

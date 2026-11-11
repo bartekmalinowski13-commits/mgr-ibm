@@ -26,8 +26,17 @@ else a parser or library raises into `parse.internal`, so a hostile file never c
 worker or loops its queue message. Archives are sniffed cheaply (zip entry count from the
 end-of-central-directory record, tar headers in a 16 MB prefix). Invalid designators,
 unknown DNP values, duplicate BOM sections and quantity mismatches are skipped or kept,
-and always reported as limitations. Workers run `parse_files` in a thread. Regression
-and fuzz tests: `tests/test_hostile_inputs.py`.
+and always reported as limitations. Regression and fuzz tests: `tests/test_hostile_inputs.py`.
+
+Workers do not call `parse_files` directly: `bomagent_cad.sandbox.parse_files_sandboxed`
+runs it in a separate `python -I` process with `RLIMIT_AS` (default 1 GiB), `RLIMIT_CPU`
+(60 s), a wall-clock timeout (90 s), core dumps off and a minimal environment (no database
+URLs or cloud credentials). A killed or over-limit child becomes `ParseError` with code
+`parse.resource_limit` or `parse.timeout`, so the file is marked failed instead of the
+message being redelivered. Limits: `SandboxLimits` / `BOMAGENT_PARSE_MEMORY_MB`,
+`BOMAGENT_PARSE_CPU_SECONDS`, `BOMAGENT_PARSE_TIMEOUT_SECONDS`;
+`BOMAGENT_PARSE_SANDBOX=inprocess` disables the subprocess (unit tests only). Linux
+enforces memory/CPU; elsewhere only the timeout applies. Tests: `tests/test_sandbox.py`.
 
 `sexpr.parse` is iterative with limits on size (64 MB), depth (512) and token count; no
 recursion on file content; UTF-8 decoding is strict; files are never executed.

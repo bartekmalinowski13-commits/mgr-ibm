@@ -34,6 +34,9 @@ class ServiceSettings(BaseSettings):
     database_name: str = "bomagent"
     database_user: str = "bomagent_app"
     database_password: str | None = Field(default=None, repr=False)
+    # CA bundle (RDS global bundle in the images). When set, connections built from the parts
+    # use ``sslmode=verify-full`` against it; unset (local/test) keeps ``sslmode=require``.
+    db_ssl_root_cert: str | None = None
 
     # OpenTelemetry: OTLP/HTTP endpoint of the collector, e.g. http://otel-lgtm:4318
     otel_exporter_otlp_endpoint: str | None = Field(default=None)
@@ -52,6 +55,7 @@ class ServiceSettings(BaseSettings):
                 self.database_host,
                 self.database_port,
                 self.database_name,
+                ssl_root_cert=self.db_ssl_root_cert,
             )
         return self
 
@@ -60,9 +64,26 @@ class ServiceSettings(BaseSettings):
         return self.environment in {"staging", "prod"}
 
 
-def postgres_url(user: str, password: str, host: str, port: int, database: str) -> str:
-    """psycopg URL with TLS required (Aurora enforces ``rds.force_ssl``)."""
+def postgres_url(
+    user: str,
+    password: str,
+    host: str,
+    port: int,
+    database: str,
+    *,
+    ssl_root_cert: str | None = None,
+) -> str:
+    """psycopg URL with TLS required (Aurora enforces ``rds.force_ssl``).
+
+    With ``ssl_root_cert`` the server certificate and host name are verified against that
+    CA bundle (``sslmode=verify-full``) instead of only encrypting the channel.
+    """
+    tls = (
+        f"sslmode=verify-full&sslrootcert={quote(ssl_root_cert, safe='/')}"
+        if ssl_root_cert
+        else "sslmode=require"
+    )
     return (
         f"postgresql+psycopg://{quote(user, safe='')}:{quote(password, safe='')}"
-        f"@{host}:{port}/{quote(database, safe='')}?sslmode=require"
+        f"@{host}:{port}/{quote(database, safe='')}?{tls}"
     )

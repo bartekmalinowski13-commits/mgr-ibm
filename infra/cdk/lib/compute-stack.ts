@@ -34,6 +34,8 @@ export const BEDROCK_REGIONS = [
 ];
 const GATEWAY_PORT = 4000;
 const API_PORT = 8000;
+/** Where the Dockerfile puts the RDS global CA bundle (deploy/docker/python-service.Dockerfile). */
+export const RDS_CA_BUNDLE_PATH = "/etc/ssl/rds/global-bundle.pem";
 
 interface WorkerSpec {
   readonly name: string;
@@ -132,6 +134,8 @@ export class ComputeStack extends BaseStack {
       BOMAGENT_ENVIRONMENT: config.name,
       BOMAGENT_AWS_REGION: config.region,
       BOMAGENT_DATABASE_HOST: data.cluster.clusterEndpoint.hostname,
+      // RDS global CA bundle baked into the images: connections use sslmode=verify-full
+      BOMAGENT_DB_SSL_ROOT_CERT: RDS_CA_BUNDLE_PATH,
       BOMAGENT_FILES_BUCKET: data.filesBucket.bucketName,
       BOMAGENT_LOG_JSON: "true",
     };
@@ -552,7 +556,7 @@ export class ComputeStack extends BaseStack {
       command: [
         "sh",
         "-c",
-        'export BOMAGENT_MIGRATOR_DATABASE_URL="postgresql+psycopg://bomagent_migrator:$MIGRATOR_PASSWORD@$BOMAGENT_DATABASE_HOST:5432/bomagent?sslmode=require" && exec bomagent-migrate upgrade',
+        'export BOMAGENT_MIGRATOR_DATABASE_URL="postgresql+psycopg://bomagent_migrator:$MIGRATOR_PASSWORD@$BOMAGENT_DATABASE_HOST:5432/bomagent?sslmode=verify-full&sslrootcert=$BOMAGENT_DB_SSL_ROOT_CERT" && exec bomagent-migrate upgrade',
       ],
     });
 

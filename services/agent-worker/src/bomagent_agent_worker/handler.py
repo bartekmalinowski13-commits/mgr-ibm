@@ -31,7 +31,8 @@ from bomagent_agents.contracts import RunConfig, RunInput, RunOutput, TraceStep
 from bomagent_agents.registry import context_factory, runtime_for
 from bomagent_agents.retrieval import KbRetriever, Retriever
 from bomagent_bom.model import Requirements, Usage
-from bomagent_cad import FileRef, parse_files
+from bomagent_cad import FileRef
+from bomagent_cad.sandbox import parse_files_sandboxed
 from bomagent_common.audit import AuditEvent, emit_audit
 from bomagent_common.db import tenant_transaction
 from bomagent_common.logging import get_logger
@@ -180,8 +181,8 @@ class RunWorker:
         if not keys or not all(key_belongs_to(message.tenant_id, k) for k in keys):
             raise RejectedRunError("design files must be under the tenant prefix")
         files = [FileRef(k.rsplit("/", 1)[-1], await self.store.get(k)) for k in keys]
-        # parsing is CPU-bound: off the event loop
-        design = await asyncio.to_thread(parse_files, files)
+        # CPU-bound and untrusted input: resource-limited subprocess, off the event loop
+        design = await asyncio.to_thread(parse_files_sandboxed, files)
         config = RunConfig(
             variant=p["variant"],
             model_id=p.get("model_id", "fake-closed"),

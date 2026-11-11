@@ -104,3 +104,17 @@ def test_only_present_passwords_are_set() -> None:
     env = {"BOMAGENT_APP_PASSWORD": "a", "BOMAGENT_PLATFORM_PASSWORD": ""}
     assert passwords_from_env(env) == {APP_ROLE: "a"}
     assert PLATFORM_ROLE not in passwords_from_env(env)
+
+
+def test_admin_url_verifies_the_server_certificate_when_a_ca_bundle_is_set() -> None:
+    url = admin_url_from_env(
+        {
+            "BOMAGENT_ADMIN_USER": "bomagent_admin",
+            "BOMAGENT_ADMIN_PASSWORD": "x",
+            "BOMAGENT_DATABASE_HOST": "db.internal",
+            "BOMAGENT_DB_SSL_ROOT_CERT": "/etc/ssl/rds/global-bundle.pem",
+        }
+    )
+    query = make_url(url).query
+    assert query["sslmode"] == "verify-full"
+    assert query["sslrootcert"] == "/etc/ssl/rds/global-bundle.pem"

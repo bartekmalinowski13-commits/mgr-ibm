@@ -6,7 +6,7 @@
 | Module | What |
 |---|---|
 | `tenancy` | `TenantContext` (tenant, actor, roles), `tenant_scope()`, `require_tenant()` - no "all tenants" fallback |
-| `db` | `make_engine()` (psycopg 3, `hide_parameters`), `tenant_transaction()` sets `app.tenant_id` via `set_config(..., true)`; `platform_transaction()`; `ping()` |
+| `db` | `make_engine()` (psycopg 3, `hide_parameters`; URLs composed by `ServiceSettings` use `sslmode=verify-full` with `BOMAGENT_DB_SSL_ROOT_CERT`, the RDS CA bundle path, else `sslmode=require`), `tenant_transaction()` sets `app.tenant_id` via `set_config(..., true)`; `platform_transaction()`; `ping()` |
 | `audit` | `emit_audit()` inside the data transaction; `verify_chain()` (+ external anchors), `chain_head()` for the Object Lock export (ADR-0011) |
 | `messaging` | `Message` envelope with `tenant_id` + W3C trace carrier; `SqsQueue`, `InMemoryQueue`; `process_one()`/`consume_forever()` restore tenant + trace context, ack only on success, poison messages go to the DLQ |
 | `storage` | `tenant_key()` (`tenants/{id}/...`, traversal-safe); `S3ObjectStore`/`InMemoryObjectStore` refuse keys outside the active tenant's prefix |

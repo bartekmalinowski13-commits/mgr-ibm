@@ -20,7 +20,8 @@ from dataclasses import dataclass
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from bomagent_cad import FileRef, ParseError, parse_files
+from bomagent_cad import FileRef, ParseError
+from bomagent_cad.sandbox import parse_files_sandboxed
 from bomagent_common.audit import AuditEvent, emit_audit
 from bomagent_common.db import tenant_transaction
 from bomagent_common.logging import get_logger
@@ -54,8 +55,8 @@ class IngestWorker:
                 raise ValueError("file outside the tenant prefix")
             files.append(FileRef(row.name, await self.store.get(row.object_key)))
         try:
-            # parsing is CPU-bound: off the event loop (queue polling, health checks stay live)
-            design = await asyncio.to_thread(parse_files, files)
+            # CPU-bound and untrusted input: resource-limited subprocess, off the event loop
+            design = await asyncio.to_thread(parse_files_sandboxed, files)
             status, fmt = "parsed", design.source_format
             summary = {
                 "design": design.design_name,
