@@ -64,28 +64,53 @@ user without a password, set `BOMAGENT_DEV_ADMIN_URL=postgresql+psycopg://user:p
 
 ## Next tasks for Claude Code (in this order)
 
-State after the second session (2026-11-11, evening):
+State after the second session (2026-11-11, evening). Done in this session: CI fix for SSO,
+SSO security review + fixes, local demo, LangGraph checkpoints in Postgres (RLS), Agent SDK
+budget/snapshot, deferred M4 low items (storage quota, upload races, idempotency scope,
+outbox retry limit + cleanup, composite FKs - migration 0011), parsing in a resource-limited
+subprocess, `sslmode=verify-full` to RDS, translation of the specification documents.
 
-1. ~~CI check of the SSO commit~~ - done (`e17256d`), CI green on `f72c058`.
-2. ~~Security review of SSO~~ - done; HIGH-1, MEDIUM-2, LOW-5 fixed (`bc81e4f`), the rest
-   logged in `DECISIONS_LOG.md` ("SSO security review - deferred").
-3. **Deferred review items** - in progress in two agent worktrees (if a new session finds
-   them unmerged, redo from `DECISIONS_LOG.md`):
-   - M4 low items (storage quota per plan, upload races, idempotency hash with method/path,
-     outbox retry limit + cleanup, composite FKs in `kb.*` and `api_keys.replaced_by`) -
-     migration `0011_m4_hardening.py` (revision 0011, down 0010); when merged, re-chain
-     `0012_graph_checkpoints.py` to `down_revision = "0011"`;
-   - parsing in a resource-limited subprocess (RLIMIT_AS / RLIMIT_CPU, minimal env) and
-     `sslmode=verify-full` with the RDS CA bundle (setting + Dockerfile + CDK env);
-   - still open after that: malware-scan enforcement before parsing (GuardDuty tag), LiteLLM
-     read-only FS test, Cognito e-mail via SES, global KB in AWS, EDIF hierarchy expansion,
-     SSO MEDIUM-3/4 and LOW-6..9.
-4. ~~LangGraph checkpoints in Postgres with RLS; budget/KB snapshot in the Agent SDK
-   adapter~~ - done (`98d43c7`, `1b5547d`); a review subagent was running at handoff.
-5. **Owner's decisions:** the list for the owner is below ("Assumptions awaiting your
-   acceptance"); keep it in sync with `DECISIONS_LOG.md`.
-6. **Translation** - in progress (agent worktree). `STATUS.md` and this file are already
-   English; `DECISIONS_LOG.md` is translated last (it is still being appended to).
+Still open (in this order):
+
+1. If not yet done at handoff: apply the findings of the review of `6cb5405` (parse sandbox,
+   TLS) and `c626bd1` (M4 hardening); finish translating `docs/plans/*`, the runbooks,
+   `NEW_SESSION_PROMPT.md`, ADR 0016 and `DECISIONS_LOG.md` (check with
+   `git ls-files '*.md' | xargs grep -l -E "ą|ę|ś|ć|ż|ź|ł|ó|ń"`; thesis and supervisor
+   report stay Polish).
+2. Remaining deferred items (`DECISIONS_LOG.md`): per-IP / per-user limits for paths without
+   an organisation (M4 L4), malware-scan enforcement before parsing (GuardDuty tag), LiteLLM
+   read-only FS test on the real image, Cognito e-mail via SES, global KB in AWS, EDIF
+   hierarchy expansion, SSO MEDIUM-3 (reconcile federated providers after CDK deploys),
+   MEDIUM-4 (`auth_time` limit / API key lifetime), LOW-6..9.
+3. Resume of crashed runs from LangGraph checkpoints (needs budget/trace restoration; today
+   checkpoints are deleted when a run ends and the reaper fails stuck runs).
+4. M7 leftovers needing an ADR first: PDF schematics/scans (OCR, vision), native
+   Altium/OrCAD/DWG.
+
+## Assumptions awaiting your acceptance
+
+All rows of `docs/DECISIONS_LOG.md` whose last column is "yes"/"tak". Grouped:
+
+- **Process / repository:** "Guidance" = Cadence (OrCAD/Allegro); "CDAC" = AWS CDK; private
+  repository; all work on the session branch, no merge to `main` by Claude.
+- **Stack choices:** moto instead of LocalStack; one migration package (ADR-0016); pypdf
+  instead of PyMuPDF (AGPL); `vector(1024)` embeddings; catalogue models disabled until
+  verified in an EU region; Claude Agent SDK adapter as a third runtime; variant A
+  extraction input.
+- **Research method (thesis):** MPN hallucination guard (MPNs only from KB evidence) in both
+  variants; rejected MPNs counted; statistics (paired permutation test, bootstrap, design as
+  the unit); validation effectiveness via injected errors; DXF mechanical parts.
+- **Platform:** roles from the DB; invitations; API keys; plan limits and storage quotas
+  (assumed sizes: pilot 2 GiB, team 20, business 100, enterprise 1000); rate limiting;
+  outbox (10 attempts, sent rows kept 7 days) and run reaper; token for the API in AWS; SPA
+  session refresh; audit archive; LLM egress outside AWS; supply chain in the pipeline;
+  GitHub deploy role trust; WAF in us-east-1 vs the EU-only SCP; HTTPS to origin;
+  ingest-worker isolation; parse sandbox default limits (1 GiB, 60 s CPU, 90 s wall);
+  RDS CA bundle download unpinned unless `RDS_BUNDLE_SHA256` is given.
+- **SSO:** one IdP per organisation in the shared Cognito pool; discovery reveals whether a
+  domain uses SSO; deferred review items (MEDIUM-3/4, LOW-6..9).
+- **Agents:** LangGraph checkpoints in Postgres, deleted when the run ends.
+- **Deferred review items** (M4, M6, M7, SSO) - each listed with its plan.
 
 ## Blocked on the owner (Claude Code cannot do these)
 
