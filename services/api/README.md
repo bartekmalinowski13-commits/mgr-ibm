@@ -12,6 +12,7 @@ regenerate with `just openapi`; a test fails when it drifts).
 | projects | `GET/POST /v1/projects`, `GET /v1/projects/{id}`, `GET/POST /v1/projects/{id}/files` (multipart upload -> S3 tenant prefix -> `file.uploaded` for the sandboxed ingest-worker) |
 | runs | `POST /v1/runs` (variant A/B, model from the catalogue) -> `run.requested` for agent-worker; `GET /v1/runs`, `GET /v1/runs/{id}`, `GET /v1/runs/{id}/events` (SSE) |
 | BOM | `GET /v1/runs/{id}/bom`, `GET /v1/runs/{id}/bom.csv`, `PATCH /v1/runs/{id}/bom/items/{line}` (new immutable version, user provenance, MPN correction stored as tenant knowledge) |
+| SSO | `GET/PUT/DELETE /v1/sso` (owners/admins: SAML 2.0 or OIDC identity provider federated in Cognito; OIDC client secret goes to Cognito only), `POST /v1/sso/domains`, `POST /v1/sso/domains/{domain}/verify` (DNS TXT `_bomagent-verify.<domain>`), `DELETE /v1/sso/domains/{domain}`, `GET /v1/sso/discover?email=` (public, sign-in screen). First sign-in through the provider with a verified-domain e-mail creates the membership (default role); `enforce` requires SSO for those domains (owners exempt). See `bomagent_api.sso` |
 | audit | `GET /v1/audit-events` (filters, cursor), `GET /v1/audit-events/verify` |
 
 ## Conventions

@@ -17,6 +17,7 @@ dependencies = [
     "bomagent-bom-core",
     "bomagent-kb",
     "bomagent-llm",
+    "dnspython>=2.7",
 ]
 
 [build-system]

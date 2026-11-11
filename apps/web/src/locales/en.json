@@ -21,9 +21,10 @@
     "name": "Name",
     "submit": "Sign in",
     "devNote": "Local environment: sign-in through the built-in test identity provider. In the cloud you sign in with Amazon Cognito or your organisation's SSO.",
-    "cloudNote": "You sign in on the BOM Agent sign-in page (Amazon Cognito in an EU region). Your organisation may require two-factor authentication.",
+    "cloudNote": "With single sign-on, enter your work e-mail: you go straight to your organisation's sign-in. You sign in on the BOM Agent sign-in page (Amazon Cognito in an EU region) otherwise.",
     "callbackError": "Sign-in could not be completed (the link expired or was already used).",
-    "retry": "Sign in again"
+    "retry": "Sign in again",
+    "continue": "Continue"
   },
   "onboarding": {
     "title": "Create an organisation",
@@ -289,7 +290,7 @@
     },
     "of": "of {{limit}}",
     "sso": "Single sign-on (SSO)",
-    "ssoLead": "SAML 2.0 / OIDC configuration for your organisation becomes available once Amazon Cognito runs in the cloud environment. Until then members sign in with an email account."
+    "ssoLead": "Single sign-on through your organisation's identity provider (SAML 2.0 or OpenID Connect), federated in Amazon Cognito in the EU."
   },
   "errors": {
     "notMember": "You do not have access to this organisation. Choose another one.",
@@ -358,5 +359,37 @@
       "indexed": "Indexed",
       "failed": "Failed"
     }
+  },
+  "sso": {
+    "domains": "Verified e-mail domains",
+    "domainsLead": "Prove that your organisation controls an e-mail domain: add a DNS TXT record, then verify. People from verified domains are sent to your identity provider when they sign in.",
+    "domain": "Domain",
+    "addDomain": "Add domain",
+    "verified": "Verified",
+    "notVerified": "Not verified yet",
+    "verify": "Verify",
+    "verifiedToast": "Domain verified",
+    "txtHint": "Add this DNS TXT record, then select Verify:",
+    "provider": "Identity provider",
+    "protocol": "Protocol",
+    "metadataUrl": "SAML metadata URL",
+    "issuer": "OIDC issuer URL",
+    "clientId": "Client ID",
+    "clientSecret": "Client secret",
+    "secretKept": "Leave empty to keep the stored secret",
+    "defaultRole": "Role of new members",
+    "enforce": "Require single sign-on",
+    "enforceHint": "Members with an e-mail in a verified domain can sign in only through the identity provider. Owners keep password access in case the provider is down.",
+    "status": "Status",
+    "statuses": {
+      "draft": "Draft",
+      "active": "Active",
+      "failed": "Failed"
+    },
+    "acsUrl": "Reply / ACS URL",
+    "entityId": "Entity ID (audience)",
+    "saved": "Identity provider saved",
+    "failed": "The identity provider could not be configured – see the status below",
+    "removeProvider": "Remove identity provider"
   }
 }

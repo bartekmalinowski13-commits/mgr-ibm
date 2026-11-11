@@ -350,6 +350,10 @@ export class ComputeStack extends BaseStack {
         BOMAGENT_OIDC_ISSUER: identity.issuer,
         BOMAGENT_OIDC_AUDIENCE: identity.webClient.userPoolClientId,
         BOMAGENT_OIDC_JWKS_URL: `${identity.issuer}/.well-known/jwks.json`,
+        // SSO per organisation: identity providers are federated in this pool / client
+        BOMAGENT_COGNITO_USER_POOL_ID: identity.userPool.userPoolId,
+        BOMAGENT_COGNITO_CLIENT_ID: identity.webClient.userPoolClientId,
+        BOMAGENT_COGNITO_DOMAIN: identity.hostedDomain,
         BOMAGENT_INGEST_QUEUE_URL: data.queues.ingest.queueUrl,
         BOMAGENT_RUNS_QUEUE_URL: data.queues.runs.queueUrl,
         BOMAGENT_KB_QUEUE_URL: data.queues.kb.queueUrl,
@@ -362,6 +366,20 @@ export class ComputeStack extends BaseStack {
     });
     grantFiles(apiTask, true);
     for (const q of Object.values(data.queues)) q.grantSendMessages(apiTask.taskRole);
+    apiTask.addToTaskRolePolicy(
+      new iam.PolicyStatement({
+        sid: "FederateOrganisationIdentityProviders",
+        actions: [
+          "cognito-idp:CreateIdentityProvider",
+          "cognito-idp:UpdateIdentityProvider",
+          "cognito-idp:DeleteIdentityProvider",
+          "cognito-idp:DescribeIdentityProvider",
+          "cognito-idp:DescribeUserPoolClient",
+          "cognito-idp:UpdateUserPoolClient",
+        ],
+        resources: [identity.userPool.userPoolArn],
+      }),
+    );
     for (const action of ["kms:GenerateDataKey*", "kms:ReEncrypt*"]) {
       acknowledge(
         apiTask,

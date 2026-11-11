@@ -36,6 +36,23 @@ describe("PKCE", () => {
     });
   });
 
+  it("sends the user straight to their organisation's identity provider", () => {
+    const url = new URL(
+      authorizeUrl(
+        {
+          mode: "oidc",
+          domain: "https://login.example",
+          clientId: "abc",
+          redirectUri: "https://app/auth/callback",
+        },
+        "challenge",
+        "state-1",
+        "org-0123456789abcdef01234567",
+      ),
+    );
+    expect(url.searchParams.get("identity_provider")).toBe("org-0123456789abcdef01234567");
+  });
+
   it("reads profile claims from an ID token (verification happens in the API)", () => {
     const payload = btoa(JSON.stringify({ sub: "u-1", email: "ola@x.eu", name: "Ola" }))
       .replace(/\+/g, "-")

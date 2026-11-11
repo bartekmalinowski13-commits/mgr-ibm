@@ -43,6 +43,7 @@ export function authorizeUrl(
   cfg: Extract<AuthConfig, { mode: "oidc" }>,
   challenge: string,
   state: string,
+  identityProvider?: string,
 ): string {
   const params = new URLSearchParams({
     response_type: "code",
@@ -53,6 +54,8 @@ export function authorizeUrl(
     code_challenge: challenge,
     state,
   });
+  // Cognito skips its own page and goes to the organisation's SAML / OIDC provider
+  if (identityProvider) params.set("identity_provider", identityProvider);
   return `${cfg.domain}/oauth2/authorize?${params}`;
 }
 
@@ -75,12 +78,23 @@ export function decodeIdToken(token: string): { sub: string; email: string; name
 }
 
 /** Redirects the browser to the hosted login. */
-export async function startLogin(cfg: Extract<AuthConfig, { mode: "oidc" }>): Promise<void> {
+/** Identity provider of the e-mail's organisation, if it uses single sign-on. */
+export async function discoverSso(email: string): Promise<string | undefined> {
+  const resp = await fetch(`/v1/sso/discover?${new URLSearchParams({ email })}`);
+  if (!resp.ok) return undefined;
+  const body = (await resp.json()) as { sso: boolean; provider?: string | null };
+  return body.sso && body.provider ? body.provider : undefined;
+}
+
+export async function startLogin(
+  cfg: Extract<AuthConfig, { mode: "oidc" }>,
+  identityProvider?: string,
+): Promise<void> {
   const verifier = randomString(48);
   const state = randomString(16);
   sessionStorage.setItem(VERIFIER, verifier);
   sessionStorage.setItem(STATE, state);
-  window.location.assign(authorizeUrl(cfg, await pkceChallenge(verifier), state));
+  window.location.assign(authorizeUrl(cfg, await pkceChallenge(verifier), state, identityProvider));
 }
 
 /** Exchanges the authorization code for tokens; rejects a mismatched state (CSRF). */

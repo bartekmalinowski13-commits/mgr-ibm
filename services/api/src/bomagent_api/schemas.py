@@ -278,6 +278,8 @@ class DevToken(_M):
     email: str
     name: str = ""
     email_verified: bool = True
+    #: local/test: sign in "through" an organisation's identity provider
+    identity_provider: str | None = None
 
 
 class Token(_M):
@@ -300,3 +302,57 @@ def problem_responses(*codes: int) -> dict[int | str, dict[str, Any]]:
 
 
 COMMON_ERRORS = problem_responses(400, 401, 403, 404, 422)
+
+
+# ------------------------------------------------------------------ single sign-on
+DOMAIN_PATTERN = r"^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$"
+
+
+class SsoConnectionIn(_M):
+    """SAML: ``metadata_url``. OIDC: ``oidc_issuer``, ``oidc_client_id`` and (on create or
+    change) ``oidc_client_secret`` - passed to the identity broker, never stored or
+    returned by the API."""
+
+    protocol: Literal["saml", "oidc"]
+    metadata_url: str | None = Field(default=None, pattern=r"^https://", max_length=2048)
+    oidc_issuer: str | None = Field(default=None, pattern=r"^https://", max_length=2048)
+    oidc_client_id: str | None = Field(default=None, min_length=1, max_length=255)
+    oidc_client_secret: str | None = Field(default=None, min_length=1, max_length=1024)
+    default_role: Literal["engineer", "reviewer", "viewer"] = "viewer"
+    enforce: bool = False
+
+
+class SsoConnection(_M):
+    protocol: Literal["saml", "oidc"]
+    provider_name: str
+    metadata_url: str | None = None
+    oidc_issuer: str | None = None
+    oidc_client_id: str | None = None
+    default_role: str
+    enforce: bool
+    status: Literal["draft", "active", "failed"]
+    error: str | None = None
+    #: what to register at the identity provider (SAML ACS / OIDC redirect URI, entity id)
+    sp_acs_url: str | None = None
+    sp_entity_id: str | None = None
+
+
+class SsoDomainIn(_M):
+    domain: str = Field(min_length=4, max_length=253, pattern=DOMAIN_PATTERN)
+
+
+class SsoDomain(_M):
+    domain: str
+    verified: bool
+    txt_name: str
+    txt_value: str
+
+
+class SsoSettings(_M):
+    connection: SsoConnection | None
+    domains: list[SsoDomain]
+
+
+class SsoDiscovery(_M):
+    sso: bool
+    provider: str | None = None

@@ -120,5 +120,11 @@ async def dev_token(request: Request, body: DevToken) -> Token:
     if idp is None:
         raise ProblemError(404, "Not Found")
     return Token(
-        access_token=idp.issue(body.sub, body.email, body.name, email_verified=body.email_verified)
+        access_token=idp.issue(
+            body.sub,
+            body.email,
+            body.name,
+            email_verified=body.email_verified,
+            identity_provider=body.identity_provider,
+        )
     )

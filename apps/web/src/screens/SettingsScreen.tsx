@@ -232,6 +232,271 @@ function Members() {
   );
 }
 
+function Sso() {
+  const { t } = useTranslation();
+  const { orgId } = useSession();
+  const toast = useToast();
+  const qc = useQueryClient();
+  const sso = useQuery({ queryKey: ["sso", orgId], queryFn: () => call(api.GET("/v1/sso")) });
+  const conn = sso.data?.connection ?? null;
+  const [domain, setDomain] = useState("");
+  const [protocol, setProtocol] = useState<"saml" | "oidc">("saml");
+  const [metadataUrl, setMetadataUrl] = useState("");
+  const [issuer, setIssuer] = useState("");
+  const [clientId, setClientId] = useState("");
+  const [clientSecret, setClientSecret] = useState("");
+  const [role, setRole] = useState<(typeof KEY_ROLES)[number]>("viewer");
+  const [enforce, setEnforce] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+  if (conn && !loaded) {
+    setLoaded(true);
+    setProtocol(conn.protocol);
+    setMetadataUrl(conn.metadata_url ?? "");
+    setIssuer(conn.oidc_issuer ?? "");
+    setClientId(conn.oidc_client_id ?? "");
+    setRole(conn.default_role as (typeof KEY_ROLES)[number]);
+    setEnforce(conn.enforce);
+  }
+  const refresh = () => qc.invalidateQueries({ queryKey: ["sso", orgId] });
+  const run = async (action: () => Promise<unknown>, done?: string) => {
+    try {
+      await action();
+      if (done) toast(done, "ok");
+      await refresh();
+    } catch (err) {
+      toast(problemMessage(err), "error");
+    }
+  };
+
+  if (sso.isPending) return <Skeleton rows={3} />;
+  if (sso.isError) return <LoadError error={sso.error} />;
+  const verified = sso.data.domains.some((d) => d.verified);
+
+  return (
+    <Section title={t("settings.sso")} lead={t("settings.ssoLead")}>
+      <div className="flex flex-col gap-3 rounded-card border border-line bg-surface p-4">
+        <h3 className="font-display text-lg font-bold">{t("sso.domains")}</h3>
+        <p className="text-sm text-muted">{t("sso.domainsLead")}</p>
+        <form
+          className="flex flex-col gap-3 sm:flex-row sm:items-end"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void run(async () => {
+              await call(
+                api.POST("/v1/sso/domains", { body: { domain: domain.trim().toLowerCase() } }),
+              );
+              setDomain("");
+            });
+          }}
+        >
+          <label className="flex flex-1 flex-col gap-1.5 font-medium">
+            {t("sso.domain")}
+            <Input
+              required
+              placeholder="medtech.example"
+              value={domain}
+              onChange={(e) => setDomain(e.target.value)}
+            />
+          </label>
+          <Button type="submit">{t("sso.addDomain")}</Button>
+        </form>
+        {sso.data.domains.length ? (
+          <ul className="divide-y divide-line">
+            {sso.data.domains.map((d) => (
+              <li key={d.domain} className="flex flex-col gap-2 py-3">
+                <div className="flex flex-wrap items-center gap-3">
+                  <span className="flex-1 font-medium">{d.domain}</span>
+                  <span className={d.verified ? "text-sm text-ok" : "text-sm text-muted"}>
+                    {d.verified ? t("sso.verified") : t("sso.notVerified")}
+                  </span>
+                  {d.verified ? null : (
+                    <Button
+                      size="sm"
+                      onClick={() =>
+                        void run(
+                          () =>
+                            call(
+                              api.POST("/v1/sso/domains/{domain}/verify", {
+                                params: { path: { domain: d.domain } },
+                              }),
+                            ),
+                          t("sso.verifiedToast"),
+                        )
+                      }
+                    >
+                      {t("sso.verify")}
+                    </Button>
+                  )}
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() =>
+                      void run(() =>
+                        call(
+                          api.DELETE("/v1/sso/domains/{domain}", {
+                            params: { path: { domain: d.domain } },
+                          }),
+                        ),
+                      )
+                    }
+                  >
+                    {t("common.remove")}
+                  </Button>
+                </div>
+                {d.verified ? null : (
+                  <p className="text-sm text-muted">
+                    {t("sso.txtHint")}{" "}
+                    <code className="break-all font-mono text-[13px] text-ink">{d.txt_name}</code> ={" "}
+                    <code className="break-all font-mono text-[13px] text-ink">{d.txt_value}</code>
+                  </p>
+                )}
+              </li>
+            ))}
+          </ul>
+        ) : null}
+      </div>
+
+      <form
+        className="flex flex-col gap-3 rounded-card border border-line bg-surface p-4"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void run(async () => {
+            const r = await call(
+              api.PUT("/v1/sso", {
+                body: {
+                  protocol,
+                  metadata_url: protocol === "saml" ? metadataUrl : null,
+                  oidc_issuer: protocol === "oidc" ? issuer : null,
+                  oidc_client_id: protocol === "oidc" ? clientId : null,
+                  oidc_client_secret: protocol === "oidc" && clientSecret ? clientSecret : null,
+                  default_role: role,
+                  enforce,
+                },
+              }),
+            );
+            setClientSecret("");
+            toast(
+              r.connection?.status === "active" ? t("sso.saved") : t("sso.failed"),
+              r.connection?.status === "active" ? "ok" : "error",
+            );
+          });
+        }}
+      >
+        <h3 className="font-display text-lg font-bold">{t("sso.provider")}</h3>
+        <label className="flex flex-col gap-1.5 font-medium sm:w-60">
+          {t("sso.protocol")}
+          <Select value={protocol} onChange={(e) => setProtocol(e.target.value as typeof protocol)}>
+            <option value="saml">SAML 2.0</option>
+            <option value="oidc">OpenID Connect</option>
+          </Select>
+        </label>
+        {protocol === "saml" ? (
+          <label className="flex flex-col gap-1.5 font-medium">
+            {t("sso.metadataUrl")}
+            <Input
+              required
+              type="url"
+              pattern="https://.*"
+              value={metadataUrl}
+              onChange={(e) => setMetadataUrl(e.target.value)}
+            />
+          </label>
+        ) : (
+          <>
+            <label className="flex flex-col gap-1.5 font-medium">
+              {t("sso.issuer")}
+              <Input
+                required
+                type="url"
+                pattern="https://.*"
+                value={issuer}
+                onChange={(e) => setIssuer(e.target.value)}
+              />
+            </label>
+            <label className="flex flex-col gap-1.5 font-medium">
+              {t("sso.clientId")}
+              <Input required value={clientId} onChange={(e) => setClientId(e.target.value)} />
+            </label>
+            <label className="flex flex-col gap-1.5 font-medium">
+              {t("sso.clientSecret")}
+              <Input
+                type="password"
+                autoComplete="off"
+                placeholder={conn?.protocol === "oidc" ? t("sso.secretKept") : ""}
+                value={clientSecret}
+                onChange={(e) => setClientSecret(e.target.value)}
+              />
+            </label>
+          </>
+        )}
+        <label className="flex flex-col gap-1.5 font-medium sm:w-60">
+          {t("sso.defaultRole")}
+          <Select value={role} onChange={(e) => setRole(e.target.value as typeof role)}>
+            {KEY_ROLES.map((r) => (
+              <option key={r} value={r}>
+                {t(`settings.roles.${r}`)}
+              </option>
+            ))}
+          </Select>
+        </label>
+        <label className="flex items-start gap-2">
+          <input
+            type="checkbox"
+            className="mt-1 size-4 accent-ink"
+            checked={enforce}
+            disabled={!verified || conn?.status !== "active"}
+            onChange={(e) => setEnforce(e.target.checked)}
+          />
+          <span>
+            <span className="font-medium">{t("sso.enforce")}</span>
+            <span className="block text-sm text-muted">{t("sso.enforceHint")}</span>
+          </span>
+        </label>
+        {conn ? (
+          <dl className="grid gap-1 text-sm sm:grid-cols-[max-content_1fr] sm:gap-x-4">
+            <dt className="text-muted">{t("sso.status")}</dt>
+            <dd>
+              <span role="status">
+                {t(`sso.statuses.${conn.status}`)}
+                {conn.error ? ` – ${conn.error}` : ""}
+              </span>
+            </dd>
+            {conn.sp_acs_url ? (
+              <>
+                <dt className="text-muted">{t("sso.acsUrl")}</dt>
+                <dd className="break-all font-mono text-[13px]">{conn.sp_acs_url}</dd>
+              </>
+            ) : null}
+            {conn.sp_entity_id ? (
+              <>
+                <dt className="text-muted">{t("sso.entityId")}</dt>
+                <dd className="break-all font-mono text-[13px]">{conn.sp_entity_id}</dd>
+              </>
+            ) : null}
+          </dl>
+        ) : null}
+        <div className="flex flex-wrap gap-3">
+          <Button type="submit">{t("common.save")}</Button>
+          {conn ? (
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() =>
+                void run(async () => {
+                  await call(api.DELETE("/v1/sso"));
+                  setLoaded(false);
+                })
+              }
+            >
+              {t("sso.removeProvider")}
+            </Button>
+          ) : null}
+        </div>
+      </form>
+    </Section>
+  );
+}
+
 function Keys() {
   const { t, i18n } = useTranslation();
   const { orgId } = useSession();
@@ -454,11 +719,7 @@ export function SettingsScreen() {
         {tab === "members" ? <Members /> : null}
         {tab === "keys" ? <Keys /> : null}
         {tab === "usage" ? <Usage /> : null}
-        {tab === "sso" ? (
-          <Section title={t("settings.sso")} lead={t("settings.ssoLead")}>
-            {null}
-          </Section>
-        ) : null}
+        {tab === "sso" ? <Sso /> : null}
       </div>
     </div>
   );

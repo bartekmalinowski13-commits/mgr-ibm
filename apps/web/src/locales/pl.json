@@ -21,9 +21,10 @@
     "name": "Imię",
     "submit": "Zaloguj się",
     "devNote": "Środowisko lokalne: logowanie przez wbudowany testowy dostawca tożsamości. W chmurze logujesz się przez Amazon Cognito lub SSO organizacji.",
-    "cloudNote": "Logowanie odbywa się na stronie logowania BOM Agent (Amazon Cognito w regionie UE). Twoja organizacja może wymagać uwierzytelniania dwuskładnikowego.",
+    "cloudNote": "Przy logowaniu jednokrotnym (SSO) podaj służbowy e-mail – przejdziesz od razu do logowania swojej organizacji. W pozostałych przypadkach logujesz się na stronie BOM Agent (Amazon Cognito w regionie UE).",
     "callbackError": "Nie udało się dokończyć logowania (link wygasł albo został już użyty).",
-    "retry": "Zaloguj się ponownie"
+    "retry": "Zaloguj się ponownie",
+    "continue": "Dalej"
   },
   "onboarding": {
     "title": "Załóż organizację",
@@ -291,7 +292,7 @@
     },
     "of": "z {{limit}}",
     "sso": "Logowanie jednokrotne (SSO)",
-    "ssoLead": "Konfiguracja SAML 2.0 / OIDC dla organizacji pojawi się po uruchomieniu Amazon Cognito w środowisku chmurowym. Do tego czasu członkowie logują się kontem e-mail."
+    "ssoLead": "Logowanie przez dostawcę tożsamości organizacji (SAML 2.0 lub OpenID Connect), federowane w Amazon Cognito w UE."
   },
   "errors": {
     "notMember": "Nie masz dostępu do tej organizacji. Wybierz inną organizację.",
@@ -366,5 +367,37 @@
       "indexed": "Zaindeksowany",
       "failed": "Błąd"
     }
+  },
+  "sso": {
+    "domains": "Zweryfikowane domeny e-mail",
+    "domainsLead": "Potwierdź, że organizacja kontroluje domenę e-mail: dodaj rekord DNS TXT i kliknij Weryfikuj. Osoby z zweryfikowanych domen przy logowaniu trafiają do Waszego dostawcy tożsamości.",
+    "domain": "Domena",
+    "addDomain": "Dodaj domenę",
+    "verified": "Zweryfikowana",
+    "notVerified": "Jeszcze niezweryfikowana",
+    "verify": "Weryfikuj",
+    "verifiedToast": "Domena zweryfikowana",
+    "txtHint": "Dodaj ten rekord DNS TXT, a potem kliknij Weryfikuj:",
+    "provider": "Dostawca tożsamości",
+    "protocol": "Protokół",
+    "metadataUrl": "Adres metadanych SAML",
+    "issuer": "Adres wystawcy OIDC (issuer)",
+    "clientId": "Identyfikator klienta",
+    "clientSecret": "Sekret klienta",
+    "secretKept": "Zostaw puste, aby zachować zapisany sekret",
+    "defaultRole": "Rola nowych członków",
+    "enforce": "Wymagaj logowania jednokrotnego",
+    "enforceHint": "Członkowie z adresem w zweryfikowanej domenie mogą logować się tylko przez dostawcę tożsamości. Właściciele zachowują logowanie hasłem na wypadek awarii dostawcy.",
+    "status": "Stan",
+    "statuses": {
+      "draft": "Szkic",
+      "active": "Aktywny",
+      "failed": "Błąd"
+    },
+    "acsUrl": "Adres odpowiedzi / ACS",
+    "entityId": "Identyfikator encji (audience)",
+    "saved": "Dostawca tożsamości zapisany",
+    "failed": "Nie udało się skonfigurować dostawcy – zobacz stan poniżej",
+    "removeProvider": "Usuń dostawcę tożsamości"
   }
 }

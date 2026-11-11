@@ -14,9 +14,16 @@ from bomagent_api import __version__, maintenance
 from bomagent_api.auth import LocalIdp, TokenVerifier
 from bomagent_api.routers import api_keys, audit, identity, members, projects, runs
 from bomagent_api.routers import kb as kb_routes
+from bomagent_api.routers import sso as sso_routes
 from bomagent_api.routers.kb import MAX_DOCUMENT
 from bomagent_api.routers.projects import MAX_UPLOAD
 from bomagent_api.routers.runs import MAX_REFERENCE
+from bomagent_api.sso import (
+    CognitoIdentityProviders,
+    DnsTxtResolver,
+    InMemoryIdentityProviders,
+    StaticTxtResolver,
+)
 from bomagent_common.config import ServiceSettings, postgres_url
 from bomagent_common.db import make_engine, ping
 from bomagent_common.health import ReadinessCheck
@@ -70,6 +77,10 @@ class Settings(ServiceSettings):
     oidc_issuer: str = ""
     oidc_audience: str = "bomagent-api"
     oidc_jwks_url: str | None = None
+    #: SSO federation (Cognito): pool + SPA client to enable providers on, hosted domain
+    cognito_user_pool_id: str | None = None
+    cognito_client_id: str | None = None
+    cognito_domain: str | None = None
     files_bucket: str = "bomagent-local-files"
     ingest_queue_url: str | None = None
     runs_queue_url: str | None = None
@@ -161,6 +172,16 @@ def create_app(
     app.state.kb = kb or KnowledgeBase(embedder)
     app.state.catalog = load_catalog()
     app.state.allow_local_models = local
+    if settings.cognito_user_pool_id and settings.cognito_client_id and not local:
+        app.state.identity_providers = CognitoIdentityProviders(
+            settings.cognito_user_pool_id, settings.cognito_client_id, settings.aws_region
+        )
+        app.state.txt_resolver = DnsTxtResolver()
+    else:
+        app.state.identity_providers = InMemoryIdentityProviders()
+        app.state.txt_resolver = StaticTxtResolver()
+    app.state.cognito_domain = settings.cognito_domain
+    app.state.cognito_user_pool_id = settings.cognito_user_pool_id
     app.state.sse_interval_s = settings.sse_interval_s
     app.state.sse_timeout_s = settings.sse_timeout_s
     if settings.auth_mode == "local":
@@ -181,6 +202,8 @@ def create_app(
         runs.models_router,
         audit.router,
         kb_routes.router,
+        sso_routes.router,
+        sso_routes.public,
     ):
         app.include_router(router)
 
@@ -190,7 +213,7 @@ def create_app(
         app.add_middleware(
             CORSMiddleware,
             allow_origins=settings.cors_origins,
-            allow_methods=["GET", "POST", "PATCH"],
+            allow_methods=["GET", "POST", "PATCH", "PUT", "DELETE"],
             allow_headers=["Authorization", "Content-Type", "X-Org-Id", "Idempotency-Key"],
         )
     return app

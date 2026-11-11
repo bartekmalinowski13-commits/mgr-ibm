@@ -180,6 +180,18 @@ describe("compute", () => {
     );
   });
 
+  it("the API may manage identity providers of its own user pool only", () => {
+    const policies = Object.values(compute.findResources("AWS::IAM::Policy"));
+    const statements = policies.flatMap((p) => p.Properties.PolicyDocument.Statement);
+    const sso = statements.filter(
+      (s: { Sid?: string }) => s.Sid === "FederateOrganisationIdentityProviders",
+    );
+    expect(sso).toHaveLength(1);
+    // the pool ARN imported from the identity stack, never a wildcard
+    expect(JSON.stringify(sso[0].Resource)).toMatch(/BomAgent-prod-Identity.*Arn/);
+    expect(JSON.stringify(sso[0].Resource)).not.toBe('"*"');
+  });
+
   it("tasks may touch only tenant-prefixed objects of the files bucket", () => {
     const policies = JSON.stringify(compute.findResources("AWS::IAM::Policy"));
     expect(policies).toContain("arn:aws:s3:::bomagent-prod-files-000000000000/tenants/*");

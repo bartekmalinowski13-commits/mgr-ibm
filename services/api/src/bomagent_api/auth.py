@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import json
 import time
 import uuid
 from dataclasses import dataclass
@@ -22,6 +23,7 @@ from fastapi import Depends, Header, Request
 from jwt import PyJWKClient
 from sqlalchemy import text
 
+from bomagent_api.sso import join_on_first_sign_in, require_sso_if_enforced
 from bomagent_common.db import tenant_transaction, user_transaction
 from bomagent_common.problems import ProblemError
 from bomagent_common.tenancy import TenantContext, tenant_scope
@@ -37,6 +39,8 @@ class Principal:
     email: str
     name: str
     email_verified: bool = False
+    #: Cognito federation: the identity provider the user signed in through
+    identity_provider: str | None = None
 
 
 class TokenVerifier:
@@ -74,7 +78,21 @@ class TokenVerifier:
             name=str(claims.get("name", "")),
             # OIDC: boolean; some IdPs (older Cognito) send the string "true"
             email_verified=claims.get("email_verified") in (True, "true"),
+            identity_provider=_identity_provider(claims.get("identities")),
         )
+
+
+def _identity_provider(identities: Any) -> str | None:
+    """Provider name from Cognito's ``identities`` claim (list, or its JSON string)."""
+    if isinstance(identities, str):
+        try:
+            identities = json.loads(identities)
+        except ValueError:
+            return None
+    if isinstance(identities, list) and identities and isinstance(identities[0], dict):
+        name = identities[0].get("providerName")
+        return str(name) if name else None
+    return None
 
 
 class LocalIdp:
@@ -93,19 +111,23 @@ class LocalIdp:
         ttl_s: int = 3600,
         *,
         email_verified: bool = True,
+        identity_provider: str | None = None,
     ) -> str:
         now = int(time.time())
+        claims: dict[str, Any] = {
+            "iss": LOCAL_ISSUER,
+            "aud": self.audience,
+            "sub": sub,
+            "email": email,
+            "name": name,
+            "email_verified": email_verified,
+            "iat": now,
+            "exp": now + ttl_s,
+        }
+        if identity_provider:  # as Cognito sets it for federated users
+            claims["identities"] = [{"providerName": identity_provider, "providerType": "SAML"}]
         return jwt.encode(
-            {
-                "iss": LOCAL_ISSUER,
-                "aud": self.audience,
-                "sub": sub,
-                "email": email,
-                "name": name,
-                "email_verified": email_verified,
-                "iat": now,
-                "exp": now + ttl_s,
-            },
+            claims,
             self._key,
             algorithm="RS256",
         )
@@ -136,6 +158,14 @@ async def _verify_user(request: Request, token: str) -> Principal:
 
 
 async def memberships(request: Request, principal: Principal) -> list[dict[str, Any]]:
+    if principal.identity_provider and principal.email:
+        await join_on_first_sign_in(
+            request.app.state.engine,
+            principal.sub,
+            principal.email,
+            principal.name,
+            principal.identity_provider,
+        )
     async with user_transaction(request.app.state.engine, principal.sub) as conn:
         rows = await conn.execute(
             text("SELECT tenant_id, slug, name, roles, status FROM tenancy.memberships_of(:sub)"),
@@ -239,6 +269,13 @@ async def org_context(
         raise ProblemError(
             403, "Forbidden", "not a member of this organisation", slug="not-a-member"
         )
+    await require_sso_if_enforced(
+        request.app.state.engine,
+        org_id,
+        principal.email,
+        principal.identity_provider,
+        member["roles"],
+    )
     ctx = TenantContext(
         tenant_id=org_id,
         actor_id=principal.sub,

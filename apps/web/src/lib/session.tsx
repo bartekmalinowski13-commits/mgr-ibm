@@ -90,12 +90,17 @@ export function useSession(): SessionState {
 }
 
 /** Local mock IdP (available only when the API runs in local/test). */
-export async function devSignIn(email: string, name: string): Promise<Session> {
+export async function devSignIn(
+  email: string,
+  name: string,
+  identityProvider?: string,
+): Promise<Session> {
   const sub = `dev-${email.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
   const resp = await fetch("/v1/dev/token", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ sub, email, name }),
+    // local only: "signing in through" an organisation's identity provider (SSO preview)
+    body: JSON.stringify({ sub, email, name, identity_provider: identityProvider ?? null }),
   });
   if (!resp.ok) throw new Error(`sign-in failed (${resp.status})`);
   const { access_token: token } = (await resp.json()) as { access_token: string };

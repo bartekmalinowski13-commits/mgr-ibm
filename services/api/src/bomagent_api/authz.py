@@ -32,6 +32,7 @@ POLICIES: dict[str, frozenset[str]] = {
     "kb.read": READ,
     "kb.write": WRITE,
     "org.update": ADMIN,
+    "sso.manage": ADMIN,
 }
 
 
