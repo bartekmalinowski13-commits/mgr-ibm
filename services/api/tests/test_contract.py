@@ -31,7 +31,7 @@ def generous_plan():
     from bomagent_api import plans
 
     with pytest.MonkeyPatch.context() as mp:
-        mp.setitem(plans.PLANS, "pilot", plans.Plan(10**9, 10**9, 10**9, 10**9, 1e12))
+        mp.setitem(plans.PLANS, "pilot", plans.Plan(10**9, 10**9, 10**9, 10**9, 1e12, 10**15))
         yield
 
 

@@ -3,8 +3,10 @@
 Same key + same body -> the stored response is replayed; same key + different body ->
 422. Keys are per tenant (RLS) *and per user* (the stored key is a hash of user + key, so
 another member reusing a key never receives someone else's response) and stored in the
-same transaction as the created row. A transaction-level advisory lock serialises
-concurrent requests with the same key: the second one waits and then replays.
+same transaction as the created row. The stored hash covers HTTP method and path too, so
+the same key and body sent to another endpoint is a mismatch, not a replay. A
+transaction-level advisory lock serialises concurrent requests with the same key: the
+second one waits and then replays.
 """
 
 from __future__ import annotations
@@ -13,6 +15,7 @@ import hashlib
 import json
 from typing import Any
 
+from fastapi import Request
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncConnection
 
@@ -24,11 +27,19 @@ def scoped_key(key: str) -> str:
     return hashlib.sha256(f"{require_tenant().actor_id}\n{key}".encode()).hexdigest()
 
 
-def request_hash(body: Any) -> str:
-    return hashlib.sha256(json.dumps(body, sort_keys=True, default=str).encode()).hexdigest()
+def request_hash(body: Any, route: str) -> str:
+    """``route`` is ``"<METHOD> <path>"`` of the request."""
+    payload = json.dumps(body, sort_keys=True, default=str)
+    return hashlib.sha256(f"{route}\n{payload}".encode()).hexdigest()
 
 
-async def replay(conn: AsyncConnection, key: str | None, body: Any) -> dict[str, Any] | None:
+def route_of(request: Request) -> str:
+    return f"{request.method} {request.url.path}"
+
+
+async def replay(
+    conn: AsyncConnection, key: str | None, body: Any, *, route: str
+) -> dict[str, Any] | None:
     if key is None:
         return None
     if not 8 <= len(key) <= 255:
@@ -51,7 +62,7 @@ async def replay(conn: AsyncConnection, key: str | None, body: Any) -> dict[str,
     ).first()
     if row is None:
         return None
-    if row.request_hash != request_hash(body):
+    if row.request_hash != request_hash(body, route):
         raise ProblemError(
             422,
             "Unprocessable Entity",
@@ -63,7 +74,13 @@ async def replay(conn: AsyncConnection, key: str | None, body: Any) -> dict[str,
 
 
 async def store(
-    conn: AsyncConnection, key: str | None, body: Any, status: int, response: dict[str, Any]
+    conn: AsyncConnection,
+    key: str | None,
+    body: Any,
+    status: int,
+    response: dict[str, Any],
+    *,
+    route: str,
 ) -> None:
     if key is None:
         return
@@ -74,7 +91,7 @@ async def store(
         ),
         {
             "k": scoped_key(key),
-            "h": request_hash(body),
+            "h": request_hash(body, route),
             "s": status,
             "r": json.dumps(response, default=str),
         },

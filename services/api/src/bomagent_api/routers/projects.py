@@ -14,7 +14,7 @@ from bomagent_api import idempotency
 from bomagent_api.auth import OrgContext
 from bomagent_api.authz import require
 from bomagent_api.pagination import clamp, encode_cursor, page_clause
-from bomagent_api.plans import check_new_project
+from bomagent_api.plans import check_new_project, check_storage, plan_of
 from bomagent_api.schemas import FileInfo, Page, Project, ProjectCreate, problem_responses
 from bomagent_common.audit import AuditEvent, emit_audit
 from bomagent_common.db import tenant_transaction
@@ -79,7 +79,9 @@ async def create_project(
     require(ctx, "project.create")
     payload = body.model_dump()
     async with tenant_transaction(request.app.state.engine) as conn:
-        stored = await idempotency.replay(conn, idempotency_key, payload)
+        stored = await idempotency.replay(
+            conn, idempotency_key, payload, route=idempotency.route_of(request)
+        )
         if stored is not None:
             return Project(**stored)
         await check_new_project(conn)
@@ -99,7 +101,12 @@ async def create_project(
             ),
         )
         await idempotency.store(
-            conn, idempotency_key, payload, 201, project.model_dump(mode="json")
+            conn,
+            idempotency_key,
+            payload,
+            201,
+            project.model_dump(mode="json"),
+            route=idempotency.route_of(request),
         )
     return project
 
@@ -148,6 +155,9 @@ async def upload_file(
     try:
         async with tenant_transaction(request.app.state.engine) as conn:
             await get_project(conn, project_id)
+            # the tenant lock (taken by check_storage) serialises uploads of an organisation,
+            # so two uploads of one name never both see "no previous file"
+            await plan_of(conn, lock=True)
             previous = (
                 await conn.execute(
                     text(
@@ -157,6 +167,9 @@ async def upload_file(
                     {"p": project_id, "n": name},
                 )
             ).first()
+            if previous is not None:
+                await refuse_if_run_active(conn, project_id)
+            await check_storage(conn, len(data), previous.size_bytes if previous else 0)
             # the client's content type is never stored or served back
             await store.put(key, data, "application/octet-stream")
             await conn.execute(
@@ -217,6 +230,27 @@ async def upload_file(
         await store.delete(previous.object_key)  # replaced: keep no orphaned copies
     await deliver_now(request, ctx.tenant_id, outbox_id)
     return info
+
+
+async def refuse_if_run_active(conn: Any, project_id: uuid.UUID) -> None:
+    """A queued or running run holds the object keys of the project's files."""
+    active = (
+        await conn.execute(
+            text(
+                "SELECT 1 FROM runs.runs WHERE project_id = :p"
+                " AND status IN ('queued', 'running') LIMIT 1"
+            ),
+            {"p": project_id},
+        )
+    ).first()
+    if active is not None:
+        raise ProblemError(
+            409,
+            "Conflict",
+            "a run of this project is queued or running; wait until it finishes"
+            " before replacing a file",
+            slug="file-in-use",
+        )
 
 
 async def deliver_now(request: Request, tenant_id: uuid.UUID, outbox_id: uuid.UUID) -> None:

@@ -21,7 +21,7 @@ from bomagent_common.audit import AuditEvent, emit_audit
 from bomagent_common.db import platform_transaction, tenant_transaction
 from bomagent_common.logging import get_logger
 from bomagent_common.messaging import Queue
-from bomagent_common.outbox import deliver
+from bomagent_common.outbox import cleanup_sent, deliver
 from bomagent_common.tenancy import TenantContext
 
 log = get_logger(__name__)
@@ -76,9 +76,10 @@ async def sweep(
 ) -> dict[str, int]:
     async with platform_transaction(platform_engine) as conn:
         tenants = (await conn.execute(text("SELECT id FROM tenancy.tenants"))).scalars().all()
-    totals = {"sent": 0, "reaped": 0}
+    totals = {"sent": 0, "reaped": 0, "purged": 0}
     for tenant_id in tenants:
         totals["sent"] += await deliver(engine, tenant_id, queues, older_than_s=outbox_grace_s)
+        totals["purged"] += await cleanup_sent(engine, tenant_id)
         totals["reaped"] += await reap_stuck_runs(engine, tenant_id, run_timeout_s)
     if any(totals.values()):
         log.info("maintenance_sweep", **totals)

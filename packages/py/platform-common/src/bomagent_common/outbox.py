@@ -1,7 +1,9 @@
 """Transactional outbox for queue messages (``app.outbox``, RLS per tenant).
 
 ``enqueue`` inside the business transaction; ``deliver`` after commit (best effort) and
-periodically from a relay for whatever is still pending.
+periodically from a relay for whatever is still pending. A row whose delivery failed
+``MAX_ATTEMPTS`` times is marked dead (``dead_at``, with ``last_error``) and no longer
+retried; sent rows are deleted after a retention period (``cleanup_sent``).
 """
 
 from __future__ import annotations
@@ -17,6 +19,8 @@ from bomagent_common.logging import get_logger
 from bomagent_common.messaging import Message, Queue
 
 log = get_logger(__name__)
+MAX_ATTEMPTS = 10
+SENT_RETENTION_DAYS = 7
 
 
 async def enqueue(conn: AsyncConnection, queue: str, message: Message) -> uuid.UUID:
@@ -39,6 +43,7 @@ async def deliver(
     ids: Sequence[uuid.UUID] | None = None,
     older_than_s: float = 0.0,
     batch: int = 100,
+    max_attempts: int = MAX_ATTEMPTS,
 ) -> int:
     """Send pending messages of one tenant; returns how many were sent. Rows are locked
     with SKIP LOCKED, so concurrent relays never send the same row at the same time."""
@@ -47,7 +52,8 @@ async def deliver(
     async with tenant_transaction(engine, tenant_id) as conn:
         rows = await conn.execute(
             text(
-                "SELECT id, queue, message FROM app.outbox WHERE sent_at IS NULL"  # noqa: S608
+                "SELECT id, queue, message FROM app.outbox"  # noqa: S608
+                " WHERE sent_at IS NULL AND dead_at IS NULL"
                 " AND tenant_id = app.current_tenant_id()"
                 f" AND created_at <= now() - make_interval(secs => :age){filters}"
                 " ORDER BY created_at LIMIT :n FOR UPDATE SKIP LOCKED"
@@ -58,14 +64,27 @@ async def deliver(
             try:
                 await queues[row.queue].send(Message.model_validate(row.message))
             except Exception as exc:
-                log.warning("outbox_send_failed", outbox_id=str(row.id), error=type(exc).__name__)
-                await conn.execute(
-                    text(
-                        "UPDATE app.outbox SET attempts = attempts + 1, last_error = :e"
-                        " WHERE id = :i"
-                    ),
-                    {"e": type(exc).__name__, "i": row.id},
-                )
+                error = type(exc).__name__
+                dead = (
+                    await conn.execute(
+                        text(
+                            "UPDATE app.outbox SET attempts = attempts + 1, last_error = :e,"
+                            " dead_at = CASE WHEN attempts + 1 >= :max THEN now() END"
+                            " WHERE id = :i RETURNING dead_at IS NOT NULL"
+                        ),
+                        {"e": error, "i": row.id, "max": max_attempts},
+                    )
+                ).scalar()
+                if dead:
+                    log.error(  # noqa: TRY400
+                        "outbox_message_dead",
+                        outbox_id=str(row.id),
+                        queue=row.queue,
+                        error=error,
+                        attempts=max_attempts,
+                    )
+                else:
+                    log.warning("outbox_send_failed", outbox_id=str(row.id), error=error)
                 continue
             await conn.execute(
                 text(
@@ -75,3 +94,18 @@ async def deliver(
             )
             sent += 1
     return sent
+
+
+async def cleanup_sent(
+    engine: AsyncEngine, tenant_id: uuid.UUID, *, older_than_days: int = SENT_RETENTION_DAYS
+) -> int:
+    """Delete rows of one tenant that were sent more than ``older_than_days`` ago."""
+    async with tenant_transaction(engine, tenant_id) as conn:
+        result = await conn.execute(
+            text(
+                "DELETE FROM app.outbox WHERE tenant_id = app.current_tenant_id()"
+                " AND sent_at < now() - make_interval(days => :d)"
+            ),
+            {"d": older_than_days},
+        )
+    return int(result.rowcount)

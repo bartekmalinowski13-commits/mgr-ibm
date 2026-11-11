@@ -97,7 +97,9 @@ async def create_run(
         raise ProblemError(422, "Unprocessable Entity", str(exc), slug="model-not-allowed") from exc
     payload = body.model_dump(mode="json")
     async with tenant_transaction(request.app.state.engine) as conn:
-        stored = await idempotency.replay(conn, idempotency_key, payload)
+        stored = await idempotency.replay(
+            conn, idempotency_key, payload, route=idempotency.route_of(request)
+        )
         if stored is not None:
             return Run(**stored)
         await get_project(conn, body.project_id)
@@ -166,7 +168,14 @@ async def create_run(
                 },
             ),
         )
-        await idempotency.store(conn, idempotency_key, payload, 202, run.model_dump(mode="json"))
+        await idempotency.store(
+            conn,
+            idempotency_key,
+            payload,
+            202,
+            run.model_dump(mode="json"),
+            route=idempotency.route_of(request),
+        )
     await deliver_now(request, ctx.tenant_id, outbox_id)
     return run
 

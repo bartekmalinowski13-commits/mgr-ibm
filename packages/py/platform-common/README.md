@@ -12,6 +12,7 @@
 | `storage` | `tenant_key()` (`tenants/{id}/...`, traversal-safe); `S3ObjectStore`/`InMemoryObjectStore` refuse keys outside the active tenant's prefix |
 | `logging` | structlog JSON; drops content-like keys (`prompt`, `content`, ...), masks secrets, adds `trace_id`/`tenant_id` |
 | `telemetry` | OTel tracer provider (OTLP/HTTP), FastAPI/SQLAlchemy/httpx instrumentation |
+| `outbox` | transactional outbox: `enqueue()`, `deliver()` (SKIP LOCKED; after `MAX_ATTEMPTS`=10 failures a row gets `dead_at` and is no longer retried, `outbox_message_dead` is logged), `cleanup_sent()` (default retention 7 days) |
 | `problems` | RFC 9457 `application/problem+json` handlers, `ProblemError` |
 | `health`, `service` | `/healthz`, `/readyz`; `create_service_app()` used by all four services |
 

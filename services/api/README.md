@@ -30,7 +30,17 @@ regenerate with `just openapi`; a test fails when it drifts).
 - Every mutation writes an audit event in the same transaction.
 - **Uploads:** `Content-Length` required and checked before the body is read (64 MB);
   stored as `application/octet-stream`; a replaced file's old object is deleted.
+  Uploads of an organisation are serialised by the tenant row lock, so two uploads of one
+  name are deterministic (the later replaces the earlier, no orphaned object). Replacing
+  a file while a run of the project is queued/running -> 409 `file-in-use`. The plan limits
+  the total size of design files (`Plan.storage_bytes`, replaced files count once; over
+  the limit -> 429 `quota-exceeded`, like the other plan limits).
 - **Concurrency:** idempotency keys are per user and serialised; BOM edits lock the run.
+  The stored request hash covers method, path and body: the same key and body on another
+  endpoint -> 422 `idempotency-mismatch`.
+- **Maintenance loop:** outbox relay (a row is retried up to 10 times, then marked dead
+  with `last_error` and logged as `outbox_message_dead`), deletion of sent outbox rows
+  older than 7 days, stuck-run reaper.
 
 ## Testing
 ```bash
