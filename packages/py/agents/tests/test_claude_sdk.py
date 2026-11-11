@@ -83,3 +83,44 @@ def test_registry_builds_sdk_runtime(retriever):
         "A", context_factory(FakeChat(heuristic_responder), retriever), runtime="claude_agent_sdk_a"
     )
     assert runtime.name == "claude_agent_sdk_a"
+
+
+async def test_adapter_pins_the_kb_snapshot_and_caps_turns_by_the_budget(retriever):
+    seen: dict = {}
+
+    async def query(prompt, options):
+        seen.update(options)
+        async for m in scripted_query()(prompt, options):
+            yield m
+
+    factory = context_factory(FakeChat(heuristic_responder), retriever)
+    run = run_input()
+    run.config = RunConfig(variant="A", kb_snapshot_id="snap-7", max_llm_calls=12)
+    out = await ClaudeAgentSdkVariantA(factory, query_fn=query).run(run)
+    assert out.bom.kb_snapshot_id == "snap-7"
+    assert seen["max_turns"] == 12  # min(adapter default 40, run budget)
+
+
+async def test_adapter_stops_at_the_time_budget(retriever):
+    import asyncio
+
+    async def slow(prompt, options):
+        await asyncio.sleep(5)
+        yield ResultMessage()
+
+    factory = context_factory(FakeChat(heuristic_responder), retriever)
+    run = run_input()
+    run.config = RunConfig(variant="A", timeout_s=0.05)
+    out = await ClaudeAgentSdkVariantA(factory, query_fn=slow).run(run)
+    assert out.status == "budget_exceeded"
+    assert any(f.rule_id == "run.budget" for f in out.bom.findings)
+
+
+async def test_adapter_flags_a_run_over_the_token_budget(retriever):
+    factory = context_factory(FakeChat(heuristic_responder), retriever)
+    run = run_input()
+    run.config = RunConfig(variant="A", max_total_tokens=500)  # scripted run uses 1200
+    out = await ClaudeAgentSdkVariantA(factory, query_fn=scripted_query()).run(run)
+    assert out.status == "budget_exceeded"
+    assert any(f.rule_id == "run.budget" for f in out.bom.findings)
+    assert out.bom.items  # the submitted BOM is kept for inspection

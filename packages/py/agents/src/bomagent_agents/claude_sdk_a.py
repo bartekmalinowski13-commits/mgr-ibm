@@ -16,6 +16,7 @@ deployment, never the public endpoint. The SDK is an optional dependency
 
 from __future__ import annotations
 
+import asyncio
 import json
 import time
 from collections.abc import AsyncIterator, Callable
@@ -139,6 +140,8 @@ class ClaudeAgentSdkVariantA:
         prompt = load_prompt("claude_agent_sdk")
         sink: dict[str, Any] = {}
         start = time.perf_counter()
+        # the run budget (R7) applies to the SDK loop too: turns <= LLM calls, wall time
+        max_turns = min(self._max_turns, run.config.max_llm_calls)
         query_fn = self._query_fn
         options: Any = None
         if query_fn is None:  # pragma: no cover - real SDK path, exercised manually
@@ -155,23 +158,39 @@ class ClaudeAgentSdkVariantA:
                 allowed_tools=TOOL_NAMES,
                 disallowed_tools=BUILTIN_TOOLS,
                 setting_sources=[],
-                max_turns=self._max_turns,
+                max_turns=max_turns,
                 model=ctx.model.gateway_model.split("/")[-1],
             )
             query_fn = query
         else:
-            options = {"tools": self._tools(ctx, run, sink), "sink": sink}
+            options = {"tools": self._tools(ctx, run, sink), "sink": sink, "max_turns": max_turns}
         usage = Usage()
-        status: Literal["completed", "failed"] = "completed"
-        async for message in query_fn(prompt="Create the BOM for this design.", options=options):
-            if type(message).__name__ == "ResultMessage":
-                u = getattr(message, "usage", None) or {}
-                usage = Usage(
-                    llm_calls=int(getattr(message, "num_turns", 0) or 0),
-                    input_tokens=int(u.get("input_tokens", 0)),
-                    output_tokens=int(u.get("output_tokens", 0)),
-                    cached_input_tokens=int(u.get("cache_read_input_tokens", 0)),
-                )
+        status: Literal["completed", "failed", "budget_exceeded"] = "completed"
+        budget_errors: list[str] = []
+
+        async def consume() -> None:
+            nonlocal usage
+            async for message in query_fn(
+                prompt="Create the BOM for this design.", options=options
+            ):
+                if type(message).__name__ == "ResultMessage":
+                    u = getattr(message, "usage", None) or {}
+                    usage = Usage(
+                        llm_calls=int(getattr(message, "num_turns", 0) or 0),
+                        input_tokens=int(u.get("input_tokens", 0)),
+                        output_tokens=int(u.get("output_tokens", 0)),
+                        cached_input_tokens=int(u.get("cache_read_input_tokens", 0)),
+                    )
+                    if getattr(message, "subtype", "") == "error_max_turns":
+                        budget_errors.append(f"limit of {max_turns} agent turns reached")
+
+        try:
+            async with asyncio.timeout(run.config.timeout_s):
+                await consume()
+        except TimeoutError:
+            budget_errors.append(f"run longer than {run.config.timeout_s} s")
+        if usage.input_tokens + usage.output_tokens > run.config.max_total_tokens:
+            budget_errors.append(f"more than {run.config.max_total_tokens} tokens")
         wall = time.perf_counter() - start
         usage = usage.model_copy(
             update={
@@ -179,8 +198,13 @@ class ClaudeAgentSdkVariantA:
                 "cost_eur": ctx.model.cost(usage.input_tokens, usage.output_tokens),
             }
         )
-        findings: list[Finding] = []
-        if "bom" not in sink:
+        findings: list[Finding] = [
+            Finding(rule_id="run.budget", severity=Severity.ERROR, message=f"claude_agent_sdk: {e}")
+            for e in budget_errors
+        ]
+        if budget_errors:
+            status = "budget_exceeded"
+        elif "bom" not in sink:
             status = "failed"
             findings.append(
                 Finding(
@@ -203,6 +227,7 @@ class ClaudeAgentSdkVariantA:
             items=items,
             findings=findings,
             usage=usage,
+            kb_snapshot_id=run.config.kb_snapshot_id,
         )
         return RunOutput(
             run_id=run.run_id,
