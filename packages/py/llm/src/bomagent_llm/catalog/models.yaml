@@ -73,6 +73,7 @@ models:
     cost_out_eur: 18.5
     enabled: false
     verified: false
+    notes: id and EU profile checked against https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-anthropic-claude-opus-5-5.html (2026-11-12); the eu. profile routes only to EU member-state regions (eu-central-1, eu-north-1, eu-south-1, eu-south-2, eu-west-1, eu-west-3 from a Frankfurt source) - re-verify with GetInferenceProfile from eu-central-1 and enable model access in the account
   - id: claude-sonnet-eu
     gateway_model: bedrock/eu.anthropic.claude-sonnet-5-5
     provider: bedrock
@@ -85,6 +86,7 @@ models:
     cost_out_eur: 9.25
     enabled: false
     verified: false
+    notes: id and EU profile checked against https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-anthropic-claude-sonnet-5-5.html (2026-11-12); the eu. profile routes only to EU member-state regions (eu-central-1, eu-north-1, eu-south-1, eu-south-2, eu-west-1, eu-west-3 from a Frankfurt source) - re-verify with GetInferenceProfile from eu-central-1 and enable model access in the account
   - id: claude-haiku-eu
     gateway_model: bedrock/eu.anthropic.claude-haiku-5-5
     provider: bedrock
@@ -97,6 +99,7 @@ models:
     cost_out_eur: 0.5
     enabled: false
     verified: false
+    notes: id and EU profile checked against https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-anthropic-claude-haiku-5-5.html (2026-11-12); the eu. profile routes only to EU member-state regions (eu-central-1, eu-north-1, eu-south-1, eu-south-2, eu-west-1, eu-west-3 from a Frankfurt source) - re-verify with GetInferenceProfile from eu-central-1 and enable model access in the account
 
   # ---------------------------------------------------------------- closed, OpenAI via Azure OpenAI (EU Data Zone Standard)
   # Deployment name is chosen when the Azure deployment is created; never use "Global"
@@ -127,7 +130,12 @@ models:
     cost_out_eur: 0.0
     enabled: false
     verified: false
-    notes: Mistral AI (EU); confirm the model's weights licence if "open-weight" matters for the experiment
+    notes: >-
+      Mistral AI La Plateforme (api.mistral.ai, EU). The -latest alias is kept on purpose; as of
+      2026-11-12 https://docs.mistral.ai/getting-started/models/models_overview/ lists Mistral Large 3
+      (mistral-large-2512, deprecated 2026-10-31) and Mistral Large 4 (mistral-large-4-0, id not confirmed
+      from the API reference). Pin an exact id after checking GET /v1/models with the owner key, and
+      confirm the EU-only data processing setting of the workspace.
   - id: open-weight-bedrock-eu
     gateway_model: bedrock/eu.meta.llama-open-weight-model-id
     provider: bedrock
@@ -141,6 +149,46 @@ models:
     enabled: false
     verified: false
     notes: choose an open-weight model offered in eu-central-1 and put its exact ID here
+  # Qwen (Alibaba). The Alibaba Cloud / DashScope API is deliberately NOT in this catalogue: it
+  # does not guarantee EU processing. Mistral La Plateforme does not host Qwen. Verified EU-resident
+  # ways (researched 2026-11-12): Amazon Bedrock in-region in eu-central-1 / eu-north-1 / eu-south-1
+  # (not eu-west-1, not via geo profiles) and self-hosting (vLLM) in an EU region. Azure AI Foundry
+  # EU availability of Qwen was not verifiable from the docs - add an entry only after checking it.
+  - id: qwen3-235b-bedrock-eu
+    gateway_model: bedrock/qwen.qwen3-235b-a22b-2507-v1:0
+    provider: bedrock
+    license_class: open-weight
+    residency: eu-region
+    region: eu-central-1
+    capabilities: [chat, structured_output, tools]
+    tier: strong
+    cost_in_eur: 0.0
+    cost_out_eur: 0.0
+    enabled: false
+    verified: false
+    notes: >-
+      Qwen3 235B A22B 2507 (Apache-2.0 weights) served in-region by Bedrock in eu-central-1, see
+      https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-qwen-qwen3-235b-a22b-2507.html
+      (bedrock-runtime In-Region: eu-central-1, eu-north-1, eu-south-1; no geo/global profile, so
+      nothing leaves the region). Check the LiteLLM Bedrock route for qwen.* ids and model access in
+      the account before enabling; costs are unset (check the Bedrock price list).
+  - id: qwen3-vllm-self-hosted
+    gateway_model: hosted_vllm/Qwen/Qwen3-32B
+    provider: vllm
+    license_class: open-weight
+    residency: eu-region
+    region: eu-central-1
+    capabilities: [chat, structured_output, tools]
+    tier: balanced
+    cost_in_eur: 0.0
+    cost_out_eur: 0.0
+    enabled: false
+    verified: false
+    notes: >-
+      Qwen3 (Apache-2.0) served by vLLM on GPU hardware in an EU region (ADR-0003 feature flag;
+      the cloud gateway does not render vllm entries yet - needs a reachable *.internal api_base).
+      Pick the model size to fit the GPU; weights are downloaded from the model hub at deploy time,
+      never at request time.
   - id: vllm-self-hosted
     gateway_model: hosted_vllm/open-weight-model
     provider: vllm
