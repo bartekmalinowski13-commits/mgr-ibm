@@ -689,6 +689,186 @@ def eeg_2ch() -> Project:
     )
 
 
+R0402 = "Resistor_SMD:R_0402_1005Metric"
+
+
+def ecg_patch() -> Project:
+    """Single-lead wearable ECG patch around the AD8232 (sample pack, exported as EDIF)."""
+    root = Sheet(
+        "ecg-patch.kicad_sch",
+        [
+            Part(
+                "U1",
+                "bomagent:AD8232",
+                "AD8232",
+                "Package_CSP:LFCSP-20-1EP_4x4mm_P0.5mm",
+                "AD8232ACPZ-R7",
+                "Analog Devices",
+                description="Single-lead ECG analog front end",
+            ),
+            Part(
+                "U2",
+                "Regulator_Linear:MCP1700x-330xxTT",
+                "MCP1700-3.3",
+                "Package_TO_SOT_SMD:SOT-23",
+                "MCP1700T-3302E/TT",
+                "Microchip",
+            ),
+            Part(
+                "D1",
+                "Device:D_TVS",
+                "PESD5V0S1BA",
+                "Diode_SMD:D_SOD-323",
+                "PESD5V0S1BA",
+                "Nexperia",
+                description="ESD protection, electrode input",
+            ),
+            Part(
+                "D2",
+                "Device:D_TVS",
+                "PESD5V0S1BA",
+                "Diode_SMD:D_SOD-323",
+                "PESD5V0S1BA",
+                "Nexperia",
+                description="ESD protection, electrode input",
+            ),
+            Part(
+                "D3",
+                "Device:LED",
+                "Green",
+                "LED_SMD:LED_0603_1608Metric",
+                "LTST-C191KGKT",
+                "Lite-On",
+                description="Power indicator",
+            ),
+            Part(
+                "J1",
+                "Connector_Generic:Conn_01x04",
+                "Output",
+                "Connector_JST:JST_PH_S4B-PH-K_1x04_P2.00mm_Horizontal",
+                "S4B-PH-K-S(LF)(SN)",
+                "JST",
+            ),
+            Part(
+                "J2",
+                "Connector_Generic:Conn_01x02",
+                "Battery",
+                "Connector_JST:JST_PH_S2B-PH-K_1x02_P2.00mm_Horizontal",
+                "S2B-PH-K-S(LF)(SN)",
+                "JST",
+            ),
+            Part(
+                "R1", "Device:R", "180k", R0402, ref_mpn="RC0402FR-07180KL", ref_manufacturer=YAGEO
+            ),
+            Part("R2", "Device:R", "10k", R0402, "RC0402FR-0710KL", YAGEO),
+            Part("R3", "Device:R", "10k", R0402, "RC0402FR-0710KL", YAGEO),
+            Part("R4", "Device:R", "100k", R0402, "RC0402FR-07100KL", YAGEO),
+            Part("R5", "Device:R", "1k", R0402, ref_mpn="RC0402FR-071KL", ref_manufacturer=YAGEO),
+            Part(
+                "R6",
+                "Device:R",
+                "0R",
+                R0402,
+                "RC0402JR-070RL",
+                YAGEO,
+                dnp=True,
+                description="Optional shield bridge",
+            ),
+            Part(
+                "C1",
+                "Device:C",
+                "100n",
+                C0603,
+                ref_mpn="GRM188R71H104KA93D",
+                ref_manufacturer="Murata",
+                alternates="CL10B104KB8NNNC",
+            ),
+            Part("C2", "Device:C", "100n", C0603, "GRM188R71H104KA93D", "Murata"),
+            Part("C3", "Device:C", "10n", C0603, "GRM188R71H103KA01D", "Murata"),
+            Part("C4", "Device:C", "1u", C0603, "GRM188R61C105KA93D", "Murata"),
+            Part(
+                "C5",
+                "Device:C",
+                "10u",
+                C0603,
+                ref_mpn="CL10A106KP8NNNC",
+                ref_manufacturer="Samsung Electro-Mechanics",
+            ),
+        ],
+    )
+    return Project("ecg-patch", 20230121, "7.0", {root.file: root}, root.file)
+
+
+def thermometer() -> Project:
+    """Digital clinical thermometer: NTC bridge + zero-drift amplifier (sample pack, PDF BOM)."""
+    root = Sheet(
+        "thermometer.kicad_sch",
+        [
+            Part(
+                "U1",
+                "Amplifier_Operational:OPA333xxDBV",
+                "OPA333",
+                "Package_TO_SOT_SMD:SOT-23-5",
+                "OPA333AIDBVR",
+                "Texas Instruments",
+                description="Bridge amplifier",
+            ),
+            Part(
+                "U2",
+                "Regulator_Linear:LP5907MFX-3.3",
+                "LP5907-3.3",
+                "Package_TO_SOT_SMD:SOT-23-5",
+                "LP5907MFX-3.3/NOPB",
+                "Texas Instruments",
+            ),
+            Part(
+                "RT1",
+                "Device:Thermistor_NTC",
+                "NTC 10k",
+                R0402,
+                ref_mpn="NCP15XH103F03RC",
+                ref_manufacturer="Murata",
+                description="Probe thermistor, 10 kOhm at 25 C",
+            ),
+            Part("R1", "Device:R", "10k", R0603, "RC0603FR-0710KL", YAGEO),
+            Part("R2", "Device:R", "10k", R0603, "RC0603FR-0710KL", YAGEO),
+            Part("R3", "Device:R", "10k", R0603, "RC0603FR-0710KL", YAGEO),
+            Part(
+                "R4", "Device:R", "100k", R0603, ref_mpn="RC0603FR-07100KL", ref_manufacturer=YAGEO
+            ),
+            Part("R5", "Device:R", "1M", R0603, "RC0603FR-071ML", YAGEO),
+            Part(
+                "C1",
+                "Device:C",
+                "100n",
+                C0603,
+                ref_mpn="GRM188R71H104KA93D",
+                ref_manufacturer="Murata",
+            ),
+            Part("C2", "Device:C", "1u", C0603, "GRM188R61C105KA93D", "Murata"),
+            Part("C3", "Device:C", "1u", C0603, "GRM188R61C105KA93D", "Murata"),
+            Part(
+                "J1",
+                "Connector_Generic:Conn_01x02",
+                "Battery",
+                "Connector_JST:JST_PH_S2B-PH-K_1x02_P2.00mm_Horizontal",
+                "S2B-PH-K-S(LF)(SN)",
+                "JST",
+            ),
+            Part(
+                "D1",
+                "Device:LED",
+                "Red",
+                "LED_SMD:LED_0603_1608Metric",
+                "LTST-C191KRKT",
+                "Lite-On",
+                description="Fever alert",
+            ),
+        ],
+    )
+    return Project("thermometer", 20231120, "8.0", {root.file: root}, root.file)
+
+
 def main(out_dir: str) -> None:
     base = Path(out_dir)
     for project in (ecg_frontend(), pulse_ox(), eeg_2ch()):

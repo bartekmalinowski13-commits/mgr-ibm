@@ -1,0 +1,11 @@
+Reference,Qty,Value,Footprint,Manufacturer,MPN,MPN Alternates,DNP
+C1 C102 C202,3,100n,Capacitor_SMD:C_0603_1608Metric,Murata,GRM188R71H104KA93D,,
+C2,1,10u,Capacitor_SMD:C_0603_1608Metric,Samsung Electro-Mechanics,CL10A106KP8NNNC,,
+C101 C201,2,47n,Capacitor_SMD:C_0603_1608Metric,Murata,GRM188R71H473KA61D,,
+J1,1,Electrodes,Connector_Molex:Molex_KK-254_AE-6410-05A_1x05_P2.54mm_Vertical,Molex,22-23-2051,,
+R101 R201,2,49k9,Resistor_SMD:R_0603_1608Metric,Yageo,RC0603FR-0749K9L,,
+R102 R103 R202 R203,4,1M,Resistor_SMD:R_0603_1608Metric,Yageo,RC0603FR-071ML,,
+U1,1,ADS1292R,Package_QFP:TQFP-32_5x5mm_P0.5mm,Texas Instruments,ADS1292RIPBSR,,
+U101 U201,2,INA333,Package_SO:MSOP-8_3x3mm_P0.65mm,Texas Instruments,INA333AIDGKR,,
+U102 U202,2,OPA2333,Package_SO:SOIC-8_3.9x4.9mm_P1.27mm,Texas Instruments,OPA2333AIDR,,
+Y1,1,2.048MHz,Crystal:Crystal_SMD_3225-4Pin_3.2x2.5mm,,,,DNP

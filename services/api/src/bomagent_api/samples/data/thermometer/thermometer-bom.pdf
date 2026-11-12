@@ -1,0 +1,103 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 842 595] /Contents 4 0 R /Resources << /Font << /F1 5 0 R /F2 6 0 R >> >> >>
+endobj
+4 0 obj
+<< /Length 2759 >>
+stream
+BT /F1 12 Tf 40 560 Td (Bill of materials - Digital thermometer - BOM) Tj ET
+BT /F2 8 Tf 40 530 Td (Designator) Tj ET
+BT /F2 8 Tf 150 530 Td (Qty) Tj ET
+BT /F2 8 Tf 180 530 Td (Value) Tj ET
+BT /F2 8 Tf 230 530 Td (Footprint) Tj ET
+BT /F2 8 Tf 410 530 Td (Manufacturer) Tj ET
+BT /F2 8 Tf 520 530 Td (MPN) Tj ET
+BT /F2 8 Tf 640 530 Td (DNP) Tj ET
+BT /F1 8 Tf 40 516 Td (C1) Tj ET
+BT /F1 8 Tf 150 516 Td (1) Tj ET
+BT /F1 8 Tf 180 516 Td (100n) Tj ET
+BT /F1 8 Tf 230 516 Td (C_0603_1608Metric) Tj ET
+BT /F1 8 Tf 410 516 Td (Murata) Tj ET
+BT /F1 8 Tf 520 516 Td (GRM188R71H104KA93D) Tj ET
+BT /F1 8 Tf 40 502 Td (C2, C3) Tj ET
+BT /F1 8 Tf 150 502 Td (2) Tj ET
+BT /F1 8 Tf 180 502 Td (1u) Tj ET
+BT /F1 8 Tf 230 502 Td (C_0603_1608Metric) Tj ET
+BT /F1 8 Tf 410 502 Td (Murata) Tj ET
+BT /F1 8 Tf 520 502 Td (GRM188R61C105KA93D) Tj ET
+BT /F1 8 Tf 40 488 Td (D1) Tj ET
+BT /F1 8 Tf 150 488 Td (1) Tj ET
+BT /F1 8 Tf 180 488 Td (Red) Tj ET
+BT /F1 8 Tf 230 488 Td (LED_0603_1608Metric) Tj ET
+BT /F1 8 Tf 410 488 Td (Lite-On) Tj ET
+BT /F1 8 Tf 520 488 Td (LTST-C191KRKT) Tj ET
+BT /F1 8 Tf 40 474 Td (J1) Tj ET
+BT /F1 8 Tf 150 474 Td (1) Tj ET
+BT /F1 8 Tf 180 474 Td (Battery) Tj ET
+BT /F1 8 Tf 230 474 Td (JST_PH_S2B-PH-K_1x02_P2.00mm_Horizontal) Tj ET
+BT /F1 8 Tf 410 474 Td (JST) Tj ET
+BT /F1 8 Tf 520 474 Td (S2B-PH-K-S\(LF\)\(SN\)) Tj ET
+BT /F1 8 Tf 40 460 Td (R1, R2, R3) Tj ET
+BT /F1 8 Tf 150 460 Td (3) Tj ET
+BT /F1 8 Tf 180 460 Td (10k) Tj ET
+BT /F1 8 Tf 230 460 Td (R_0603_1608Metric) Tj ET
+BT /F1 8 Tf 410 460 Td (Yageo) Tj ET
+BT /F1 8 Tf 520 460 Td (RC0603FR-0710KL) Tj ET
+BT /F1 8 Tf 40 446 Td (R4) Tj ET
+BT /F1 8 Tf 150 446 Td (1) Tj ET
+BT /F1 8 Tf 180 446 Td (100k) Tj ET
+BT /F1 8 Tf 230 446 Td (R_0603_1608Metric) Tj ET
+BT /F1 8 Tf 410 446 Td (Yageo) Tj ET
+BT /F1 8 Tf 520 446 Td (RC0603FR-07100KL) Tj ET
+BT /F1 8 Tf 40 432 Td (R5) Tj ET
+BT /F1 8 Tf 150 432 Td (1) Tj ET
+BT /F1 8 Tf 180 432 Td (1M) Tj ET
+BT /F1 8 Tf 230 432 Td (R_0603_1608Metric) Tj ET
+BT /F1 8 Tf 410 432 Td (Yageo) Tj ET
+BT /F1 8 Tf 520 432 Td (RC0603FR-071ML) Tj ET
+BT /F1 8 Tf 40 418 Td (RT1) Tj ET
+BT /F1 8 Tf 150 418 Td (1) Tj ET
+BT /F1 8 Tf 180 418 Td (NTC 10k) Tj ET
+BT /F1 8 Tf 230 418 Td (R_0402_1005Metric) Tj ET
+BT /F1 8 Tf 410 418 Td (Murata) Tj ET
+BT /F1 8 Tf 520 418 Td (NCP15XH103F03RC) Tj ET
+BT /F1 8 Tf 40 404 Td (U1) Tj ET
+BT /F1 8 Tf 150 404 Td (1) Tj ET
+BT /F1 8 Tf 180 404 Td (OPA333) Tj ET
+BT /F1 8 Tf 230 404 Td (SOT-23-5) Tj ET
+BT /F1 8 Tf 410 404 Td (Texas Instruments) Tj ET
+BT /F1 8 Tf 520 404 Td (OPA333AIDBVR) Tj ET
+BT /F1 8 Tf 40 390 Td (U2) Tj ET
+BT /F1 8 Tf 150 390 Td (1) Tj ET
+BT /F1 8 Tf 180 390 Td (LP5907-3.3) Tj ET
+BT /F1 8 Tf 230 390 Td (SOT-23-5) Tj ET
+BT /F1 8 Tf 410 390 Td (Texas Instruments) Tj ET
+BT /F1 8 Tf 520 390 Td (LP5907MFX-3.3/NOPB) Tj ET
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+6 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>
+endobj
+xref
+0 7
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000251 00000 n 
+0000003062 00000 n 
+0000003159 00000 n 
+trailer
+<< /Size 7 /Root 1 0 R >>
+startxref
+3261
+%%EOF
