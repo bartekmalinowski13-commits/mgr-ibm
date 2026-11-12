@@ -16,5 +16,10 @@ gateway (ADR-0006).
   Pydantic schema (one retry); `FakeChat` replays cassettes (`record_cassette`) or a
   scripted responder - CI never calls a real model.
 
+- `eu_guard` - EU-only enforcement: `check_catalog` (enabled entries) and
+  `check_gateway_config` (rendered LiteLLM config: Bedrock `eu.` profiles and EU regions,
+  EU Azure regions, only api.mistral.ai / Azure / EU Bedrock endpoints, no DashScope).
+  `gateway_config.render` raises `EuResidencyError` on any violation.
+
 ## Testing
 `uv run pytest packages/py/llm`

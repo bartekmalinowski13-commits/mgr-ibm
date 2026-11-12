@@ -153,7 +153,7 @@ jobs:
           run -e BOMAGENT_MIGRATOR_DATABASE_URL="$(db bomagent_migrator ci-migrator bomagent)" \
             bomagent-allinone python -m bomagent_allinone migrate
           docker run -d --name app --network pilot -p 8000:8000 \
-            -e BOMAGENT_ENVIRONMENT=dev \
+            -e BOMAGENT_ENVIRONMENT=dev -e BOMAGENT_ALLOW_FAKE_LLM=true \
             -e BOMAGENT_DATABASE_URL="$(db bomagent_app ci-app bomagent)" \
             -e BOMAGENT_PLATFORM_DATABASE_URL="$(db bomagent_platform ci-platform bomagent)" \
             -e BOMAGENT_SUPABASE_URL=https://example.supabase.co \
@@ -162,12 +162,30 @@ jobs:
             -e BOMAGENT_FILES_BUCKET=ci -e AWS_ACCESS_KEY_ID=ci -e AWS_SECRET_ACCESS_KEY=ci \
             bomagent-allinone
           for _ in $(seq 1 30); do curl -fsS localhost:8000/readyz && break; sleep 2; done
-          curl -fsS localhost:8000/readyz
+          curl -fsS localhost:8000/readyz | grep -q '"llm":"fake"'
           curl -fsS localhost:8000/ | grep -qi "<!doctype html"
           curl -fsS localhost:8000/config.json | grep -q '"mode":"supabase"'
           test "$(curl -s -o /dev/null -w '%{http_code}' localhost:8000/v1/me)" = 401
       - if: failure()
         run: docker logs app || true
+
+  llm-gateway:
+    name: LLM gateway image - render config from the catalogue, EU-only check
+    runs-on: ubuntu-24.04
+    needs: [static]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+      # the unit tests render a fixture with every provider enabled and assert that no
+      # non-EU region, profile or endpoint is present (packages/py/llm/tests/test_eu_guard.py)
+      - run: uv sync --all-packages --frozen
+      - run: uv run pytest packages/py/llm -q
+      # rendering the real catalogue fails closed on a non-EU entry; the build renders it too
+      - name: render the shipped catalogue
+        run: uv run python -m bomagent_llm.gateway_config --region eu-central-1
+      - name: build the gateway image (config rendered inside, no secrets)
+        run: docker build -f deploy/docker/llm-gateway.Dockerfile -t bomagent-llm-gateway .
 
   security:
     name: secrets + vulnerabilities

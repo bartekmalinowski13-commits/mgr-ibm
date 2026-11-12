@@ -15,9 +15,10 @@ import pytest
 from pydantic import ValidationError
 
 from bomagent_agents.retrieval import InMemoryRetriever
-from bomagent_allinone.app import Settings, create_app, spa_csp
+from bomagent_allinone.app import Settings, _llm, create_app, spa_csp
 from bomagent_common.messaging import PostgresQueue
 from bomagent_common.storage import InMemoryObjectStore
+from bomagent_llm.chat import FakeChat, GatewayChat
 from bomagent_testing.data import FIXTURES, KICAD_FIXTURES
 
 REF = "abcdefghijklmnop"
@@ -84,6 +85,74 @@ def test_outside_local_and_test_endpoints_must_use_https(field):
     Settings(environment="test", **(base | {field: "http://localhost:9/x"}))
 
 
+PILOT = {"environment": "dev", "supabase_url": SUPABASE_URL, "supabase_anon_key": "anon"}
+
+
+def test_fake_llm_is_allowed_by_default_only_in_local_and_test():
+    assert Settings(environment="test").allow_fake_llm is True
+    assert Settings(environment="local").allow_fake_llm is True
+    assert Settings(**PILOT).allow_fake_llm is False
+    assert Settings(**PILOT, allow_fake_llm=True).allow_fake_llm is True
+    assert Settings(environment="test", allow_fake_llm=False).allow_fake_llm is False
+
+
+def test_allow_fake_llm_is_read_from_the_environment(monkeypatch):
+    monkeypatch.setenv("BOMAGENT_ALLOW_FAKE_LLM", "true")
+    assert Settings(**PILOT).allow_fake_llm is True
+
+
+def test_llm_fails_closed_without_a_gateway_unless_the_fake_is_allowed():
+    with pytest.raises(RuntimeError, match="BOMAGENT_LLM_GATEWAY_URL"):
+        _llm(Settings(**PILOT))
+    chat, _ = _llm(Settings(**PILOT, allow_fake_llm=True))
+    assert isinstance(chat, FakeChat)
+    chat, _ = _llm(Settings(environment="test"))
+    assert isinstance(chat, FakeChat)
+
+
+def test_a_half_configured_gateway_is_an_error_even_when_the_fake_is_allowed():
+    with pytest.raises(RuntimeError, match="both"):
+        _llm(Settings(**PILOT, allow_fake_llm=True, llm_gateway_url="https://g.example.eu"))
+    with pytest.raises(RuntimeError, match="both"):
+        _llm(Settings(**PILOT, allow_fake_llm=True, llm_gateway_key="k"))
+
+
+def test_the_gateway_is_used_when_configured():
+    settings = Settings(
+        **PILOT, llm_gateway_url="http://mgr-ibm-llm-gateway.internal:4000", llm_gateway_key="k"
+    )
+    chat, _ = _llm(settings)
+    assert isinstance(chat, GatewayChat)
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "http://mgr-ibm-llm-gateway.internal:4000",
+        "http://mgr-ibm-llm-gateway.internal",
+        "https://gateway.example.eu",
+    ],
+)
+def test_gateway_may_use_http_only_on_the_private_network(url):
+    Settings(**PILOT, llm_gateway_url=url)
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "http://gateway.example.eu",
+        "http://internal.example.com",
+        "http://evil.internal.example.com:4000",
+        "http://localhost:4000",
+        "http://10.0.0.1:4000",
+        "http://x.internal@evil.example.com",
+    ],
+)
+def test_gateway_http_elsewhere_is_refused(url):
+    with pytest.raises(ValidationError, match="https"):
+        Settings(**PILOT, llm_gateway_url=url)
+
+
 def test_only_the_postgres_queue_is_supported():
     with pytest.raises(ValidationError, match="postgres"):
         Settings(environment="test", queue_backend="sqs")
@@ -116,6 +185,7 @@ async def test_fake_provider_models_are_selectable_only_without_a_gateway(
             supabase_url=SUPABASE_URL,
             supabase_anon_key="anon",
             start_workers=False,
+            allow_fake_llm=True,
             **(extra if gateway else {}),
         ),
         engine=app_engine,
@@ -123,6 +193,7 @@ async def test_fake_provider_models_are_selectable_only_without_a_gateway(
         store=InMemoryObjectStore(),
     )
     assert app.state.allow_local_models is (not gateway)
+    assert app.state.readyz_info == {"llm": "gateway" if gateway else "fake"}
 
 
 # ---------------------------------------------------------------- HTTP surface

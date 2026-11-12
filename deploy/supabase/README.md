@@ -10,7 +10,7 @@ unchanged). Everything runs in the EU:
 | Files | Supabase Storage through its S3-compatible endpoint | S3 |
 | Queues | `PostgresQueue` (`app.queue_messages`, migration 0013) | SQS |
 | Compute | **one container** (`deploy/docker/allinone.Dockerfile`, package `services/all-in-one`): API + ingest/agent/KB workers + SPA, on an EU container host; config for Fly.io region `fra` in `fly.toml` | ECS Fargate services |
-| LLM | deterministic fake provider by default; a real EU provider only through the existing LLM gateway settings | LLM gateway |
+| LLM | LiteLLM gateway as a second, internal-only Fly app (`gateway.fly.toml`, runbook `docs/platform/runbooks/llm-gateway-pilot.md`); the fake provider only while `BOMAGENT_ALLOW_FAKE_LLM=true` | LLM gateway (ECS) |
 
 The image is host-agnostic: it only reads environment variables and listens on
 `BOMAGENT_PORT` (8000). Health: `GET /healthz` (liveness), `GET /readyz` (database and
@@ -75,8 +75,9 @@ Names only - values are project-specific. **Secret** = set with `fly secrets set
 | `BOMAGENT_FILES_BUCKET` | no | a **private** Storage bucket, e.g. `bomagent-files` |
 | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | **yes** | the Supabase Storage **S3 access keys** (standard AWS SDK variable names) |
 | `BOMAGENT_AWS_REGION` | no | `eu-central-1` (unused without AWS services) |
-| `BOMAGENT_LLM_GATEWAY_URL` | no | unset = fake provider; set (with the key) only for an EU gateway endpoint (ADR-0006) |
-| `BOMAGENT_LLM_GATEWAY_KEY` | **yes** | gateway virtual key |
+| `BOMAGENT_LLM_GATEWAY_URL` | no | the EU gateway (ADR-0006): `http://mgr-ibm-llm-gateway.internal:4000` (Fly private network, `gateway.fly.toml`) - plain `http://` is accepted **only** for `*.internal` hosts, everything else needs `https://`. Must be set together with the key |
+| `BOMAGENT_LLM_GATEWAY_KEY` | **yes** | LiteLLM virtual key (never the master key) |
+| `BOMAGENT_ALLOW_FAKE_LLM` | no | `true` lets the app start without a gateway on the deterministic fake model. Default: only in `local`/`test`; **outside them the app refuses to start without a gateway**. `fly.toml` sets it for now - remove it once the gateway is configured. `/readyz` reports `"llm":"fake"` or `"llm":"gateway"` |
 | `BOMAGENT_EMBEDDING_MODEL` | no | gateway embedding model id (default `fake-embedding`) |
 | `BOMAGENT_STATIC_DIR` | no | set by the image (`/app/web`) |
 | `BOMAGENT_MAINTENANCE_INTERVAL_S`, `BOMAGENT_RUN_TIMEOUT_S` | no | outbox relay / stuck-run reaper (30 s, 3600 s) |
@@ -174,7 +175,9 @@ PostgreSQL 16 + pgvector):
 ## Security notes (review of 2026-11-12)
 
 - Endpoints that leave the host must use `https://` outside `local`/`test` (Supabase URL,
-  JWKS, user endpoint, S3 endpoint, LLM gateway): the settings refuse plain HTTP.
+  JWKS, user endpoint, S3 endpoint, LLM gateway): the settings refuse plain HTTP. The one
+  exception is the LLM gateway on Fly's private network (`*.internal`, WireGuard, same
+  organisation only).
 - The parse sandbox limits memory/CPU/time and strips the environment, but on Fly it shares
   the machine's network (in AWS the parsers run in isolated subnets without a route out). A
   parser exploited by a hostile file could send data out - accepted for the pilot with test

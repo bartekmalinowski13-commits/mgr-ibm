@@ -17,6 +17,7 @@ from typing import Any
 import yaml
 
 from bomagent_llm.catalog import Catalog, ModelSpec, load_catalog
+from bomagent_llm.eu_guard import assert_eu_only, check_catalog, check_gateway_config
 
 KEY_ENV = {
     "azure_openai": ("AZURE_API_KEY", "AZURE_API_BASE"),
@@ -38,6 +39,8 @@ def _entry(model: ModelSpec, region: str) -> dict[str, Any] | None:
     info: dict[str, Any] = {
         "license_class": model.license_class.value,
         "residency": model.residency,
+        "provider": model.provider,
+        "region": model.region,
     }
     if "embedding" in model.capabilities:
         info["mode"] = "embedding"
@@ -52,11 +55,14 @@ def render(catalog: Catalog, *, region: str) -> dict[str, Any]:
         for e in [_entry(m, region)]
         if e is not None
     ]
-    return {
+    config = {
         "model_list": entries,
         "litellm_settings": {"drop_params": True, "telemetry": False, "request_timeout": 120},
         "general_settings": {"master_key": "os.environ/LITELLM_MASTER_KEY"},
     }
+    # fail closed: a non-EU region, profile or endpoint must never reach the gateway
+    assert_eu_only(check_catalog(catalog) + check_gateway_config(config))
+    return config
 
 
 def main() -> None:  # pragma: no cover - thin CLI

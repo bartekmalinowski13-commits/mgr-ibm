@@ -23,6 +23,10 @@ kill_timeout = "60s" # workers finish the current message (30 s grace) before ex
   BOMAGENT_QUEUE_BACKEND = "postgres"
   BOMAGENT_DATABASE_NAME = "bomagent" # our own database, never Supabase's "postgres"
   BOMAGENT_DATABASE_PORT = "5432"     # Supavisor session mode (IPv4)
+  # TEMPORARY: the pilot still runs on the deterministic fake model. REMOVE this line once
+  # BOMAGENT_LLM_GATEWAY_URL/KEY are set (docs/platform/runbooks/llm-gateway-pilot.md);
+  # without it the app refuses to start when no gateway is configured.
+  BOMAGENT_ALLOW_FAKE_LLM = "true"
   BOMAGENT_AWS_REGION = "eu-central-1"
   BOMAGENT_S3_REGION = "eu-west-1" # the Supabase project's region (Ireland)
   BOMAGENT_S3_FORCE_PATH_STYLE = "true"

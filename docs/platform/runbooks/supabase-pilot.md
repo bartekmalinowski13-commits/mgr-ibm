@@ -10,8 +10,9 @@ data processing terms (DPA, EU region, sub-processors) of Supabase and Fly.io.
 
 What works: the whole app (projects, uploads, parsing in the sandbox, runs A/B, BOM,
 corrections, export, KB, audit log, members, invitations, API keys). What does not: SSO per
-organisation, WAF, Bedrock. Without an LLM gateway configured, runs use the deterministic
-fake model (good for testing the product flow, not for real BOMs or the thesis experiment).
+organisation, WAF. Until the LLM gateway is configured ([llm-gateway-pilot.md](llm-gateway-pilot.md)),
+runs use the deterministic fake model (`BOMAGENT_ALLOW_FAKE_LLM=true` in `fly.toml`; good for
+testing the product flow, not for real BOMs or the thesis experiment).
 
 Placeholders: `<REF>` = Supabase project ref (from its URL), `<APP>` = your Fly app name,
 `<POOLER>` = the session pooler host shown in Supabase -> Connect (e.g.

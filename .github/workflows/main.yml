@@ -38,10 +38,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with: { persist-credentials: false }
-      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
-      - name: render gateway config from the model catalogue (before any credentials)
-        if: matrix.image.dockerfile == 'llm-gateway'
-        run: uv run python -m bomagent_llm.gateway_config --region "$AWS_REGION" > deploy/gateway/config.yaml
+      # the llm-gateway Dockerfile renders (and EU-checks) its config from the catalogue itself
       - name: AWS credentials (GitHub OIDC)
         env: { ROLE_ARN: "${{ vars.AWS_IMAGES_ROLE_ARN }}" }
         run: bash .github/scripts/aws-oidc.sh "$ROLE_ARN"

@@ -1,0 +1,40 @@
+# Fly.io configuration of the LLM gateway (LiteLLM) of the Supabase pilot: a SEPARATE Fly
+# app in Frankfurt with NO public service. The pilot app reaches it over Fly's private
+# 6PN network at http://mgr-ibm-llm-gateway.internal:4000 (same Fly organisation only).
+# Deploy from the repository root (the model catalogue is rendered into the image):
+#   fly deploy . --config deploy/supabase/gateway.fly.toml \
+#     --dockerfile deploy/docker/llm-gateway.Dockerfile --ha=false
+# Secrets (`fly secrets set -a mgr-ibm-llm-gateway ...`): docs/platform/runbooks/llm-gateway-pilot.md.
+# Never put keys in this file.
+app = "mgr-ibm-llm-gateway"
+primary_region = "fra"
+kill_signal = "SIGTERM"
+kill_timeout = "30s"
+
+[build]
+  dockerfile = "../docker/llm-gateway.Dockerfile"
+
+[deploy]
+  strategy = "immediate" # a single machine
+
+[env]
+  # LiteLLM: EU only, no telemetry; the model list comes from the catalogue baked into the image
+  LITELLM_TELEMETRY = "False"
+  LITELLM_LOCAL_MODEL_COST_MAP = "True"
+
+# Deliberately no [http_service] and no [[services]]: nothing is exposed through Fly's
+# public proxy, so the app gets no public IP and is reachable only via .internal DNS.
+# The check below runs inside the machine.
+[checks]
+  [checks.liveliness]
+    type = "http"
+    port = 4000
+    path = "/health/liveliness"
+    method = "GET"
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "40s"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "1gb"
