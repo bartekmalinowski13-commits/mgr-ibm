@@ -119,3 +119,30 @@ b. **Apple private relay.** A user who chooses "Hide my e-mail" gets a
 c. **Enforced-SSO organisations.** Organisations with enforced SSO require a Cognito
    identities claim; Supabase users have none, so they fail closed (cannot access such an
    organisation). This is intended: SSO exists only in the AWS deployment.
+
+## Prepared in consoles (2026-11-12)
+
+### Google (done, secret pending)
+
+- Google Cloud project `mgr-ibm` (display name "MGR IBM"), Google Auth Platform configured: app name MGR-IBM, support/developer contact = owner's Google account, audience External, scopes only `openid`, `userinfo.email`, `userinfo.profile`.
+- Publishing status: **Testing** (the owner's e-mail is added as a test user). The "Publish app" button is disabled until the branding page has a home page + authorised domains, and the console rejects `fly.dev` and `supabase.co` as authorised domains ("must be a private top-level domain", both are public-suffix entries). Testing mode works for the owner's account; other users cannot sign in until the app is published or added as test users (max 100). To publish later, try a custom domain for the app home page.
+- OAuth client `MGR-IBM Supabase` (Web application). **Client ID:** `865063955174-lhho672pmv46454g7eq9qhuhtkgde022.apps.googleusercontent.com`. JS origin `https://mgr-ibm-bomagent.fly.dev`; redirect URI `https://wdjhfugsduoymelipimq.supabase.co/auth/v1/callback`.
+- A first secret (ending `NMlI`) was auto-created with the client and was never read; Google no longer shows it. Create a new one.
+
+Morning clicks: Google Cloud Console -> project mgr-ibm -> Google Auth Platform -> Clients -> "MGR-IBM Supabase" -> **Add secret** -> copy it -> Supabase -> Authentication -> Sign In / Providers -> Google -> paste Client ID + secret -> Save.
+
+### Microsoft (NOT done - blocked)
+
+Entra "App registrations -> New registration" refused: the signed-in account is a personal Microsoft account (live.com) with no Entra directory ("creating apps outside a directory is deprecated; get a directory via the M365 developer program or sign up for Azure"). Getting a directory needs an Azure/M365 sign-up (possibly card/phone), which was not attempted. Application ID and Tenant ID: none yet.
+
+Once a directory exists: App registrations -> New registration, name MGR-IBM, accounts "any organizational directory and personal Microsoft accounts", Web redirect `https://wdjhfugsduoymelipimq.supabase.co/auth/v1/callback`; Token configuration -> add optional claims (ID): `email`, `xms_edov`; API permissions: openid, profile, email, User.Read. Then Certificates & secrets -> New client secret -> copy VALUE -> Supabase -> Azure provider -> paste Application ID + secret, Azure Tenant URL `https://login.microsoftonline.com/common/v2.0` -> Save.
+
+### Then
+
+Set the Fly env `BOMAGENT_SOCIAL_PROVIDERS=google` (or `google,azure` once Microsoft is done) and redeploy.
+
+### Decisions (2026-11-12)
+
+- **Apple is out of scope** (owner's decision: no paid Apple Developer account for now). The code path stays dormant; `BOMAGENT_SOCIAL_PROVIDERS` lists only `google` and `azure`.
+- **Google in Testing mode** allows up to 100 listed test users (add the supervisor's Google e-mail under Google Auth Platform -> Audience -> Test users). Publishing to everyone needs a home page and an authorised domain that Google accepts, i.e. an own domain (`fly.dev` and `supabase.co` are on the public-suffix list and are rejected).
+- **Microsoft needs an Entra directory.** Options: sign up for an Azure free account (needs a card and a phone for verification, no charge for the directory itself) or the Microsoft 365 developer programme if eligible; then follow the "once a directory exists" steps above.
