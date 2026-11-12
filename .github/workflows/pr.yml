@@ -127,6 +127,48 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with: { name: compose-logs, path: compose-logs.txt }
 
+  allinone:
+    name: all-in-one image (Supabase pilot) - build, bootstrap, migrate, serve
+    runs-on: ubuntu-24.04
+    needs: [static]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - name: build the image
+        run: docker build -f deploy/docker/allinone.Dockerfile -t bomagent-allinone .
+      - name: PostgreSQL + pgvector (stands in for the Supabase database)
+        run: |
+          docker network create pilot
+          docker run -d --name pg --network pilot -e POSTGRES_PASSWORD=admin \
+            pgvector/pgvector:0.8.7-pg16-trixie
+          for _ in $(seq 1 30); do docker exec pg pg_isready -U postgres && break; sleep 2; done
+      - name: bootstrap, migrate, serve, check
+        run: |
+          db() { echo "postgresql+psycopg://$1:$2@pg:5432/$3"; }
+          run() { docker run --rm --network pilot "$@"; }
+          run -e BOMAGENT_ADMIN_DATABASE_URL="$(db postgres admin postgres)" \
+            -e BOMAGENT_DATABASE_NAME=bomagent -e BOMAGENT_MIGRATOR_PASSWORD=ci-migrator \
+            -e BOMAGENT_APP_PASSWORD=ci-app -e BOMAGENT_PLATFORM_PASSWORD=ci-platform \
+            bomagent-allinone python -m bomagent_allinone bootstrap
+          run -e BOMAGENT_MIGRATOR_DATABASE_URL="$(db bomagent_migrator ci-migrator bomagent)" \
+            bomagent-allinone python -m bomagent_allinone migrate
+          docker run -d --name app --network pilot -p 8000:8000 \
+            -e BOMAGENT_ENVIRONMENT=dev \
+            -e BOMAGENT_DATABASE_URL="$(db bomagent_app ci-app bomagent)" \
+            -e BOMAGENT_PLATFORM_DATABASE_URL="$(db bomagent_platform ci-platform bomagent)" \
+            -e BOMAGENT_SUPABASE_URL=https://example.supabase.co \
+            -e BOMAGENT_SUPABASE_ANON_KEY=ci-anon \
+            -e BOMAGENT_S3_ENDPOINT_URL=https://example.supabase.co/storage/v1/s3 \
+            -e BOMAGENT_FILES_BUCKET=ci -e AWS_ACCESS_KEY_ID=ci -e AWS_SECRET_ACCESS_KEY=ci \
+            bomagent-allinone
+          for _ in $(seq 1 30); do curl -fsS localhost:8000/readyz && break; sleep 2; done
+          curl -fsS localhost:8000/readyz
+          curl -fsS localhost:8000/ | grep -qi "<!doctype html"
+          curl -fsS localhost:8000/config.json | grep -q '"mode":"supabase"'
+          test "$(curl -s -o /dev/null -w '%{http_code}' localhost:8000/v1/me)" = 401
+      - if: failure()
+        run: docker logs app || true
+
   security:
     name: secrets + vulnerabilities
     runs-on: ubuntu-24.04
