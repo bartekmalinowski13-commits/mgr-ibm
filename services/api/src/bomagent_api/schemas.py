@@ -71,6 +71,13 @@ class Project(_M):
     description: str
     created_by: str
     created_at: datetime
+    #: added by the platform as a sample (``[Sample] ...``); only these can be deleted
+    is_sample: bool = False
+
+
+class SamplesAdded(_M):
+    added: list[str]
+    existing: list[str]
 
 
 class FileInfo(_M):

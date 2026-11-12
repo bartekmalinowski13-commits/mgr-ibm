@@ -7,7 +7,7 @@ import re
 import uuid
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Header, Request, UploadFile
+from fastapi import APIRouter, Header, Request, Response, UploadFile
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncConnection
 
@@ -64,7 +64,9 @@ async def check_project_size(
 
 
 _SAFE_NAME = re.compile(r"[^A-Za-z0-9._\-]")
-PROJECT_COLS = "id, name, description, created_by, created_at"
+PROJECT_COLS = (
+    "id, name, description, created_by, created_at, (sample_key IS NOT NULL) AS is_sample"
+)
 
 
 async def get_project(conn: Any, project_id: uuid.UUID) -> dict[str, Any]:
@@ -147,6 +149,63 @@ async def read_project(request: Request, ctx: OrgContext, project_id: uuid.UUID)
     require(ctx, "project.read")
     async with tenant_transaction(request.app.state.engine) as conn:
         return Project(**await get_project(conn, project_id))
+
+
+@router.delete("/{project_id}", status_code=204, summary="Delete a sample project")
+async def delete_project(request: Request, ctx: OrgContext, project_id: uuid.UUID) -> Response:
+    """Only the platform's sample projects (``[Sample] ...``) can be deleted - the API has no
+    general project deletion yet. Files, runs and BOM versions go with the project (cascade);
+    the stored objects are removed after the commit."""
+    require(ctx, "project.delete")
+    store = request.app.state.store
+    async with tenant_transaction(request.app.state.engine) as conn:
+        row = (
+            await conn.execute(
+                text("SELECT sample_key, name FROM projects.projects WHERE id = :i FOR UPDATE"),
+                {"i": project_id},
+            )
+        ).first()
+        if row is None:
+            raise ProblemError(404, "Not Found", "project not found", slug="not-found")
+        if row.sample_key is None:
+            raise ProblemError(
+                409,
+                "Conflict",
+                "only sample projects can be deleted",
+                slug="not-deletable",
+            )
+        await refuse_if_run_active(conn, project_id)
+        keys = list(
+            (
+                await conn.execute(
+                    text("SELECT object_key FROM projects.files WHERE project_id = :p"),
+                    {"p": project_id},
+                )
+            ).scalars()
+        )
+        run_ids = list(
+            (
+                await conn.execute(
+                    text("SELECT id FROM runs.runs WHERE project_id = :p"), {"p": project_id}
+                )
+            ).scalars()
+        )
+        await conn.execute(text("DELETE FROM projects.projects WHERE id = :i"), {"i": project_id})
+        await emit_audit(
+            conn,
+            AuditEvent(
+                action="project.deleted",
+                object_type="project",
+                object_id=str(project_id),
+                before={"name": row.name, "sample": row.sample_key},
+            ),
+        )
+    for run_id in run_ids:
+        for artifact in ("bom.json", "trace.json"):
+            keys.append(tenant_key(ctx.tenant_id, "runs", str(run_id), artifact))
+    for key in keys:
+        await store.delete(key)
+    return Response(status_code=204)
 
 
 FILE_COLS = "id, name, size_bytes, sha256, status, detected_format, summary, created_at"

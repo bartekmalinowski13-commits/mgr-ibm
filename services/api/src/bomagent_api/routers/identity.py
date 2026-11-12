@@ -11,6 +11,7 @@ from sqlalchemy.exc import IntegrityError
 from bomagent_api.auth import CurrentPrincipal, OrgContext, memberships, require_verified_email
 from bomagent_api.authz import require
 from bomagent_api.plans import MAX_OWNED_ORGANIZATIONS, quota_exceeded, usage_report
+from bomagent_api.samples.seeding import seed_samples
 from bomagent_api.schemas import (
     DevToken,
     Me,
@@ -23,9 +24,11 @@ from bomagent_api.schemas import (
 )
 from bomagent_common.audit import AuditEvent, emit_audit
 from bomagent_common.db import platform_transaction, tenant_transaction
+from bomagent_common.logging import get_logger
 from bomagent_common.problems import ProblemError
 from bomagent_common.tenancy import TenantContext
 
+log = get_logger(__name__)
 router = APIRouter(
     prefix="/v1",
     tags=["identity"],
@@ -99,6 +102,17 @@ async def create_organization(
         raise ProblemError(
             409, "Conflict", "organisation slug already taken", slug="slug-taken"
         ) from exc
+    if request.app.state.samples_enabled:
+        try:  # best effort: organisation creation never fails because of the samples
+            await seed_samples(
+                ctx,
+                engine=request.app.state.engine,
+                store=request.app.state.store,
+                queues=request.app.state.queues,
+                trigger="org_created",
+            )
+        except Exception:
+            log.exception("samples_seed_failed", tenant_id=str(org_id))
     return Organization(id=org_id, slug=body.slug, name=body.name, plan="pilot")
 
 

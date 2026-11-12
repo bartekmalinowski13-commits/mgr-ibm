@@ -92,7 +92,10 @@ async def hit_rate_limit(conn: AsyncConnection, subject: str, plan: Plan) -> Non
 
 async def check_new_project(conn: AsyncConnection) -> None:
     plan = await plan_of(conn, lock=True)
-    count = (await conn.execute(text("SELECT count(*) FROM projects.projects"))).scalar() or 0
+    # sample projects added by the platform are exempt from the quota
+    count = (
+        await conn.execute(text("SELECT count(*) FROM projects.projects WHERE sample_key IS NULL"))
+    ).scalar() or 0
     if count >= plan.max_projects:
         raise quota_exceeded(f"plan allows {plan.max_projects} projects")
 
