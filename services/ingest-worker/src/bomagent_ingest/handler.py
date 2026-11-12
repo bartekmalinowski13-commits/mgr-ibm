@@ -44,6 +44,14 @@ class IngestWorker:
             return
         project_id = uuid.UUID(message.payload["project_id"])
         async with tenant_transaction(self.engine, message.tenant_id) as conn:
+            exists = (
+                await conn.execute(
+                    text("SELECT 1 FROM projects.projects WHERE id = :p"), {"p": project_id}
+                )
+            ).first()
+            if exists is None:  # deleted after the message was queued: nothing to parse
+                log.info("project_gone_skipped", project_id=str(project_id))
+                return
             rows = (
                 await conn.execute(
                     text(

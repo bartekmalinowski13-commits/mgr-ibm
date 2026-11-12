@@ -7,7 +7,7 @@ import { useTranslation } from "react-i18next";
 import { api, call, problemMessage, uploadFile } from "../lib/api";
 import { formatBytes } from "../lib/format";
 import { usePageTitle, useShell } from "../lib/layout";
-import { useRuns } from "../lib/queries";
+import { useIsAdmin, useRuns } from "../lib/queries";
 import { useSession } from "../lib/session";
 import { useToast } from "../lib/toast";
 import { projectRoute } from "../router";
@@ -23,6 +23,7 @@ export function ProjectScreen() {
   const toast = useToast();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const isAdmin = useIsAdmin();
   const input = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -87,9 +88,11 @@ export function ProjectScreen() {
       {project.data?.is_sample ? (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-card border border-line bg-surface p-4">
           <p className="max-w-[70ch] text-muted">{t("samples.projectNote")}</p>
-          <Button type="button" variant="danger" size="sm" onClick={() => void removeSample()}>
-            {t("samples.delete")}
-          </Button>
+          {isAdmin ? (
+            <Button type="button" variant="danger" size="sm" onClick={() => void removeSample()}>
+              {t("samples.delete")}
+            </Button>
+          ) : null}
         </div>
       ) : null}
       <section aria-labelledby="files-title" className="flex flex-col gap-3">

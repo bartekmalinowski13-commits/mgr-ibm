@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
 import uuid
+from typing import Any
 
 from fastapi import APIRouter, Request
 from sqlalchemy import text
@@ -29,6 +31,7 @@ from bomagent_common.problems import ProblemError
 from bomagent_common.tenancy import TenantContext
 
 log = get_logger(__name__)
+_BACKGROUND: set[asyncio.Task[Any]] = set()  # keeps shielded seeding tasks alive
 router = APIRouter(
     prefix="/v1",
     tags=["identity"],
@@ -103,14 +106,21 @@ async def create_organization(
             409, "Conflict", "organisation slug already taken", slug="slug-taken"
         ) from exc
     if request.app.state.samples_enabled:
-        try:  # best effort: organisation creation never fails because of the samples
-            await seed_samples(
+        # best effort: organisation creation never fails because of the samples, and a
+        # client disconnect does not cancel a half-done seeding (POST /v1/samples fills gaps)
+        task = asyncio.create_task(
+            seed_samples(
                 ctx,
                 engine=request.app.state.engine,
                 store=request.app.state.store,
                 queues=request.app.state.queues,
                 trigger="org_created",
             )
+        )
+        _BACKGROUND.add(task)
+        task.add_done_callback(_BACKGROUND.discard)
+        try:
+            await asyncio.shield(task)
         except Exception:
             log.exception("samples_seed_failed", tenant_id=str(org_id))
     return Organization(id=org_id, slug=body.slug, name=body.name, plan="pilot")

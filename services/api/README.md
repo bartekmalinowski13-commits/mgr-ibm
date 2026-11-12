@@ -65,8 +65,14 @@ audit events `project.created` and `org.samples_seeded`.
   organisation; repeated or concurrent calls only add what is missing.
 - **Re-add:** `POST /v1/samples` (owner) adds missing samples to an existing organisation; the
   web app shows "Add sample projects" on Home and Projects while the organisation has none.
-- **Delete:** `DELETE /v1/projects/{id}` works for sample projects only (409 `not-deletable`
-  otherwise); files, runs, BOM versions and stored objects go with it.
+- **Delete:** `DELETE /v1/projects/{id}` (owner/admin) works for sample projects only (409
+  `not-deletable` otherwise, 409 `file-in-use` while a run is active); files, runs, BOM
+  versions, pending outbox rows and stored objects go with it (object cleanup is best effort,
+  the answer is always 204); the audit event records the counts. Sample projects are
+  read-only: uploads are refused (409 `sample-read-only`). The ingest-worker skips a message
+  whose project is gone.
+- **Seeding details:** one ingest message per project, metered as uploads, shielded from
+  client disconnects; `POST /v1/samples` is limited to 5 calls per minute per user.
 - **Quota:** sample projects are **not** counted against the plan's project limit (and seeding is
   never refused); their files (about 100 KB) do count towards the storage limit.
 - **Switch:** `BOMAGENT_SEED_SAMPLES` (`true`/`false`; unset = on in local/test/dev, off in

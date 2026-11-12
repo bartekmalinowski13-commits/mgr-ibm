@@ -18,6 +18,14 @@ export function useIsOwner(): boolean {
   return !!me.data?.organizations.find((o) => o.org_id === orgId)?.roles.includes("owner");
 }
 
+/** Owners and admins may delete sample projects. */
+export function useIsAdmin(): boolean {
+  const { orgId } = useSession();
+  const me = useMe();
+  const roles = me.data?.organizations.find((o) => o.org_id === orgId)?.roles ?? [];
+  return roles.includes("owner") || roles.includes("admin");
+}
+
 export function useProjects() {
   const { orgId } = useSession();
   return useQuery({

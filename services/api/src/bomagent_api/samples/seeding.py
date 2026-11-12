@@ -25,6 +25,7 @@ from bomagent_common.audit import AuditEvent, emit_audit
 from bomagent_common.db import tenant_transaction
 from bomagent_common.logging import get_logger
 from bomagent_common.messaging import Message, Queue
+from bomagent_common.metering import record_usage
 from bomagent_common.outbox import deliver, enqueue
 from bomagent_common.storage import ObjectStore, tenant_key
 from bomagent_common.tenancy import TenantContext
@@ -105,7 +106,7 @@ async def _add_one(
             ).first()
             if created is None:
                 return None
-            outbox_ids: list[uuid.UUID] = []
+            total = 0
             for name, data in load_files(sample):
                 fid = uuid.uuid4()
                 key = tenant_key(ctx.tenant_id, "projects", str(pid), str(fid), name)
@@ -127,15 +128,7 @@ async def _add_one(
                         "u": ctx.actor_id,
                     },
                 )
-                outbox_ids.append(
-                    await enqueue(
-                        conn,
-                        "ingest",
-                        Message.create(
-                            "file.uploaded", ctx, {"project_id": str(pid), "file_id": str(fid)}
-                        ),
-                    )
-                )
+                total += len(data)
             await emit_audit(
                 conn,
                 AuditEvent(
@@ -150,7 +143,15 @@ async def _add_one(
                 ),
                 ctx,
             )
-            return outbox_ids
+            await record_usage(conn, files_uploaded=len(sample.files), bytes_uploaded=total)
+            # the ingest-worker parses a whole project per message: one is enough
+            return [
+                await enqueue(
+                    conn,
+                    "ingest",
+                    Message.create("file.uploaded", ctx, {"project_id": str(pid)}),
+                )
+            ]
     except BaseException:
         for key in written:  # the transaction was not committed: drop the new objects
             await store.delete(key)

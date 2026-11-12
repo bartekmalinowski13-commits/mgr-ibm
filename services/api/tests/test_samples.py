@@ -310,3 +310,109 @@ def test_default_setting_by_environment(monkeypatch) -> None:
     assert not Settings(environment="prod").samples_enabled
     assert Settings(environment="prod", seed_samples=True).samples_enabled
     assert not Settings(environment="dev", seed_samples=False).samples_enabled
+
+
+# ---------------------------------------------------------------- review fixes
+
+
+async def join(env: Env, owner: dict[str, str], sub: str, role: str) -> dict[str, str]:
+    invite = await env.client.post(
+        "/v1/invitations", headers=owner, json={"email": f"{sub}@x.eu", "roles": [role]}
+    )
+    assert invite.status_code == 201, invite.text
+    user = await env.login(sub)
+    ok = await env.client.post(
+        "/v1/invitations/accept", headers=user, json={"token": invite.json()["token"]}
+    )
+    assert ok.status_code == 200, ok.text
+    return user | {"X-Org-Id": owner["X-Org-Id"]}
+
+
+async def first_sample(env: Env, owner: dict[str, str]) -> dict:
+    return next(p for p in await env.projects(owner) if p["is_sample"])
+
+
+@pg
+async def test_sample_projects_refuse_uploads(env) -> None:
+    owner = await env.org(f"own-{uniq()}", f"ro-{uniq()}")
+    sample = await first_sample(env, owner)
+    resp = await env.client.post(
+        f"/v1/projects/{sample['id']}/files", headers=owner, files={"file": ("x.edf", b"x")}
+    )
+    assert resp.status_code == 409
+    assert resp.json()["type"].endswith("sample-read-only")
+    assert "sample" in resp.json()["detail"]
+
+
+@pg
+async def test_delete_needs_admin_and_is_tenant_scoped(env) -> None:
+    s = uniq()
+    owner = await env.org(f"own-{s}", f"dr-{s}")
+    other = await env.org(f"oth-{s}", f"dr-o-{s}")
+    sample = await first_sample(env, owner)
+    url = f"/v1/projects/{sample['id']}"
+    for role in ("viewer", "reviewer", "engineer"):
+        member = await join(env, owner, f"{role}-{s}", role)
+        assert (await env.client.delete(url, headers=member)).status_code == 403, role
+    assert (await env.client.delete(url, headers=other)).status_code == 404
+    assert (await env.client.get(url, headers=owner)).status_code == 200
+
+
+@pg
+async def test_delete_refused_while_a_run_is_active(env) -> None:
+    owner = await env.org(f"own-{uniq()}", f"act-{uniq()}")
+    sample = await first_sample(env, owner)
+    await env.drain_ingest()
+    run = await env.client.post(
+        "/v1/runs", headers=owner, json={"project_id": sample["id"], "variant": "B"}
+    )
+    assert run.status_code == 202, run.text
+    resp = await env.client.delete(f"/v1/projects/{sample['id']}", headers=owner)
+    assert resp.status_code == 409
+    assert "deleting" in resp.json()["detail"]
+
+
+@pg
+async def test_delete_audit_records_counts_and_stale_ingest_is_skipped(env) -> None:
+    owner = await env.org(f"own-{uniq()}", f"aud-{uniq()}")
+    sample = await first_sample(env, owner)
+    files = (await env.client.get(f"/v1/projects/{sample['id']}/files", headers=owner)).json()
+    # the ingest message of the project is still queued when the project is deleted
+    deleted = await env.client.delete(f"/v1/projects/{sample['id']}", headers=owner)
+    assert deleted.status_code == 204
+    events = (await env.client.get("/v1/audit-events?limit=100", headers=owner)).json()["items"]
+    event = next(e for e in events if e["action"] == "project.deleted")
+    assert event["before"]["files"] == len(files)
+    assert event["before"]["runs"] == 0
+    assert event["before"]["bom_versions"] == 0
+    # the worker acks the stale message and records no failure for the vanished project
+    await env.drain_ingest()
+    events = (await env.client.get("/v1/audit-events?limit=100", headers=owner)).json()["items"]
+    stale = [
+        e
+        for e in events
+        if e["action"].startswith("project.files_") and e["object_id"] == sample["id"]
+    ]
+    assert not stale
+
+
+@pg
+async def test_seeding_queues_one_ingest_message_per_project(env) -> None:
+    await env.org(f"own-{uniq()}", f"msg-{uniq()}")
+    received = await env.queues["ingest"].receive(max_messages=10)
+    assert len(received) == len(SAMPLES)
+
+
+@pg
+async def test_seeding_is_metered_and_the_endpoint_is_rate_limited(env, app_engine) -> None:
+    owner = await env.org(f"own-{uniq()}", f"rl-{uniq()}")
+    async with tenant_transaction(app_engine, uuid.UUID(owner["X-Org-Id"])) as conn:
+        uploaded = (
+            await conn.execute(
+                text("SELECT COALESCE(sum(files_uploaded), 0) FROM metering.usage_daily")
+            )
+        ).scalar()
+    assert uploaded == sum(len(s.files) for s in SAMPLES)
+    codes = [(await env.client.post("/v1/samples", headers=owner)).status_code for _ in range(8)]
+    assert codes[0] == 200
+    assert 429 in codes

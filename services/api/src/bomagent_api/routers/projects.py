@@ -174,7 +174,7 @@ async def delete_project(request: Request, ctx: OrgContext, project_id: uuid.UUI
                 "only sample projects can be deleted",
                 slug="not-deletable",
             )
-        await refuse_if_run_active(conn, project_id)
+        await refuse_if_run_active(conn, project_id, "deleting it")
         keys = list(
             (
                 await conn.execute(
@@ -190,6 +190,23 @@ async def delete_project(request: Request, ctx: OrgContext, project_id: uuid.UUI
                 )
             ).scalars()
         )
+        bom_versions = (
+            await conn.execute(
+                text(
+                    "SELECT count(*) FROM bom.versions WHERE run_id IN"
+                    " (SELECT id FROM runs.runs WHERE project_id = :p)"
+                ),
+                {"p": project_id},
+            )
+        ).scalar()
+        # queued ingest work of the project goes with it
+        await conn.execute(
+            text(
+                "DELETE FROM app.outbox WHERE sent_at IS NULL"
+                " AND message->'payload'->>'project_id' = :p"
+            ),
+            {"p": str(project_id)},
+        )
         await conn.execute(text("DELETE FROM projects.projects WHERE id = :i"), {"i": project_id})
         await emit_audit(
             conn,
@@ -197,14 +214,23 @@ async def delete_project(request: Request, ctx: OrgContext, project_id: uuid.UUI
                 action="project.deleted",
                 object_type="project",
                 object_id=str(project_id),
-                before={"name": row.name, "sample": row.sample_key},
+                before={
+                    "name": row.name,
+                    "sample": row.sample_key,
+                    "files": len(keys),
+                    "runs": len(run_ids),
+                    "bom_versions": int(bom_versions or 0),
+                },
             ),
         )
     for run_id in run_ids:
         for artifact in ("bom.json", "trace.json"):
             keys.append(tenant_key(ctx.tenant_id, "runs", str(run_id), artifact))
-    for key in keys:
-        await store.delete(key)
+    for key in keys:  # the rows are gone: a failed cleanup must not turn a retry into a 404
+        try:
+            await store.delete(key)
+        except Exception:
+            log.warning("project_object_cleanup_failed", project_id=str(project_id), key=key)
     return Response(status_code=204)
 
 
@@ -244,7 +270,7 @@ async def upload_file(
     key = tenant_key(ctx.tenant_id, "projects", str(project_id), str(fid), name)
     try:
         async with tenant_transaction(request.app.state.engine) as conn:
-            await get_project(conn, project_id)
+            refuse_sample_upload(await get_project(conn, project_id))
             # the tenant lock (taken by check_storage) serialises uploads of an organisation,
             # so two uploads of one name never both see "no previous file"
             await plan_of(conn, lock=True)
@@ -323,7 +349,19 @@ async def upload_file(
     return info
 
 
-async def refuse_if_run_active(conn: Any, project_id: uuid.UUID) -> None:
+def refuse_sample_upload(project: dict[str, Any]) -> None:
+    if project["is_sample"]:
+        raise ProblemError(
+            409,
+            "Conflict",
+            "sample projects are read-only; create your own project to upload files",
+            slug="sample-read-only",
+        )
+
+
+async def refuse_if_run_active(
+    conn: Any, project_id: uuid.UUID, action: str = "replacing a file"
+) -> None:
     """A queued or running run holds the object keys of the project's files."""
     active = (
         await conn.execute(
@@ -338,8 +376,7 @@ async def refuse_if_run_active(conn: Any, project_id: uuid.UUID) -> None:
         raise ProblemError(
             409,
             "Conflict",
-            "a run of this project is queued or running; wait until it finishes"
-            " before replacing a file",
+            f"a run of this project is queued or running; wait until it finishes before {action}",
             slug="file-in-use",
         )
 
