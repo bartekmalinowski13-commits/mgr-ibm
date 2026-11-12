@@ -24,7 +24,31 @@
     "cloudNote": "With single sign-on, enter your work e-mail: you go straight to your organisation's sign-in. You sign in on the BOM Agent sign-in page (Amazon Cognito in an EU region) otherwise.",
     "callbackError": "Sign-in could not be completed (the link expired or was already used).",
     "retry": "Sign in again",
-    "continue": "Continue"
+    "continue": "Continue",
+    "supabase": {
+      "title": "Sign in with your account",
+      "create": "Create account",
+      "signIn": "Sign in",
+      "password": "Password",
+      "fullName": "Full name",
+      "forgot": "Forgot password",
+      "haveAccount": "I already have an account",
+      "newHere": "New here? Create an account",
+      "checkInbox": "Check your inbox: we sent a confirmation link to {{email}}. Confirm your e-mail, then sign in.",
+      "recoverSent": "If an account exists for this e-mail, a password reset link is on its way.",
+      "recoverNeedsEmail": "Enter your e-mail above first.",
+      "note": "Hosted on Supabase. Single sign-on (SSO) is available only in the AWS deployment.",
+      "errors": {
+        "invalidCredentials": "Wrong e-mail or password.",
+        "emailNotConfirmed": "Confirm your e-mail first: open the link we sent you.",
+        "userExists": "An account with this e-mail already exists. Sign in instead.",
+        "weakPassword": "The password is too weak. Use at least 8 characters.",
+        "rateLimited": "Too many attempts. Try again in a few minutes.",
+        "signupDisabled": "Creating accounts is turned off for this deployment.",
+        "network": "Cannot reach the sign-in service. Check your connection.",
+        "unknown": "Something went wrong. Try again in a moment."
+      }
+    }
   },
   "onboarding": {
     "title": "Create an organisation",
@@ -290,7 +314,8 @@
     },
     "of": "of {{limit}}",
     "sso": "Single sign-on (SSO)",
-    "ssoLead": "Single sign-on through your organisation's identity provider (SAML 2.0 or OpenID Connect), federated in Amazon Cognito in the EU."
+    "ssoLead": "Single sign-on through your organisation's identity provider (SAML 2.0 or OpenID Connect), federated in Amazon Cognito in the EU.",
+    "ssoUnavailable": "Single sign-on is available only in the AWS deployment. This deployment signs in with e-mail and password."
   },
   "errors": {
     "notMember": "You do not have access to this organisation. Choose another one.",

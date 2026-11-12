@@ -4,7 +4,8 @@ The BOM Agent single-page app (ADR-0014: React, Vite, TanStack Router/Query/Tabl
 Tailwind, components from `@bomagent/ui`), following `docs/design/UX_GUIDELINES.md`.
 
 - **Responsibility:** the user interface of the SaaS: sign-in (mock IdP locally, Cognito in
-  AWS from M6), organisation onboarding and switching, projects and uploads, new run
+  AWS from M6, e-mail + password through Supabase Auth when `/config.json` has
+  `auth.mode = "supabase"`), organisation onboarding and switching, projects and uploads, new run
   (variant A / B / both), live run progress (SSE over fetch), BOM table with the
   provenance stripe and item panel (rationale, knowledge-base sources, findings,
   correction as a new version), CSV export, audit log with chain verification, settings

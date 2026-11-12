@@ -24,7 +24,31 @@
     "cloudNote": "Przy logowaniu jednokrotnym (SSO) podaj służbowy e-mail – przejdziesz od razu do logowania swojej organizacji. W pozostałych przypadkach logujesz się na stronie BOM Agent (Amazon Cognito w regionie UE).",
     "callbackError": "Nie udało się dokończyć logowania (link wygasł albo został już użyty).",
     "retry": "Zaloguj się ponownie",
-    "continue": "Dalej"
+    "continue": "Dalej",
+    "supabase": {
+      "title": "Zaloguj się kontem",
+      "create": "Utwórz konto",
+      "signIn": "Zaloguj się",
+      "password": "Hasło",
+      "fullName": "Imię i nazwisko",
+      "forgot": "Nie pamiętam hasła",
+      "haveAccount": "Mam już konto",
+      "newHere": "Nowy tutaj? Utwórz konto",
+      "checkInbox": "Sprawdź skrzynkę: wysłaliśmy link potwierdzający na adres {{email}}. Potwierdź e-mail, a potem zaloguj się.",
+      "recoverSent": "Jeśli dla tego adresu istnieje konto, wysłaliśmy link do zmiany hasła.",
+      "recoverNeedsEmail": "Najpierw wpisz swój e-mail powyżej.",
+      "note": "Hostowane na Supabase. Logowanie jednokrotne (SSO) jest dostępne tylko we wdrożeniu AWS.",
+      "errors": {
+        "invalidCredentials": "Nieprawidłowy e-mail lub hasło.",
+        "emailNotConfirmed": "Najpierw potwierdź e-mail: otwórz link, który wysłaliśmy.",
+        "userExists": "Konto z tym adresem już istnieje. Zaloguj się.",
+        "weakPassword": "Hasło jest zbyt słabe. Użyj co najmniej 8 znaków.",
+        "rateLimited": "Zbyt wiele prób. Spróbuj ponownie za kilka minut.",
+        "signupDisabled": "Tworzenie kont jest wyłączone w tym wdrożeniu.",
+        "network": "Nie można połączyć się z usługą logowania. Sprawdź połączenie.",
+        "unknown": "Coś poszło nie tak. Spróbuj ponownie za chwilę."
+      }
+    }
   },
   "onboarding": {
     "title": "Załóż organizację",
@@ -292,7 +316,8 @@
     },
     "of": "z {{limit}}",
     "sso": "Logowanie jednokrotne (SSO)",
-    "ssoLead": "Logowanie przez dostawcę tożsamości organizacji (SAML 2.0 lub OpenID Connect), federowane w Amazon Cognito w UE."
+    "ssoLead": "Logowanie przez dostawcę tożsamości organizacji (SAML 2.0 lub OpenID Connect), federowane w Amazon Cognito w UE.",
+    "ssoUnavailable": "Logowanie jednokrotne jest dostępne tylko we wdrożeniu AWS. To wdrożenie loguje e-mailem i hasłem."
   },
   "errors": {
     "notMember": "Nie masz dostępu do tej organizacji. Wybierz inną organizację.",

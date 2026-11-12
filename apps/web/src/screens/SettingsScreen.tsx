@@ -1,10 +1,11 @@
 import { Button, Input, Select } from "@bomagent/ui";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { type FormEvent, type ReactNode, useState } from "react";
+import { type FormEvent, type ReactNode, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { api, call, problemMessage } from "../lib/api";
 import { formatDate, formatNumber } from "../lib/format";
 import { usePageTitle } from "../lib/layout";
+import { authConfig } from "../lib/oidc";
 import { formatEur } from "../lib/provenance";
 import { useMe, useUsage } from "../lib/queries";
 import { useSession } from "../lib/session";
@@ -233,6 +234,22 @@ function Members() {
 }
 
 function Sso() {
+  const { t } = useTranslation();
+  const [supabase, setSupabase] = useState(false);
+  useEffect(() => {
+    void authConfig().then((cfg) => setSupabase(cfg.mode === "supabase"));
+  }, []);
+  if (supabase) {
+    return (
+      <Section title={t("settings.sso")} lead={t("settings.ssoLead")}>
+        <p className="text-muted">{t("settings.ssoUnavailable")}</p>
+      </Section>
+    );
+  }
+  return <SsoSettings />;
+}
+
+function SsoSettings() {
   const { t } = useTranslation();
   const { orgId } = useSession();
   const toast = useToast();

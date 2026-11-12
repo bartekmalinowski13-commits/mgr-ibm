@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import { type AuthConfig, authConfig, discoverSso, startLogin } from "../lib/oidc";
 import { devSignIn, useSession } from "../lib/session";
 import { AuthLayout } from "./AuthLayout";
+import { SupabaseLogin } from "./SupabaseLogin";
 
 export function LoginScreen() {
   const { t } = useTranslation();
@@ -20,6 +21,7 @@ export function LoginScreen() {
   }, []);
   if (session) return <Navigate to="/start" />;
   if (!cfg) return null;
+  if (cfg.mode === "supabase") return <SupabaseLogin cfg={cfg} />;
   if (cfg.mode === "oidc") {
     const oidc = cfg;
     const continueLogin = async (e: FormEvent) => {

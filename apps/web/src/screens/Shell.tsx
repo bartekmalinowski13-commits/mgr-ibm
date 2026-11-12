@@ -22,6 +22,7 @@ import { authConfig, logoutUrl } from "../lib/oidc";
 import { formatEur } from "../lib/provenance";
 import { useMe, useProjects, useUsage } from "../lib/queries";
 import { useSession } from "../lib/session";
+import { signOutRemote } from "../lib/supabase";
 import { NewRunDialog } from "./NewRunDialog";
 
 export function Shell() {
@@ -161,9 +162,11 @@ export function Shell() {
           type="button"
           className={cn(navItem, "text-left")}
           onClick={() => {
+            const token = session.token;
             signOut();
             void authConfig().then((cfg) => {
               if (cfg.mode === "oidc") window.location.assign(logoutUrl(cfg));
+              if (cfg.mode === "supabase") void signOutRemote(cfg, token);
             });
           }}
         >

@@ -8,7 +8,8 @@ import type { Session } from "./session";
 
 export type AuthConfig =
   | { mode: "local" }
-  | { mode: "oidc"; domain: string; clientId: string; redirectUri: string; logoutUri?: string };
+  | { mode: "oidc"; domain: string; clientId: string; redirectUri: string; logoutUri?: string }
+  | { mode: "supabase"; url: string; anonKey: string };
 
 const VERIFIER = "bomagent.pkce.verifier";
 const STATE = "bomagent.pkce.state";

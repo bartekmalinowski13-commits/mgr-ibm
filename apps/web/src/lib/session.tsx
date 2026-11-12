@@ -5,13 +5,26 @@
  * the hosted Cognito login (PKCE) fills the same slot (M6). The token lives in
  * sessionStorage only (cleared with the tab), the chosen organisation in localStorage.
  */
-import { createContext, type ReactNode, useCallback, useContext, useMemo, useState } from "react";
+import {
+  createContext,
+  type ReactNode,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+import { authConfig } from "./oidc";
+import { refreshDelay, refreshSession } from "./supabase";
 
 export interface Session {
   token: string;
   sub: string;
   email: string;
   name: string;
+  /** Supabase mode only: refresh token and access-token expiry (epoch ms). */
+  refreshToken?: string;
+  expiresAt?: number;
 }
 
 const SESSION_KEY = "bomagent.session";
@@ -68,6 +81,30 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     setSession(null);
     setOrgId(undefined);
   }, []);
+  // Supabase mode: swap the access token for a fresh one shortly before it expires; when the
+  // refresh fails (revoked or expired refresh token) the user is signed out.
+  const { refreshToken, expiresAt } = session ?? {};
+  useEffect(() => {
+    if (!refreshToken || !expiresAt) return;
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      void authConfig().then(async (cfg) => {
+        if (cfg.mode !== "supabase") return;
+        try {
+          const next = await refreshSession(cfg, refreshToken);
+          if (cancelled) return;
+          write(sessionStorage, SESSION_KEY, next);
+          setSession(next);
+        } catch {
+          if (!cancelled) signOut();
+        }
+      });
+    }, refreshDelay(expiresAt));
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [refreshToken, expiresAt, signOut]);
   const selectOrg = useCallback(
     (next: string | undefined) => {
       if (session) write(localStorage, orgKey(session.sub), next ?? null);
