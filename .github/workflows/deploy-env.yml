@@ -39,4 +39,6 @@ jobs:
           ALARM_EMAIL: ${{ vars.ALARM_EMAIL }}
           GITHUB_OIDC_PROVIDER_ARN: ${{ vars.GITHUB_OIDC_PROVIDER_ARN }}
           ORGANIZATION_SECURITY_SERVICES: ${{ vars.ORGANIZATION_SECURITY_SERVICES }}
+          SINGLE_ACCOUNT: ${{ vars.SINGLE_ACCOUNT }}
+          MONTHLY_BUDGET_USD: ${{ vars.MONTHLY_BUDGET_USD }}
         run: bash tools/deploy.sh

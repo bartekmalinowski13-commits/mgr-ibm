@@ -18,6 +18,8 @@ opt albCertificateArn "${ALB_CERTIFICATE_ARN:-}"
 opt alarmEmail "${ALARM_EMAIL:-}"
 opt githubOidcProviderArn "${GITHUB_OIDC_PROVIDER_ARN:-}"
 opt organizationSecurityServices "${ORGANIZATION_SECURITY_SERVICES:-}"
+opt singleAccount "${SINGLE_ACCOUNT:-}"
+opt monthlyBudgetUsd "${MONTHLY_BUDGET_USD:-}"
 
 out() { # out <stack> <region> <output key prefix>
   aws cloudformation describe-stacks --region "${2:-$REGION}" --stack-name "$1" \

@@ -1,6 +1,7 @@
 # main: build images (SBOM + provenance), deploy dev -> staging -> prod (ARCHITECTURE.md §13).
 # Each environment runs .github/workflows/deploy-env.yml.
 # Disabled until the AWS accounts exist: vars.AWS_DEPLOY_ENABLED == 'true'.
+# Single account (runbook single-account-dev.md): DEPLOY_ENVIRONMENTS=dev.
 # AWS access: GitHub OIDC -> IAM role per environment (Cicd stack); no long-lived keys and
 # no third-party credential actions (the AWS CLI on the runner assumes the role).
 name: main
@@ -67,12 +68,16 @@ jobs:
     permissions: { id-token: write, contents: read }
     uses: ./.github/workflows/deploy-env.yml
     with: { environment: dev }
+  # vars.DEPLOY_ENVIRONMENTS (default "dev,staging,prod") lets a single-account setup stop
+  # after dev: a skipped environment also skips the ones after it
   staging:
+    if: contains(format(',{0},', vars.DEPLOY_ENVIRONMENTS || 'dev,staging,prod'), ',staging,')
     needs: dev
     permissions: { id-token: write, contents: read }
     uses: ./.github/workflows/deploy-env.yml
     with: { environment: staging }
   prod:
+    if: contains(format(',{0},', vars.DEPLOY_ENVIRONMENTS || 'dev,staging,prod'), ',prod,')
     needs: staging
     permissions: { id-token: write, contents: read }
     uses: ./.github/workflows/deploy-env.yml

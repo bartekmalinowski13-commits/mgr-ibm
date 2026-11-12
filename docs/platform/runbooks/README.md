@@ -2,6 +2,8 @@
 
 All cloud operations are performed by a **human** (or a pipeline started by a human) – never by a Claude Code session (CLAUDE.md §6).
 
+> **Starting out?** One account, dev only: [`single-account-dev.md`](single-account-dev.md).
+
 ## first-deployment – first deployment of an environment
 1. **Accounts (AWS Organizations):** management, security, log-archive, shared-services, dev, staging, prod. Apply the SCPs from `infra/cdk/policies/` (first in test mode on the dev OU).
 2. **shared-services:** ECR repositories `bomagent-api`, `bomagent-ingest-worker`, `bomagent-agent-worker`, `bomagent-kb-indexer`, `bomagent-migrate`, `bomagent-llm-gateway` (scan on push, immutable tags, pull policy for the dev/staging/prod accounts) and an OIDC role for GitHub (`vars.AWS_IMAGES_ROLE_ARN`) with push rights only to these repositories.

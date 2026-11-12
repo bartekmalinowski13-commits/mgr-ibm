@@ -1,9 +1,11 @@
 import { CfnOutput, Duration, RemovalPolicy } from "aws-cdk-lib";
 import * as accessanalyzer from "aws-cdk-lib/aws-accessanalyzer";
 import * as backup from "aws-cdk-lib/aws-backup";
+import * as budgets from "aws-cdk-lib/aws-budgets";
 import * as cloudtrail from "aws-cdk-lib/aws-cloudtrail";
 import * as cw from "aws-cdk-lib/aws-cloudwatch";
 import * as cwActions from "aws-cdk-lib/aws-cloudwatch-actions";
+import * as ecr from "aws-cdk-lib/aws-ecr";
 import * as elbv2 from "aws-cdk-lib/aws-elasticloadbalancingv2";
 import * as events from "aws-cdk-lib/aws-events";
 import * as guardduty from "aws-cdk-lib/aws-guardduty";
@@ -16,6 +18,7 @@ import * as subs from "aws-cdk-lib/aws-sns-subscriptions";
 import type { Construct } from "constructs";
 import { BaseStack, type BaseStackProps } from "./base-stack";
 import type { ComputeStack } from "./compute-stack";
+import { IMAGE_NAMES } from "./config";
 import { type DataStack, filesBucketName } from "./data-stack";
 import { siteBucketName } from "./edge-stack";
 import { acknowledge } from "./nag";
@@ -505,5 +508,100 @@ export class CicdStack extends BaseStack {
       acknowledge(role, `AwsSolutions-IAM5[Resource::${resource}]`, reason as string);
     }
     new CfnOutput(this, "DeployRoleArn", { value: role.roleArn });
+    if (config.singleAccount) this.imageRepositories(config.githubRepository, providerArn);
+    if (config.monthlyBudgetUsd !== undefined && config.alarmEmail)
+      this.costBudget(config.name, config.monthlyBudgetUsd, config.alarmEmail);
+  }
+
+  /**
+   * Single-account setup (no shared-services account): the ECR repositories and the role
+   * the "images" job of main.yml assumes. The role may push to these repositories only.
+   */
+  private imageRepositories(githubRepository: string, providerArn: string): void {
+    const repos = IMAGE_NAMES.map(
+      (name) =>
+        new ecr.Repository(this, `Repo-${name}`, {
+          repositoryName: name,
+          imageScanOnPush: true,
+          imageTagMutability: ecr.TagMutability.IMMUTABLE,
+          encryption: ecr.RepositoryEncryption.AES_256,
+          lifecycleRules: [{ maxImageCount: 30, description: "keep the last 30 images" }],
+          removalPolicy: RemovalPolicy.RETAIN,
+        }),
+    );
+    const push = new iam.Role(this, "ImagesPush", {
+      roleName: "bomagent-images-github-push",
+      description: "Assumed by the GitHub 'images' environment to push container images",
+      assumedBy: new iam.WebIdentityPrincipal(providerArn, {
+        StringEquals: {
+          "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
+          "token.actions.githubusercontent.com:sub": `repo:${githubRepository}:environment:images`,
+        },
+      }),
+    });
+    push.addToPolicy(
+      new iam.PolicyStatement({
+        sid: "EcrLogin",
+        actions: ["ecr:GetAuthorizationToken"],
+        resources: ["*"], // the API has no resource-level form
+      }),
+    );
+    push.addToPolicy(
+      new iam.PolicyStatement({
+        sid: "PushImages",
+        actions: [
+          "ecr:BatchCheckLayerAvailability",
+          "ecr:InitiateLayerUpload",
+          "ecr:UploadLayerPart",
+          "ecr:CompleteLayerUpload",
+          "ecr:PutImage",
+          "ecr:BatchGetImage",
+          "ecr:GetDownloadUrlForLayer",
+        ],
+        resources: repos.map((r) => r.repositoryArn),
+      }),
+    );
+    acknowledge(
+      push,
+      "AwsSolutions-IAM5[Resource::*]",
+      "ecr:GetAuthorizationToken has no resource-level permissions; pushes are limited to the repositories.",
+    );
+    new CfnOutput(this, "ImagesRoleArn", { value: push.roleArn });
+    new CfnOutput(this, "ImageRegistry", {
+      value: `${this.account}.dkr.ecr.${this.region}.amazonaws.com`,
+    });
+  }
+
+  /** Monthly cost guardrail: e-mail at 80 % of actual and 100 % of forecast spend. */
+  private costBudget(env: string, amountUsd: number, email: string): void {
+    const subscribers = [{ subscriptionType: "EMAIL", address: email }];
+    new budgets.CfnBudget(this, "MonthlyBudget", {
+      budget: {
+        budgetName: `bomagent-${env}-monthly`,
+        budgetType: "COST",
+        timeUnit: "MONTHLY",
+        budgetLimit: { amount: amountUsd, unit: "USD" },
+      },
+      notificationsWithSubscribers: [
+        {
+          notification: {
+            notificationType: "ACTUAL",
+            comparisonOperator: "GREATER_THAN",
+            threshold: 80,
+            thresholdType: "PERCENTAGE",
+          },
+          subscribers,
+        },
+        {
+          notification: {
+            notificationType: "FORECASTED",
+            comparisonOperator: "GREATER_THAN",
+            threshold: 100,
+            thresholdType: "PERCENTAGE",
+          },
+          subscribers,
+        },
+      ],
+    });
   }
 }

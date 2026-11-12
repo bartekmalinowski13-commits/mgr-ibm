@@ -44,13 +44,38 @@ export interface EnvConfig {
    * administrator: the account then must not create its own detector or hub (it fails).
    */
   readonly organizationSecurityServices: boolean;
+  /**
+   * One AWS account without a shared-services account: the Cicd stack also creates the
+   * ECR repositories and the GitHub role that pushes images (runbook: single-account dev).
+   */
+  readonly singleAccount: boolean;
+  /** Monthly cost budget in USD with e-mail alerts at 80 % and 100 % (needs alarmEmail). */
+  readonly monthlyBudgetUsd?: number;
 }
 
 export const PLACEHOLDER_ACCOUNT = "000000000000";
 
+/** Container images built by .github/workflows/main.yml (one ECR repository each). */
+export const IMAGE_NAMES = [
+  "bomagent-api",
+  "bomagent-ingest-worker",
+  "bomagent-agent-worker",
+  "bomagent-kb-indexer",
+  "bomagent-migrate",
+  "bomagent-llm-gateway",
+] as const;
+
 const DEFAULTS: Record<
   EnvName,
-  Omit<EnvConfig, "account" | "imageRegistry" | "githubRepository" | "organizationSecurityServices">
+  Omit<
+    EnvConfig,
+    | "account"
+    | "imageRegistry"
+    | "githubRepository"
+    | "organizationSecurityServices"
+    | "singleAccount"
+    | "monthlyBudgetUsd"
+  >
 > = {
   dev: {
     name: "dev",
@@ -127,11 +152,21 @@ export function loadConfig(get: (key: string) => unknown): EnvConfig {
   const account = str("account") ?? PLACEHOLDER_ACCOUNT;
   if (!/^\d{12}$/.test(account))
     throw new Error("bomagent:account must be a 12-digit AWS account id");
+  const singleAccount = str("singleAccount") === "true";
+  const budget = str("monthlyBudgetUsd");
+  const monthlyBudgetUsd = budget === undefined ? undefined : Number(budget);
+  if (monthlyBudgetUsd !== undefined && !(monthlyBudgetUsd > 0))
+    throw new Error("bomagent:monthlyBudgetUsd must be a positive number");
+  if (monthlyBudgetUsd !== undefined && !str("alarmEmail"))
+    throw new Error("bomagent:monthlyBudgetUsd needs bomagent:alarmEmail for the alerts");
   return {
     ...DEFAULTS[name],
     account,
+    singleAccount,
+    monthlyBudgetUsd,
     imageRegistry:
-      str("imageRegistry") ?? `${PLACEHOLDER_ACCOUNT}.dkr.ecr.eu-central-1.amazonaws.com`,
+      str("imageRegistry") ??
+      `${singleAccount ? account : PLACEHOLDER_ACCOUNT}.dkr.ecr.eu-central-1.amazonaws.com`,
     imageTag: str("imageTag") ?? DEFAULTS[name].imageTag,
     domainName: str("domainName"),
     appUrl: str("appUrl") ?? (str("domainName") ? `https://${str("domainName")}` : undefined),
