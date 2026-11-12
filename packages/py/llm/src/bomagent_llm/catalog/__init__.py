@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from enum import StrEnum
 from importlib import resources
 from pathlib import Path
@@ -71,10 +72,40 @@ class Catalog(BaseModel):
         ]
 
 
-def load_catalog(path: str | Path | None = None) -> Catalog:
+OVERRIDE_ENV = "BOMAGENT_CATALOG_OVERRIDE"
+
+
+def _apply_override(catalog: Catalog, override: str | Path) -> Catalog:
+    """Local development override: ``enable: [<id>, ...]`` switches on **local** entries only.
+
+    Hosted (EU cloud) entries can never be enabled this way - flipping them is a reviewed
+    change of ``models.yaml`` after checking availability in the provider account.
+    """
+    data = yaml.safe_load(Path(override).read_text(encoding="utf-8")) or {}
+    ids = [str(i) for i in data.get("enable", [])]
+    by_id = {m.id: m for m in catalog.models}
+    for model_id in ids:
+        spec = by_id.get(model_id)
+        if spec is None:
+            raise ValueError(f"catalogue override: unknown model {model_id!r}")
+        if spec.residency != "local":
+            raise ValueError(
+                f"catalogue override: {model_id!r} is not a local model; hosted models are "
+                "enabled in models.yaml only"
+            )
+    models = [
+        m.model_copy(update={"enabled": True, "verified": True}) if m.id in ids else m
+        for m in catalog.models
+    ]
+    return Catalog(models=models)
+
+
+def load_catalog(path: str | Path | None = None, *, override: str | Path | None = None) -> Catalog:
     text = (
         Path(path).read_text(encoding="utf-8")
         if path is not None
         else resources.files(__package__).joinpath("models.yaml").read_text(encoding="utf-8")
     )
-    return Catalog.model_validate(yaml.safe_load(text))
+    catalog = Catalog.model_validate(yaml.safe_load(text))
+    override = override or os.environ.get(OVERRIDE_ENV)
+    return _apply_override(catalog, override) if override else catalog

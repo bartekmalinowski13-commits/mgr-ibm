@@ -56,6 +56,74 @@ models:
     verified: false
     notes: developer machines only (compose profile "ollama")
 
+  # Local open-weight models run by the owner with Ollama (Apple silicon) for learning and
+  # experiments (`bomagent run`, `bomagent experiment run`, `just demo`) - NOT for the Fly pilot
+  # (a Fly machine cannot reach a laptop without a tunnel, and local models never go through the
+  # EU gateway). gateway_model is the Ollama tag; point BOMAGENT_LLM_GATEWAY_URL at
+  # http://localhost:11434 (Ollama's OpenAI-compatible API). Enable one locally with the override
+  # file (BOMAGENT_CATALOG_OVERRIDE), see docs/platform/runbooks/local-models.md. Download sizes are
+  # from the Ollama library pages (2026-11-12); "RAM" adds roughly 2-4 GB for the KV cache.
+  - id: ollama-qwen3-8b
+    gateway_model: qwen3:8b
+    provider: ollama
+    license_class: open-weight
+    residency: local
+    capabilities: [chat, structured_output, tools]
+    tier: fast
+    enabled: false
+    verified: false
+    notes: ollama pull qwen3:8b (5.2 GB download, about 8 GB RAM); Apache-2.0 weights; a thinking model - slower per answer
+  - id: ollama-qwen3-14b
+    gateway_model: qwen3:14b
+    provider: ollama
+    license_class: open-weight
+    residency: local
+    capabilities: [chat, structured_output, tools]
+    tier: balanced
+    enabled: false
+    verified: false
+    notes: ollama pull qwen3:14b (9.3 GB download, about 12 GB RAM); Apache-2.0 weights
+  - id: ollama-llama3-1-8b
+    gateway_model: llama3.1:8b
+    provider: ollama
+    license_class: open-weight
+    residency: local
+    capabilities: [chat, tools]
+    tier: fast
+    enabled: false
+    verified: false
+    notes: ollama pull llama3.1:8b (4.9 GB download, about 8 GB RAM); Llama 3.1 community licence (not OSI open source)
+  - id: ollama-mistral-small
+    gateway_model: mistral-small:24b
+    provider: ollama
+    license_class: open-weight
+    residency: local
+    capabilities: [chat, structured_output, tools]
+    tier: balanced
+    enabled: false
+    verified: false
+    notes: ollama pull mistral-small:24b (14 GB download, about 18 GB RAM, 32K context tag); Apache-2.0
+  - id: ollama-ministral-3-8b
+    gateway_model: ministral-3:8b
+    provider: ollama
+    license_class: open-weight
+    residency: local
+    capabilities: [chat, structured_output, tools]
+    tier: fast
+    enabled: false
+    verified: false
+    notes: ollama pull ministral-3:8b (6.0 GB download, about 9 GB RAM); Apache-2.0; ministral-3:3b (3.0 GB) and :14b (9.1 GB) also exist
+  - id: ollama-gpt-oss-20b
+    gateway_model: gpt-oss:20b
+    provider: ollama
+    license_class: open-weight
+    residency: local
+    capabilities: [chat, tools]
+    tier: balanced
+    enabled: false
+    verified: false
+    notes: ollama pull gpt-oss:20b (14 GB download, about 16 GB RAM, 128K context); Apache-2.0; needs a 32 GB Mac for comfortable use
+
   # ---------------------------------------------------------------- closed, Anthropic via Amazon Bedrock (EU)
   # Use an EU inference profile (prefix "eu.") or in-region model. Check the profile's
   # destination regions: some EU profiles may include non-EU-member regions (e.g.
@@ -148,7 +216,10 @@ models:
     cost_out_eur: 0.0
     enabled: false
     verified: false
-    notes: choose an open-weight model offered in eu-central-1 and put its exact ID here
+    notes: >-
+      placeholder. Checked 2026-11-12: Llama 3.3 70B on Bedrock has only a us. geo profile and
+      US in-region availability (no EU), so it cannot be confirmed for the EU; prefer
+      gpt-oss-120b-bedrock-eu or qwen3-235b-bedrock-eu, or put another model's exact EU id here
   # Qwen (Alibaba). The Alibaba Cloud / DashScope API is deliberately NOT in this catalogue: it
   # does not guarantee EU processing. Mistral La Plateforme does not host Qwen. Verified EU-resident
   # ways (researched 2026-11-12): Amazon Bedrock in-region in eu-central-1 / eu-north-1 / eu-south-1
@@ -172,6 +243,53 @@ models:
       (bedrock-runtime In-Region: eu-central-1, eu-north-1, eu-south-1; no geo/global profile, so
       nothing leaves the region). Check the LiteLLM Bedrock route for qwen.* ids and model access in
       the account before enabling; costs are unset (check the Bedrock price list).
+  - id: gpt-oss-120b-bedrock-eu
+    gateway_model: bedrock/openai.gpt-oss-120b-1:0
+    provider: bedrock
+    license_class: open-weight
+    residency: eu-region
+    region: eu-central-1
+    capabilities: [chat, structured_output, tools]
+    tier: strong
+    cost_in_eur: 0.0
+    cost_out_eur: 0.0
+    enabled: false
+    verified: false
+    notes: >-
+      OpenAI gpt-oss-120b (Apache-2.0 weights), Bedrock in-region, id openai.gpt-oss-120b-1:0 per
+      https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-openai-gpt-oss-120b.html
+      (bedrock-runtime In-Region in eu-central-1, eu-north-1, eu-south-1, eu-west-1; no EU geo
+      profile, so nothing leaves the region). Costs unset. gpt-oss-20b on Bedrock was not checked.
+  - id: ministral-8b-mistral-eu
+    gateway_model: mistral/ministral-8b-latest
+    provider: mistral
+    license_class: open-weight
+    residency: eu-region
+    capabilities: [chat, structured_output, tools]
+    tier: fast
+    cost_in_eur: 0.0
+    cost_out_eur: 0.0
+    enabled: false
+    verified: false
+    notes: >-
+      Ministral open-weight (Apache-2.0 for Ministral 3) served by La Plateforme (api.mistral.ai).
+      The -latest alias is a guess: the model overview (https://docs.mistral.ai/getting-started/models/models_overview/)
+      lists Ministral 3 3B/8B/14B without API ids - take the exact id from GET /v1/models.
+  - id: mistral-small-mistral-eu
+    gateway_model: mistral/mistral-small-latest
+    provider: mistral
+    license_class: open-weight
+    residency: eu-region
+    capabilities: [chat, structured_output, tools]
+    tier: balanced
+    cost_in_eur: 0.0
+    cost_out_eur: 0.0
+    enabled: false
+    verified: false
+    notes: >-
+      Mistral Small (Small 4 is Apache-2.0 per the model overview) on La Plateforme; confirm the exact
+      id and the EU data-processing setting in the workspace. Codestral is not open-weight and open-mistral-nemo
+      is retired, so neither is listed.
   - id: qwen3-vllm-self-hosted
     gateway_model: hosted_vllm/Qwen/Qwen3-32B
     provider: vllm
