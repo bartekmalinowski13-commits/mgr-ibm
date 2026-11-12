@@ -20,3 +20,4 @@ Format: Context → Decision → Consequences → Alternatives considered. Statu
 | [0014](0014-frontend-react-shadcn.md) | Frontend: React + Vite + shadcn/ui |
 | [0015](0015-api-rest-openapi.md) | API: REST + OpenAPI 3.1 + SSE |
 | [0016](0016-db-migrations-package.md) | One migration package with hand-written DDL and database roles |
+| [0017](0017-supabase-pilot-variant.md) | Second, lightweight deployment variant on Supabase (EU) for pilots (proposed) |
