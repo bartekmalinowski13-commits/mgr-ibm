@@ -18,7 +18,13 @@ regenerate with `just openapi`; a test fails when it drifts).
 ## Conventions
 - **Auth:** OIDC bearer JWT (issuer, audience, expiry, JWKS; required settings outside
   local/test). Locally/in tests a mock IdP (`auth_mode=local`, `POST /v1/dev/token`) -
-  refused in any other environment. Integrations use `Authorization: Bearer bomk_...`
+  refused in any other environment. Claims are configurable for other IdPs (Supabase
+  Auth in the Supabase pilot): `BOMAGENT_OIDC_EMAIL_CLAIM` (default `email`),
+  `BOMAGENT_OIDC_EMAIL_VERIFIED_CLAIM` (default `email_verified`; dotted paths such as
+  `user_metadata.email_verified`), `BOMAGENT_OIDC_NAME_CLAIMS` (JSON list of dotted
+  paths, first non-empty wins; default `["name"]`), `BOMAGENT_OIDC_ALGORITHMS` (JSON
+  list, default `["RS256"]`; only asymmetric algorithms are accepted - HS256 with a
+  shared secret is refused at startup and at verification). Integrations use `Authorization: Bearer bomk_...`
   (organisation API key, bound to its organisation; not accepted by user-only endpoints
   such as `/v1/me`). Key and invitation lookups stay inside RLS (hash-matching policies).
 - **Organisation:** header `X-Org-Id`; membership and roles are read from the database

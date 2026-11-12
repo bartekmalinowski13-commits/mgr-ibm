@@ -1,6 +1,8 @@
 """Authentication (ADR-0005): the API depends only on OIDC - a signed JWT from the IdP
-(Amazon Cognito in AWS, any OIDC provider later). Locally and in tests a built-in mock
-IdP signs tokens with an ephemeral key; it is refused in any other environment.
+(Amazon Cognito in AWS; Supabase Auth in the Supabase pilot - asymmetric JWKS keys, claims
+under ``user_metadata`` selected by the ``oidc_*_claim`` settings). Locally and in tests a
+built-in mock IdP signs tokens with an ephemeral key; it is refused in any other
+environment.
 
 The active organisation comes from the ``X-Org-Id`` header and is checked against the
 user's memberships in the database (roles come from the database, never from the
@@ -14,8 +16,9 @@ import hashlib
 import json
 import time
 import uuid
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import Annotated, Any
+from typing import Annotated, Any, Protocol
 
 import jwt
 from cryptography.hazmat.primitives.asymmetric import rsa
@@ -28,7 +31,11 @@ from bomagent_common.db import tenant_transaction, user_transaction
 from bomagent_common.problems import ProblemError
 from bomagent_common.tenancy import TenantContext, tenant_scope
 
-ALGORITHMS = ["RS256"]
+ALGORITHMS = ("RS256",)  # Cognito
+#: JWS algorithms verified with a public key; HS* (shared secret) and ``none`` never
+ASYMMETRIC_ALGORITHMS = frozenset(
+    {"RS256", "RS384", "RS512", "PS256", "PS384", "PS512", "ES256", "ES384", "ES512", "EdDSA"}
+)
 API_KEY_PREFIX = "bomk_"
 LOCAL_ISSUER = "https://local-idp.bomagent.invalid"
 
@@ -43,15 +50,61 @@ class Principal:
     identity_provider: str | None = None
 
 
+def claim(claims: Mapping[str, Any], path: str) -> Any:
+    """Value at a dotted ``path`` (``user_metadata.full_name``), ``None`` when absent."""
+    value: Any = claims
+    for part in path.split("."):
+        if not isinstance(value, Mapping) or part not in value:
+            return None
+        value = value[part]
+    return value
+
+
+def check_algorithms(algorithms: Sequence[str]) -> list[str]:
+    """Only asymmetric JWS algorithms: tokens are verified with the IdP's public keys
+    (JWKS), never with a shared secret (e.g. Supabase's legacy HS256 JWT secret)."""
+    bad = [a for a in algorithms if a not in ASYMMETRIC_ALGORITHMS]
+    if bad or not algorithms:
+        raise ValueError(f"only asymmetric JWT algorithms are allowed, got {bad or 'none'}")
+    return list(algorithms)
+
+
 class TokenVerifier:
-    """Validates signature, issuer, audience, expiry. ``jwks`` (dict) or ``jwks_url``."""
+    """Validates signature, issuer, audience, expiry against ``jwks_url`` (or a fixed
+    ``public_key``). Which claims carry the e-mail, its verification and the display name
+    is configurable as dotted paths (Cognito: top-level; Supabase: ``user_metadata``)."""
 
     def __init__(
-        self, issuer: str, audience: str, *, jwks_url: str | None = None, public_key: Any = None
+        self,
+        issuer: str,
+        audience: str,
+        *,
+        jwks_url: str | None = None,
+        public_key: Any = None,
+        algorithms: Sequence[str] = ALGORITHMS,
+        email_claim: str = "email",
+        email_verified_claim: str = "email_verified",
+        name_claims: Sequence[str] = ("name",),
     ) -> None:
         self.issuer, self.audience = issuer, audience
         self._jwk_client = PyJWKClient(jwks_url, cache_keys=True) if jwks_url else None
         self._public_key = public_key
+        self.algorithms = check_algorithms(algorithms)
+        self.email_claim = email_claim
+        self.email_verified_claim = email_verified_claim
+        self.name_claims = tuple(name_claims)
+
+    @classmethod
+    def from_settings(cls, settings: OidcSettings) -> TokenVerifier:
+        return cls(
+            settings.oidc_issuer,
+            settings.oidc_audience,
+            jwks_url=settings.oidc_jwks_url,
+            algorithms=settings.oidc_algorithms,
+            email_claim=settings.oidc_email_claim,
+            email_verified_claim=settings.oidc_email_verified_claim,
+            name_claims=settings.oidc_name_claims,
+        )
 
     def verify(self, token: str) -> Principal:
         try:
@@ -63,7 +116,7 @@ class TokenVerifier:
             claims = jwt.decode(
                 token,
                 key,
-                algorithms=ALGORITHMS,
+                algorithms=self.algorithms,
                 audience=self.audience,
                 issuer=self.issuer,
                 options={"require": ["exp", "sub", "iss"]},
@@ -72,14 +125,26 @@ class TokenVerifier:
             raise ProblemError(
                 401, "Unauthorized", "invalid or expired token", slug="invalid-token"
             ) from exc
+        names = (claim(claims, path) for path in self.name_claims)
+        email = claim(claims, self.email_claim)
         return Principal(
             sub=str(claims["sub"]),
-            email=str(claims.get("email", "")),
-            name=str(claims.get("name", "")),
+            email=str(email) if isinstance(email, str) else "",
+            name=next((str(n) for n in names if isinstance(n, str) and n), ""),
             # OIDC: boolean; some IdPs (older Cognito) send the string "true"
-            email_verified=claims.get("email_verified") in (True, "true"),
+            email_verified=claim(claims, self.email_verified_claim) in (True, "true"),
             identity_provider=_identity_provider(claims.get("identities")),
         )
+
+
+class OidcSettings(Protocol):
+    oidc_issuer: str
+    oidc_audience: str
+    oidc_jwks_url: str | None
+    oidc_algorithms: list[str]
+    oidc_email_claim: str
+    oidc_email_verified_claim: str
+    oidc_name_claims: list[str]
 
 
 def _identity_provider(identities: Any) -> str | None:

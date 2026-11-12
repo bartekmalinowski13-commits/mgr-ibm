@@ -7,11 +7,11 @@ from typing import Any, Literal
 
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import Field
+from pydantic import Field, field_validator
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from bomagent_api import __version__, maintenance
-from bomagent_api.auth import LocalIdp, TokenVerifier
+from bomagent_api.auth import ALGORITHMS, LocalIdp, TokenVerifier, check_algorithms
 from bomagent_api.routers import api_keys, audit, identity, members, projects, runs
 from bomagent_api.routers import kb as kb_routes
 from bomagent_api.routers import sso as sso_routes
@@ -59,6 +59,20 @@ class Settings(ServiceSettings):
     oidc_issuer: str = ""
     oidc_audience: str = "bomagent-api"
     oidc_jwks_url: str | None = None
+    #: asymmetric JWS algorithms accepted from the JWKS (Cognito RS256; Supabase ES256 or
+    #: RS256). HS* is refused: a shared secret is never used to verify user tokens.
+    oidc_algorithms: list[str] = Field(default_factory=lambda: list(ALGORITHMS))
+    #: claims as dotted paths (Supabase: ``user_metadata.email_verified``,
+    #: ``["user_metadata.full_name", "user_metadata.name"]``); the first non-empty name wins
+    oidc_email_claim: str = "email"
+    oidc_email_verified_claim: str = "email_verified"
+    oidc_name_claims: list[str] = Field(default_factory=lambda: ["name"])
+
+    @field_validator("oidc_algorithms")
+    @classmethod
+    def _asymmetric_only(cls, value: list[str]) -> list[str]:
+        return check_algorithms(value)
+
     #: SSO federation (Cognito): pool + SPA client to enable providers on, hosted domain
     cognito_user_pool_id: str | None = None
     cognito_client_id: str | None = None
@@ -174,9 +188,7 @@ def create_app(
         app.state.local_idp = idp
         app.state.verifier = idp.verifier
     else:
-        app.state.verifier = TokenVerifier(
-            settings.oidc_issuer, settings.oidc_audience, jwks_url=settings.oidc_jwks_url
-        )
+        app.state.verifier = TokenVerifier.from_settings(settings)
 
     for router in (
         identity.router,
