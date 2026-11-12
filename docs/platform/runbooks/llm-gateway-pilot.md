@@ -8,7 +8,7 @@ committed. `<...>` = placeholder for a value you create.
 
 ```
 browser -> mgr-ibm-bomagent (Fly, public) -- http over 6PN --> mgr-ibm-llm-gateway.internal:4000 (Fly, private)
-                                                                  |-> api.mistral.ai (EU)
+                                                                  |-> api.eu.mistral.ai (EU regional inference)
                                                                   |-> Azure OpenAI, EU data-zone resource
                                                                   |-> Bedrock eu-central-1 (eu. inference profiles)
 ```
@@ -22,10 +22,16 @@ without a gateway unless `BOMAGENT_ALLOW_FAKE_LLM=true`.
 ## A. Provider accounts (EU)
 
 1. **Mistral La Plateforme.** Create an account at <https://console.mistral.ai>, create a
-   workspace, add billing, create an API key (`<MISTRAL_KEY>`). Keep the workspace on the
-   EU endpoint `api.mistral.ai` and check its data-processing/region settings. Note the exact
-   model id you want from `GET https://api.mistral.ai/v1/models` (the catalogue uses
-   `mistral/mistral-large-latest`; pin an exact id if you prefer).
+   workspace, add billing, create an API key (`<MISTRAL_KEY>`). Only the regional endpoint
+   `https://api.eu.mistral.ai` guarantees EU inference processing; the default
+   `api.mistral.ai` does **not**, and the gateway config therefore pins
+   `api_base: https://api.eu.mistral.ai/v1` (the EU guard rejects anything else). EU regional
+   inference carries a surcharge of about +10 % (check the current terms at
+   <https://docs.mistral.ai/inference/regional-inference>) and covers **inference only** -
+   account, billing and console data are not covered by it. Note the exact model id from
+   `GET https://api.eu.mistral.ai/v1/models` (the catalogue uses
+   `mistral/mistral-large-latest`; pin an exact id if you prefer) and check the key works
+   against the EU endpoint.
 2. **Azure OpenAI (OpenAI models).** In the Azure portal create an *Azure OpenAI* /
    Foundry resource in an EU region (`swedencentral`, `francecentral` or
    `germanywestcentral`). Create a model deployment of type **Data Zone Standard (EU)** -

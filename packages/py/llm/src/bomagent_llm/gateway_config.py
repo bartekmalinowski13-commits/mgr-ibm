@@ -17,7 +17,12 @@ from typing import Any
 import yaml
 
 from bomagent_llm.catalog import Catalog, ModelSpec, load_catalog
-from bomagent_llm.eu_guard import assert_eu_only, check_catalog, check_gateway_config
+from bomagent_llm.eu_guard import (
+    MISTRAL_EU_BASE,
+    assert_eu_only,
+    check_catalog,
+    check_gateway_config,
+)
 
 KEY_ENV = {
     "azure_openai": ("AZURE_API_KEY", "AZURE_API_BASE"),
@@ -34,6 +39,8 @@ def _entry(model: ModelSpec, region: str) -> dict[str, Any] | None:
         params["api_key"] = f"os.environ/{key}"
         if base:
             params["api_base"] = f"os.environ/{base}"
+        elif model.provider == "mistral":
+            params["api_base"] = MISTRAL_EU_BASE  # not the default api.mistral.ai
     else:  # local, self-hosted or unknown providers are not served by the cloud gateway
         return None
     info: dict[str, Any] = {

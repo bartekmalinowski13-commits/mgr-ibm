@@ -199,7 +199,7 @@ models:
     enabled: false
     verified: false
     notes: >-
-      Mistral AI La Plateforme (api.mistral.ai, EU). The -latest alias is kept on purpose; as of
+      Mistral AI La Plateforme via the regional endpoint https://api.eu.mistral.ai (the default api.mistral.ai does NOT guarantee EU inference; EU regional inference carries a surcharge, see docs.mistral.ai/inference/regional-inference). The -latest alias is kept on purpose; as of
       2026-11-12 https://docs.mistral.ai/getting-started/models/models_overview/ lists Mistral Large 3
       (mistral-large-2512, deprecated 2026-10-31) and Mistral Large 4 (mistral-large-4-0, id not confirmed
       from the API reference). Pin an exact id after checking GET /v1/models with the owner key, and
@@ -272,7 +272,7 @@ models:
     enabled: false
     verified: false
     notes: >-
-      Ministral open-weight (Apache-2.0 for Ministral 3) served by La Plateforme (api.mistral.ai).
+      Ministral open-weight (Apache-2.0 for Ministral 3) served by La Plateforme, EU regional endpoint api.eu.mistral.ai only.
       The -latest alias is a guess: the model overview (https://docs.mistral.ai/getting-started/models/models_overview/)
       lists Ministral 3 3B/8B/14B without API ids - take the exact id from GET /v1/models.
   - id: mistral-small-mistral-eu

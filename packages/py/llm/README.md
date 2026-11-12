@@ -18,7 +18,7 @@ gateway (ADR-0006).
 
 - `eu_guard` - EU-only enforcement: `check_catalog` (enabled entries) and
   `check_gateway_config` (rendered LiteLLM config: Bedrock `eu.` profiles and EU regions,
-  EU Azure regions, only api.mistral.ai / Azure / EU Bedrock endpoints, no DashScope).
+  EU Azure regions, only api.eu.mistral.ai (never api.mistral.ai) / Azure / EU Bedrock endpoints, no DashScope).
   `gateway_config.render` raises `EuResidencyError` on any violation.
 
 ## Testing

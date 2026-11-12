@@ -130,6 +130,10 @@ def test_rendered_config_rejects_us_region_and_us_profile():
         "https://dashscope-intl.aliyuncs.com/v1",
         "https://api.openai.com/v1",
         "https://example.alibabacloud.com",
+        # the default Mistral endpoint does NOT guarantee EU processing; only api.eu does
+        "https://api.mistral.ai/v1",
+        "https://api.us.mistral.ai/v1",
+        "https://api.eu.mistral.ai.evil.example/v1",
     ],
 )
 def test_rendered_config_rejects_foreign_endpoints(base):
@@ -143,9 +147,16 @@ def test_rendered_config_rejects_foreign_endpoints(base):
 
 def test_rendered_config_accepts_the_documented_endpoints():
     config = _config()
-    _first(config, "mistral")["litellm_params"]["api_base"] = "https://api.mistral.ai/v1"
+    _first(config, "mistral")["litellm_params"]["api_base"] = "https://api.eu.mistral.ai/v1"
     _first(config, "azure_openai")["litellm_params"]["api_base"] = "https://r.openai.azure.com"
     assert check_gateway_config(config) == []
+
+
+def test_mistral_without_an_explicit_endpoint_is_refused():
+    """LiteLLM would fall back to api.mistral.ai, which is not EU-guaranteed."""
+    config = _config()
+    del _first(config, "mistral")["litellm_params"]["api_base"]
+    assert any("api_base" in p for p in check_gateway_config(config))
 
 
 def test_azure_region_in_the_config_must_be_eu():
