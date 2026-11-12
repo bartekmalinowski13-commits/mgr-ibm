@@ -1,0 +1,20 @@
+name: Bug
+description: Something does not work as documented
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      {
+        label: What happened,
+        description: "Steps, expected vs actual. Never paste customer files or secrets.",
+      }
+    validations: { required: true }
+  - type: input
+    id: version
+    attributes: { label: Version / commit }
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options: [api, ingest-worker, agent-worker, kb-indexer, web, infra, eval, other]

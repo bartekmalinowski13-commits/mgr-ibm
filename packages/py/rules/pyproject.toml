@@ -1,0 +1,22 @@
+[project]
+name = "bomagent-rules"
+version = "0.1.0"
+description = "Deterministic, versioned BOM validation rule packs"
+readme = "README.md"
+requires-python = ">=3.12"
+license = "LicenseRef-Proprietary"
+dependencies = [
+    "pydantic>=2.9",
+    "jsonschema>=4.23",
+    "bomagent-bom-core",
+]
+
+[build-system]
+requires = ["hatchling>=1.26"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/bomagent_rules"]
+
+[tool.uv.sources]
+bomagent-bom-core = { workspace = true }

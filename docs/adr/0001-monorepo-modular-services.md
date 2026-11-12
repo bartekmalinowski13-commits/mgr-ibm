@@ -1,15 +1,15 @@
-# ADR-0001: Monorepo i modułowe serwisy zamiast monolitu lub drobnych mikroserwisów
+# ADR-0001: Monorepo and modular services instead of a monolith or fine-grained microservices
 
-Status: Zaakceptowany · 2026-11-09
+Status: Accepted · 2026-11-09
 
-## Kontekst
-Projekt ma być modułowy (nie monolit), ale jest rozwijany przez jedną osobę i agentów AI, a część kodu musi być współdzielona przez warianty A i B eksperymentu.
+## Context
+The project is meant to be modular (not a monolith), but it is developed by one person and AI agents, and part of the code must be shared by variants A and B of the experiment.
 
-## Decyzja
-Jedno monorepo (`uv` workspace + `pnpm` workspace). Kod domenowy w bibliotekach `packages/py/*` z granicami pilnowanymi przez `import-linter`. Cztery serwisy wdrożeniowe: `api`, `ingest-worker`, `agent-worker`, `kb-indexer` + gotowe komponenty (`llm-gateway`, Langfuse, opcjonalnie `model-serving`). Nowy serwis tylko, gdy ma inny profil bezpieczeństwa, skalowania albo cyklu wydań – uzasadnienie w nowym ADR.
+## Decision
+A single monorepo (`uv` workspace + `pnpm` workspace). Domain code in `packages/py/*` libraries with boundaries enforced by `import-linter`. Four deployment services: `api`, `ingest-worker`, `agent-worker`, `kb-indexer` + ready-made components (`llm-gateway`, Langfuse, optionally `model-serving`). A new service only when it has a different security, scaling or release-cycle profile – justification in a new ADR.
 
-## Konsekwencje
-Atomowe zmiany przekrojowe, jeden pipeline CI, wspólne narzędzia. Ryzyko: rozrost CI – łagodzone filtrami ścieżek (`paths`) i budowaniem tylko zmienionych pakietów.
+## Consequences
+Atomic cross-cutting changes, a single CI pipeline, shared tooling. Risk: CI growth – mitigated by path filters (`paths`) and building only the changed packages.
 
-## Rozważane alternatywy
-Polirepo (narzut koordynacji wersji); pełne mikroserwisy per domena (narzut sieci, transakcji rozproszonych i operacji bez korzyści na tym etapie).
+## Alternatives considered
+Polyrepo (version coordination overhead); full microservices per domain (network, distributed transaction and operations overhead without benefit at this stage).

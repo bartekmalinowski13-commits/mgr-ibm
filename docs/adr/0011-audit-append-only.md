@@ -1,15 +1,15 @@
-# ADR-0011: Audyt: log append-only z łańcuchem skrótów i Object Lock
+# ADR-0011: Audit: append-only log with a hash chain and Object Lock
 
-Status: Zaakceptowany · 2026-11-09
+Status: Accepted · 2026-11-09
 
-## Kontekst
-Klienci pracują w reżimie ISO 13485 – potrzebna identyfikowalność, kto i dlaczego zmienił BOM.
+## Context
+Customers work under the ISO 13485 regime – traceability of who changed the BOM and why is needed.
 
-## Decyzja
-Tabela `audit_events` tylko do dopisywania (uprawnienia + trigger blokujący UPDATE/DELETE), pole `prev_hash`/`hash`; codzienny eksport do S3 z Object Lock (compliance). Pochodzenie każdej pozycji BOM (reguła + wersja / model + prompt + cytaty).
+## Decision
+An append-only `audit_events` table (permissions + a trigger blocking UPDATE/DELETE), `prev_hash`/`hash` fields; daily export to S3 with Object Lock (compliance). Provenance of every BOM item (rule + version / model + prompt + citations).
 
-## Konsekwencje
-Dowodliwa integralność logu; dane do kontroli klienta. Koszt: przechowywanie.
+## Consequences
+Provable log integrity; data for customer inspections. Cost: storage.
 
-## Rozważane alternatywy
-Tylko CloudTrail (nie widzi operacji domenowych).
+## Alternatives considered
+CloudTrail only (does not see domain operations).

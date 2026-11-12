@@ -1,0 +1,9 @@
+{
+  "app": "pnpm exec tsx bin/app.ts",
+  "context": {
+    "bomagent:env": "dev",
+    "@aws-cdk/aws-iam:minimizePolicies": true,
+    "@aws-cdk/core:target-partitions": ["aws"],
+    "@aws-cdk/core:defaultCrossStackReferences": "strong"
+  }
+}

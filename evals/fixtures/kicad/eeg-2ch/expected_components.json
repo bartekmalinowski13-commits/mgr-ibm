@@ -1,0 +1,135 @@
+[
+  {
+    "refdes": "C1",
+    "value": "100n",
+    "footprint": "Capacitor_SMD:C_0603_1608Metric",
+    "mpn_in_schematic": "",
+    "dnp": false
+  },
+  {
+    "refdes": "C2",
+    "value": "10u",
+    "footprint": "Capacitor_SMD:C_0603_1608Metric",
+    "mpn_in_schematic": "",
+    "dnp": false
+  },
+  {
+    "refdes": "C101",
+    "value": "47n",
+    "footprint": "Capacitor_SMD:C_0603_1608Metric",
+    "mpn_in_schematic": "",
+    "dnp": false
+  },
+  {
+    "refdes": "C102",
+    "value": "100n",
+    "footprint": "Capacitor_SMD:C_0603_1608Metric",
+    "mpn_in_schematic": "GRM188R71H104KA93D",
+    "dnp": false
+  },
+  {
+    "refdes": "C201",
+    "value": "47n",
+    "footprint": "Capacitor_SMD:C_0603_1608Metric",
+    "mpn_in_schematic": "",
+    "dnp": false
+  },
+  {
+    "refdes": "C202",
+    "value": "100n",
+    "footprint": "Capacitor_SMD:C_0603_1608Metric",
+    "mpn_in_schematic": "GRM188R71H104KA93D",
+    "dnp": false
+  },
+  {
+    "refdes": "J1",
+    "value": "Electrodes",
+    "footprint": "Connector_Molex:Molex_KK-254_AE-6410-05A_1x05_P2.54mm_Vertical",
+    "mpn_in_schematic": "22-23-2051",
+    "dnp": false
+  },
+  {
+    "refdes": "R101",
+    "value": "49k9",
+    "footprint": "Resistor_SMD:R_0603_1608Metric",
+    "mpn_in_schematic": "",
+    "dnp": false
+  },
+  {
+    "refdes": "R102",
+    "value": "1M",
+    "footprint": "Resistor_SMD:R_0603_1608Metric",
+    "mpn_in_schematic": "RC0603FR-071ML",
+    "dnp": false
+  },
+  {
+    "refdes": "R103",
+    "value": "1M",
+    "footprint": "Resistor_SMD:R_0603_1608Metric",
+    "mpn_in_schematic": "RC0603FR-071ML",
+    "dnp": false
+  },
+  {
+    "refdes": "R201",
+    "value": "49k9",
+    "footprint": "Resistor_SMD:R_0603_1608Metric",
+    "mpn_in_schematic": "",
+    "dnp": false
+  },
+  {
+    "refdes": "R202",
+    "value": "1M",
+    "footprint": "Resistor_SMD:R_0603_1608Metric",
+    "mpn_in_schematic": "RC0603FR-071ML",
+    "dnp": false
+  },
+  {
+    "refdes": "R203",
+    "value": "1M",
+    "footprint": "Resistor_SMD:R_0603_1608Metric",
+    "mpn_in_schematic": "RC0603FR-071ML",
+    "dnp": false
+  },
+  {
+    "refdes": "U1",
+    "value": "ADS1292R",
+    "footprint": "Package_QFP:TQFP-32_5x5mm_P0.5mm",
+    "mpn_in_schematic": "ADS1292RIPBSR",
+    "dnp": false
+  },
+  {
+    "refdes": "U101",
+    "value": "INA333",
+    "footprint": "Package_SO:MSOP-8_3x3mm_P0.65mm",
+    "mpn_in_schematic": "INA333AIDGKR",
+    "dnp": false
+  },
+  {
+    "refdes": "U102",
+    "value": "OPA2333",
+    "footprint": "Package_SO:SOIC-8_3.9x4.9mm_P1.27mm",
+    "mpn_in_schematic": "OPA2333AIDR",
+    "dnp": false
+  },
+  {
+    "refdes": "U201",
+    "value": "INA333",
+    "footprint": "Package_SO:MSOP-8_3x3mm_P0.65mm",
+    "mpn_in_schematic": "INA333AIDGKR",
+    "dnp": false
+  },
+  {
+    "refdes": "U202",
+    "value": "OPA2333",
+    "footprint": "Package_SO:SOIC-8_3.9x4.9mm_P1.27mm",
+    "mpn_in_schematic": "OPA2333AIDR",
+    "dnp": false
+  },
+  {
+    "refdes": "Y1",
+    "value": "2.048MHz",
+    "footprint": "Crystal:Crystal_SMD_3225-4Pin_3.2x2.5mm",
+    "mpn_in_schematic": "",
+    "dnp": true
+  }
+]

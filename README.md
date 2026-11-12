@@ -1,36 +1,36 @@
 # mgr-ibm · BOM Agent
 
-**Praca magisterska (PG WETI, Inżynieria Biomedyczna):** Porównanie systemu wieloagentowego opartego na dużych modelach językowych z systemem wieloagentowym z elementami deterministycznymi w zastosowaniu do generowania BOM urządzeń biomedycznych.
+**Master's thesis (Gdańsk University of Technology, Faculty of Electronics, Telecommunications and Informatics (PG WETI), Biomedical Engineering):** Comparison of a multi-agent system based on large language models with a multi-agent system with deterministic elements, applied to generating the BOM of biomedical devices.
 
-Bartosz Malinowski · opiekun: dr inż. Magdalena Mazur-Milecka
+Bartosz Malinowski · supervisor: dr inż. Magdalena Mazur-Milecka
 
-Repozytorium jest jednocześnie **stanowiskiem badawczym** i **produkcyjną platformą SaaS** (multi-tenant, UE, SSO), która z plików CAD/EDA, PDF i DXF/DWG generuje i waliduje BOM przy pomocy agentów LLM.
+The repository is both a **research testbed** and a **production SaaS platform** (multi-tenant, EU, SSO) that generates and validates a BOM from CAD/EDA, PDF and DXF/DWG files with the help of LLM agents.
 
 ## Start
-| Chcę… | Plik |
+| I want to… | File |
 |---|---|
-| zbudować aplikację przez Claude Code | [`docs/prompts/CLAUDE_CODE_MASTER_PROMPT.md`](docs/prompts/CLAUDE_CODE_MASTER_PROMPT.md) |
-| zrozumieć architekturę produkcyjną | [`docs/platform/ARCHITECTURE.md`](docs/platform/ARCHITECTURE.md), [`docs/adr/`](docs/adr/README.md) |
-| zobaczyć, co już działa | [`docs/STATUS.md`](docs/STATUS.md), [`docs/ROADMAP.md`](docs/ROADMAP.md) |
-| pisać pracę | [`thesis/Praca_magisterska_Bartosz_Malinowski_szablon.docx`](thesis/), [`docs/thesis/STRUKTURA_PRACY.md`](docs/thesis/STRUKTURA_PRACY.md) |
-| zobaczyć warianty A i B | [`docs/thesis/ARCHITEKTURA_WARIANTOW.md`](docs/thesis/ARCHITEKTURA_WARIANTOW.md) |
-| projektować UI | [`docs/design/UX_GUIDELINES.md`](docs/design/UX_GUIDELINES.md) |
+| build the application with Claude Code | [`docs/prompts/CLAUDE_CODE_MASTER_PROMPT.md`](docs/prompts/CLAUDE_CODE_MASTER_PROMPT.md) |
+| understand the production architecture | [`docs/platform/ARCHITECTURE.md`](docs/platform/ARCHITECTURE.md), [`docs/adr/`](docs/adr/README.md) |
+| see what already works | [`docs/STATUS.md`](docs/STATUS.md), [`docs/ROADMAP.md`](docs/ROADMAP.md) |
+| write the thesis | [`thesis/Praca_magisterska_Bartosz_Malinowski_szablon.docx`](thesis/), [`docs/thesis/STRUKTURA_PRACY.md`](docs/thesis/STRUKTURA_PRACY.md) |
+| see variants A and B | [`docs/thesis/ARCHITEKTURA_WARIANTOW.md`](docs/thesis/ARCHITEKTURA_WARIANTOW.md) |
+| design the UI | [`docs/design/UX_GUIDELINES.md`](docs/design/UX_GUIDELINES.md) |
 
-## Mapa repozytorium
+## Repository map
 ```
-CLAUDE.md                 zasady dla Claude Code (czytane w każdej sesji)
-docs/platform/            architektura, bezpieczeństwo, testy, formaty
-docs/adr/                 decyzje architektoniczne (15)
-docs/design/              wytyczne UX, inspiracje (Mobbin), prototyp v0
-docs/prompts/             prompt startowy dla Claude Code
-docs/thesis/              materiały do pracy magisterskiej
-docs/img/                 diagramy
-thesis/                   szablon pracy (DOCX)
-tools/                    generatory diagramu i szablonu DOCX
+CLAUDE.md                 rules for Claude Code (read in every session)
+docs/platform/            architecture, security, tests, formats
+docs/adr/                 architecture decisions (15)
+docs/design/              UX guidelines, inspirations (Mobbin), prototype v0
+docs/prompts/             starting prompt for Claude Code
+docs/thesis/              materials for the master's thesis
+docs/img/                 diagrams
+thesis/                   thesis template (DOCX)
+tools/                    generators of the diagram and the DOCX template
 ```
-Kod aplikacji (`apps/`, `services/`, `packages/`, `infra/`, `deploy/`, `evals/`) powstaje zgodnie z [`docs/ROADMAP.md`](docs/ROADMAP.md).
+The application code (`apps/`, `services/`, `packages/`, `infra/`, `deploy/`, `evals/`) is created according to [`docs/ROADMAP.md`](docs/ROADMAP.md).
 
-## Regeneracja materiałów do pracy
+## Regenerating the thesis materials
 ```bash
 python3 tools/arch.py docs/img/architektura.svg && rsvg-convert -z 2 docs/img/architektura.svg -o docs/img/architektura.png
 node tools/build_docx.js . thesis/Praca_magisterska_Bartosz_Malinowski_szablon.docx

@@ -1,0 +1,13 @@
+# Pipeline check of the thesis experiment on the deterministic fake provider.
+# NOT a scientific result: the fake LLM answers by heuristics. Real runs use models
+# enabled and verified in packages/py/llm/src/bomagent_llm/catalog/models.yaml.
+name: pilot-fake
+designs:
+  - evals/fixtures/kicad/ecg-frontend
+  - evals/fixtures/kicad/pulse-ox
+  - evals/fixtures/kicad/eeg-2ch
+variants: [A, B]
+models: [fake-closed, fake-open-weight]
+repeats: 3
+kb_dir: evals/fixtures/datasheets
+seed: 2026

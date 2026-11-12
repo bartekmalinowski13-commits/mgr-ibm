@@ -1,0 +1,182 @@
+# Model catalogue (ADR-0006). Every call goes through the LLM gateway (LiteLLM); the
+# gateway model name below is what the platform sends to it.
+#
+# !!! Model IDs and their availability per AWS/Azure region change frequently. Every
+# !!! non-local entry is `enabled: false` and `verified: false` until a human checks the
+# !!! exact ID in the provider console for the target EU region (eu-central-1 for
+# !!! Bedrock, Sweden Central / EU Data Zone for Azure) and flips both flags.
+#
+# license_class: closed | open-weight      residency: eu-region | eu-geo | local
+# Costs are EUR per 1M tokens and are placeholders until checked against the price list.
+models:
+  # ---------------------------------------------------------------- local / CI only
+  - id: fake-closed
+    gateway_model: fake-closed
+    provider: fake
+    license_class: closed
+    residency: local
+    capabilities: [chat, structured_output, tools]
+    tier: strong
+    cost_in_eur: 0.0
+    cost_out_eur: 0.0
+    enabled: true
+    verified: true
+  - id: fake-open-weight
+    gateway_model: fake-open-weight
+    provider: fake
+    license_class: open-weight
+    residency: local
+    capabilities: [chat, structured_output, tools]
+    tier: strong
+    cost_in_eur: 0.0
+    cost_out_eur: 0.0
+    enabled: true
+    verified: true
+  - id: fake-embedding
+    gateway_model: fake-embedding
+    provider: fake
+    license_class: open-weight
+    residency: local
+    capabilities: [embedding]
+    dimensions: 1024
+    cost_in_eur: 0.0
+    cost_out_eur: 0.0
+    enabled: true
+    verified: true
+  - id: ollama-llama
+    gateway_model: ollama-llama
+    provider: ollama
+    license_class: open-weight
+    residency: local
+    capabilities: [chat]
+    tier: fast
+    cost_in_eur: 0.0
+    cost_out_eur: 0.0
+    enabled: false
+    verified: false
+    notes: developer machines only (compose profile "ollama")
+
+  # ---------------------------------------------------------------- closed, Anthropic via Amazon Bedrock (EU)
+  # Use an EU inference profile (prefix "eu.") or in-region model. Check the profile's
+  # destination regions: some EU profiles may include non-EU-member regions (e.g.
+  # Zurich). For strict "EU only" use an application inference profile limited to EU
+  # member-state regions (ARCHITECTURE.md §8).
+  - id: claude-opus-eu
+    gateway_model: bedrock/eu.anthropic.claude-opus-5-5
+    provider: bedrock
+    license_class: closed
+    residency: eu-geo
+    region: eu-central-1
+    capabilities: [chat, structured_output, tools, prompt_caching]
+    tier: strong
+    cost_in_eur: 3.7
+    cost_out_eur: 18.5
+    enabled: false
+    verified: false
+  - id: claude-sonnet-eu
+    gateway_model: bedrock/eu.anthropic.claude-sonnet-5-5
+    provider: bedrock
+    license_class: closed
+    residency: eu-geo
+    region: eu-central-1
+    capabilities: [chat, structured_output, tools, prompt_caching]
+    tier: balanced
+    cost_in_eur: 1.85
+    cost_out_eur: 9.25
+    enabled: false
+    verified: false
+  - id: claude-haiku-eu
+    gateway_model: bedrock/eu.anthropic.claude-haiku-5-5
+    provider: bedrock
+    license_class: closed
+    residency: eu-geo
+    region: eu-central-1
+    capabilities: [chat, structured_output, tools]
+    tier: fast
+    cost_in_eur: 0.1
+    cost_out_eur: 0.5
+    enabled: false
+    verified: false
+
+  # ---------------------------------------------------------------- closed, OpenAI via Azure OpenAI (EU Data Zone Standard)
+  # Deployment name is chosen when the Azure deployment is created; never use "Global"
+  # deployment types.
+  - id: openai-eu
+    gateway_model: azure/bomagent-gpt-eu-datazone
+    provider: azure_openai
+    license_class: closed
+    residency: eu-geo
+    region: swedencentral
+    capabilities: [chat, structured_output, tools]
+    tier: strong
+    cost_in_eur: 0.0
+    cost_out_eur: 0.0
+    enabled: false
+    verified: false
+    notes: set the deployment (model + version) in Azure, Data Zone Standard EU
+
+  # ---------------------------------------------------------------- open-weight
+  - id: mistral-large-eu
+    gateway_model: mistral/mistral-large-latest
+    provider: mistral
+    license_class: open-weight
+    residency: eu-region
+    capabilities: [chat, structured_output, tools]
+    tier: strong
+    cost_in_eur: 0.0
+    cost_out_eur: 0.0
+    enabled: false
+    verified: false
+    notes: Mistral AI (EU); confirm the model's weights licence if "open-weight" matters for the experiment
+  - id: open-weight-bedrock-eu
+    gateway_model: bedrock/eu.meta.llama-open-weight-model-id
+    provider: bedrock
+    license_class: open-weight
+    residency: eu-geo
+    region: eu-central-1
+    capabilities: [chat, structured_output]
+    tier: balanced
+    cost_in_eur: 0.0
+    cost_out_eur: 0.0
+    enabled: false
+    verified: false
+    notes: choose an open-weight model offered in eu-central-1 and put its exact ID here
+  - id: vllm-self-hosted
+    gateway_model: hosted_vllm/open-weight-model
+    provider: vllm
+    license_class: open-weight
+    residency: eu-region
+    region: eu-central-1
+    capabilities: [chat, structured_output]
+    tier: balanced
+    cost_in_eur: 0.0
+    cost_out_eur: 0.0
+    enabled: false
+    verified: false
+    notes: model-serving on EC2 GPU, behind a feature flag (ADR-0003)
+
+  # ---------------------------------------------------------------- embeddings
+  - id: titan-embed-v2-eu
+    gateway_model: bedrock/amazon.titan-embed-text-v2:0
+    provider: bedrock
+    license_class: closed
+    residency: eu-region
+    region: eu-central-1
+    capabilities: [embedding]
+    dimensions: 1024
+    cost_in_eur: 0.02
+    cost_out_eur: 0.0
+    enabled: false
+    verified: false
+  - id: cohere-embed-multilingual-eu
+    gateway_model: bedrock/cohere.embed-multilingual-v3
+    provider: bedrock
+    license_class: closed
+    residency: eu-region
+    region: eu-central-1
+    capabilities: [embedding]
+    dimensions: 1024
+    cost_in_eur: 0.1
+    cost_out_eur: 0.0
+    enabled: false
+    verified: false

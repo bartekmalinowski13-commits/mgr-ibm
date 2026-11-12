@@ -1,0 +1,44 @@
+# One environment of the main pipeline: cdk deploy, DB bootstrap + migrations, web app, smoke.
+# Called by main.yml once per environment, strictly in order (dev -> staging -> prod).
+name: deploy-env
+
+on:
+  workflow_call:
+    inputs:
+      environment: { type: string, required: true }
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: deploy ${{ inputs.environment }}
+    runs-on: ubuntu-24.04
+    environment: ${{ inputs.environment }} # prod is protected (required reviewers, main only)
+    permissions: { id-token: write, contents: read }
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with: { node-version: "22", cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - name: AWS credentials (GitHub OIDC)
+        env: { ROLE_ARN: "${{ vars.AWS_DEPLOY_ROLE_ARN }}" }
+        run: bash .github/scripts/aws-oidc.sh "$ROLE_ARN" 10800
+      - name: deploy, bootstrap DB, migrate, publish web app, smoke
+        env:
+          ENV: ${{ inputs.environment }}
+          AWS_REGION: eu-central-1
+          AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
+          IMAGE_REGISTRY: ${{ vars.IMAGE_REGISTRY }}
+          IMAGE_TAG: ${{ github.sha }}
+          DOMAIN_NAME: ${{ vars.DOMAIN_NAME }}
+          CLOUDFRONT_CERTIFICATE_ARN: ${{ vars.CLOUDFRONT_CERTIFICATE_ARN }}
+          ALB_CERTIFICATE_ARN: ${{ vars.ALB_CERTIFICATE_ARN }}
+          ALARM_EMAIL: ${{ vars.ALARM_EMAIL }}
+          GITHUB_OIDC_PROVIDER_ARN: ${{ vars.GITHUB_OIDC_PROVIDER_ARN }}
+          ORGANIZATION_SECURITY_SERVICES: ${{ vars.ORGANIZATION_SECURITY_SERVICES }}
+          SINGLE_ACCOUNT: ${{ vars.SINGLE_ACCOUNT }}
+          MONTHLY_BUDGET_USD: ${{ vars.MONTHLY_BUDGET_USD }}
+        run: bash tools/deploy.sh

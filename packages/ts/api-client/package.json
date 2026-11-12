@@ -1,0 +1,24 @@
+{
+  "name": "@bomagent/api-client",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Typed client for the BOM Agent /v1 API, generated from services/api/openapi.json",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "generate": "openapi-typescript ../../../services/api/openapi.json -o src/schema.gen.ts",
+    "check-generated": "openapi-typescript ../../../services/api/openapi.json -o /tmp/bomagent-schema-check.ts && diff -q /tmp/bomagent-schema-check.ts src/schema.gen.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "lint": "biome check src"
+  },
+  "dependencies": {
+    "openapi-fetch": "0.17.0"
+  },
+  "devDependencies": {
+    "openapi-typescript": "7.13.0",
+    "typescript": "~5.9.3",
+    "vitest": "5.1.0"
+  }
+}

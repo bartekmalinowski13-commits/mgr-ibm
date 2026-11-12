@@ -1,15 +1,15 @@
-# ADR-0004: Multi-tenancy: model pooled z Postgres RLS, silo dla planu Enterprise
+# ADR-0004: Multi-tenancy: pooled model with Postgres RLS, silo for the Enterprise plan
 
-Status: Zaakceptowany · 2026-11-09
+Status: Accepted · 2026-11-09
 
-## Kontekst
-Wiele organizacji, wymagana silna izolacja, prosty onboarding nowych klientów.
+## Context
+Many organizations, strong isolation required, simple onboarding of new customers.
 
-## Decyzja
-Wspólna baza z kolumną `tenant_id` i Row-Level Security na każdej tabeli tenanta; `SET LOCAL app.tenant_id` w każdej transakcji; rola aplikacji bez BYPASSRLS. S3: prefiks per tenant + ABAC. Plan Enterprise: dedykowany klaster Aurora i klucz KMS, routing połączeń po `tenant_id`. Obowiązkowy zestaw testów izolacji w CI.
+## Decision
+A shared database with a `tenant_id` column and Row-Level Security on every tenant table; `SET LOCAL app.tenant_id` in every transaction; application role without BYPASSRLS. S3: per-tenant prefix + ABAC. Enterprise plan: a dedicated Aurora cluster and KMS key, connection routing by `tenant_id`. A mandatory isolation test suite in CI.
 
-## Konsekwencje
-Tani onboarding (rekord w bazie, nie nowa infrastruktura), obrona w głąb. Ryzyko: błąd w polityce RLS – łagodzone testami izolacji i przeglądem każdej migracji.
+## Consequences
+Cheap onboarding (a database record, not new infrastructure), defence in depth. Risk: an error in an RLS policy – mitigated by isolation tests and review of every migration.
 
-## Rozważane alternatywy
-Schemat per tenant (problemy z migracjami przy setkach tenantów); baza per tenant dla wszystkich (koszt).
+## Alternatives considered
+Schema per tenant (migration problems with hundreds of tenants); database per tenant for everyone (cost).

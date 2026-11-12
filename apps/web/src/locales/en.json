@@ -1,0 +1,420 @@
+{
+  "app": {
+    "name": "BOM Agent"
+  },
+  "common": {
+    "cancel": "Cancel",
+    "close": "Close",
+    "save": "Save",
+    "loading": "Loading…",
+    "retry": "Try again",
+    "copy": "Copy",
+    "copied": "Copied",
+    "remove": "Remove",
+    "never": "never",
+    "unknownError": "Something went wrong. Try again in a moment."
+  },
+  "login": {
+    "title": "Sign in to BOM Agent",
+    "lead": "Bills of materials from design files, with the origin of every decision.",
+    "email": "Email",
+    "name": "Name",
+    "submit": "Sign in",
+    "devNote": "Local environment: sign-in through the built-in test identity provider. In the cloud you sign in with Amazon Cognito or your organisation's SSO.",
+    "cloudNote": "With single sign-on, enter your work e-mail: you go straight to your organisation's sign-in. You sign in on the BOM Agent sign-in page (Amazon Cognito in an EU region) otherwise.",
+    "callbackError": "Sign-in could not be completed (the link expired or was already used).",
+    "retry": "Sign in again",
+    "continue": "Continue",
+    "supabase": {
+      "title": "Sign in with your account",
+      "create": "Create account",
+      "signIn": "Sign in",
+      "password": "Password",
+      "fullName": "Full name",
+      "forgot": "Forgot password",
+      "haveAccount": "I already have an account",
+      "newHere": "New here? Create an account",
+      "checkInbox": "Check your inbox: we sent a confirmation link to {{email}}. Confirm your e-mail, then sign in.",
+      "recoverSent": "If an account exists for this e-mail, a password reset link is on its way.",
+      "recoverNeedsEmail": "Enter your e-mail above first.",
+      "note": "Hosted on Supabase. Single sign-on (SSO) is available only in the AWS deployment.",
+      "errors": {
+        "invalidCredentials": "Wrong e-mail or password.",
+        "emailNotConfirmed": "Confirm your e-mail first: open the link we sent you.",
+        "userExists": "An account with this e-mail already exists. Sign in instead.",
+        "weakPassword": "The password is too weak. Use at least 8 characters.",
+        "rateLimited": "Too many attempts. Try again in a few minutes.",
+        "signupDisabled": "Creating accounts is turned off for this deployment.",
+        "network": "Cannot reach the sign-in service. Check your connection.",
+        "unknown": "Something went wrong. Try again in a moment."
+      }
+    }
+  },
+  "onboarding": {
+    "title": "Create an organisation",
+    "lead": "An organisation is your team's shared space: projects, runs, knowledge base and audit log. Its data is kept apart from every other organisation.",
+    "name": "Organisation name",
+    "slug": "Address",
+    "slugHint": "Lowercase letters, digits and hyphens, e.g. medtech-krakow.",
+    "create": "Create organisation",
+    "inviteTitle": "Have an invitation?",
+    "inviteLead": "Paste the code from the invitation an administrator sent you.",
+    "token": "Invitation code",
+    "join": "Join organisation",
+    "joined": "Joined {{name}}"
+  },
+  "nav": {
+    "label": "Main navigation",
+    "start": "Home",
+    "newRun": "New run",
+    "projects": "Projects",
+    "runs": "Runs",
+    "audit": "Audit log",
+    "settings": "Settings",
+    "recent": "Recent projects",
+    "switchOrg": "Switch organisation",
+    "newOrg": "Create a new organisation",
+    "signOut": "Sign out",
+    "language": "Polski",
+    "kb": "Knowledge base"
+  },
+  "plan": {
+    "pill": "{{plan}} plan",
+    "names": {
+      "pilot": "Pilot",
+      "team": "Team",
+      "business": "Business",
+      "enterprise": "Enterprise"
+    },
+    "budget": "LLM this month: {{used}} of {{limit}}"
+  },
+  "start": {
+    "greeting": "Hi, {{name}}",
+    "newRunTitle": "New BOM run",
+    "newRunLead": "Start from a blank project or a device template – the template fills in the requirements (applied part, power).",
+    "blank": "Blank project",
+    "blankHint": "Your own KiCad files",
+    "stats": {
+      "activeRuns": "Active runs",
+      "activeRunsEmpty": "Nothing is running. Start a run for a project.",
+      "projects": "Projects",
+      "projectsEmpty": "No projects yet. Create the first one and upload its files.",
+      "completed": "Finished BOMs",
+      "completedEmpty": "BOMs ready for review will show up here."
+    },
+    "templates": {
+      "ecg": {
+        "title": "Wearable ECG",
+        "hint": "BF part, battery"
+      },
+      "pulseox": {
+        "title": "Pulse oximeter",
+        "hint": "BF part, USB"
+      },
+      "eeg": {
+        "title": "EEG amplifier",
+        "hint": "CF part, battery"
+      },
+      "infusion": {
+        "title": "Infusion pump",
+        "hint": "CF part, mains"
+      }
+    }
+  },
+  "projects": {
+    "title": "Projects",
+    "new": "New project",
+    "name": "Project name",
+    "description": "Description",
+    "create": "Create project",
+    "created": "Created project",
+    "empty": "A project holds the files of one device. Create your first project, then upload its KiCad files.",
+    "files": "Design files",
+    "drop": "Drag the project files here (KiCad .kicad_sch/.kicad_pro/.kicad_pcb, IPC-2581 .xml, EDIF .edf, ODB++ .tgz/.zip, DXF parts list, PDF/CSV BOM) or",
+    "browse": "choose from disk",
+    "dropHint": "Up to 64 MB per file. Files are checked in an isolated environment before use.",
+    "uploaded": "Uploaded {{count}} files",
+    "noFiles": "No files yet. Upload a KiCad schematic to start a run.",
+    "runs": "Runs of this project",
+    "noRuns": "This project has no runs yet.",
+    "startRun": "Start run",
+    "components": "{{count}} components",
+    "fileStatus": {
+      "uploaded": "Checking",
+      "parsed": "Ready",
+      "failed": "Rejected"
+    }
+  },
+  "newRun": {
+    "title": "New run",
+    "lead": "Pick a project, a system variant and a model. You will see the result live.",
+    "project": "Project",
+    "pickProject": "Choose a project",
+    "noProjects": "Create a project and upload its files first.",
+    "variant": "Variant",
+    "variantA": "A – LLM only",
+    "variantAHint": "LLM agents do every step.",
+    "variantB": "B – hybrid",
+    "variantBHint": "Rules decide what they can; the LLM handles the rest.",
+    "variantBoth": "Both and compare",
+    "variantBothHint": "Two runs on the same files.",
+    "model": "Model",
+    "closed": "closed",
+    "openWeight": "open weights",
+    "device": "Device name",
+    "appliedPart": "Applied part",
+    "appliedParts": {
+      "none": "None",
+      "B": "Type B",
+      "BF": "Type BF",
+      "CF": "Type CF"
+    },
+    "power": "Power source",
+    "powers": {
+      "battery": "Battery",
+      "usb": "USB",
+      "mains": "Mains",
+      "external_psu": "External PSU"
+    },
+    "defib": "Defibrillation-proof",
+    "submit": "Start run",
+    "started": "Started run"
+  },
+  "run": {
+    "title": "Run",
+    "variant": "Variant {{variant}}",
+    "status": {
+      "queued": "Queued",
+      "running": "Running",
+      "completed": "Done",
+      "failed": "Failed",
+      "budget_exceeded": "Budget exceeded"
+    },
+    "steps": "Agent steps",
+    "llmCalls": "LLM calls",
+    "tokens": "Tokens",
+    "cost": "Cost",
+    "time": "Time",
+    "waiting": "The run is waiting for a free agent.",
+    "failedHelp": "The run failed: {{error}}. Check the project files and start it again.",
+    "export": "Export CSV",
+    "exported": "Exported CSV",
+    "version": "Version {{version}}",
+    "findings": "{{count}} validation findings",
+    "lastStep": "Last finished step: {{step}}",
+    "starting": "Starting the agents…",
+    "timeline": "Run steps",
+    "stepCalls_one": "{{count}} LLM call",
+    "stepCalls_other": "{{count}} LLM calls",
+    "stepRule": "no LLM"
+  },
+  "bom": {
+    "title": "Bill of materials",
+    "onlyFindings": "Only with findings",
+    "origin": "Who decided",
+    "columns": {
+      "line": "Line",
+      "refdes": "Designators",
+      "qty": "Qty",
+      "value": "Value",
+      "footprint": "Footprint",
+      "manufacturer": "Manufacturer",
+      "mpn": "MPN",
+      "notes": "Findings"
+    },
+    "provenance": {
+      "agent": "LLM agent",
+      "rule": "Rule",
+      "parser": "Design file",
+      "user": "Person"
+    },
+    "dnp": "Do not place",
+    "empty": "This BOM has no lines.",
+    "noMatches": "No line has findings."
+  },
+  "panel": {
+    "title": "Line {{line}}",
+    "fields": "Where each field came from",
+    "rationale": "Rationale",
+    "citations": "Knowledge base sources",
+    "page": "p. {{page}}",
+    "findings": "Validation findings",
+    "noFindings": "The rules reported nothing for this line.",
+    "edit": "Correct this line",
+    "editLead": "A correction creates a new BOM version and becomes knowledge of your organisation (never of others).",
+    "reason": "Reason for the change",
+    "reasonHint": "E.g. “Stock alternative, approved by quality”.",
+    "saveFix": "Save correction",
+    "saved": "Saved the correction as version {{version}}",
+    "rule": "Rule {{rule}} ({{pack}} {{version}})",
+    "agent": "{{agent}} · model {{model}}",
+    "parser": "Read from the file ({{parser}})",
+    "user": "Changed by {{user}}"
+  },
+  "runs": {
+    "title": "Runs",
+    "empty": "No runs yet. Start the first one from Home."
+  },
+  "audit": {
+    "title": "Audit log",
+    "objectType": "Object",
+    "actor": "Who",
+    "all": "All",
+    "when": "When",
+    "action": "Event",
+    "verify": "Check integrity",
+    "verifyOk": "The audit chain is intact ({{count}} events).",
+    "verifyBroken": "The audit chain is broken from event #{{seq}}. Report this to your security administrator.",
+    "more": "Show older",
+    "empty": "No events for these filters."
+  },
+  "settings": {
+    "title": "Organisation settings",
+    "tabs": {
+      "members": "Members",
+      "keys": "API keys",
+      "usage": "Usage and limits",
+      "sso": "SSO"
+    },
+    "members": "Members",
+    "role": "Role",
+    "roles": {
+      "owner": "Owner",
+      "admin": "Admin",
+      "engineer": "Engineer",
+      "reviewer": "Reviewer",
+      "viewer": "Viewer"
+    },
+    "invite": "Invite someone",
+    "inviteEmail": "Email",
+    "sendInvite": "Create invitation",
+    "invited": "Created the invitation. Give this code to the person you invited – it is shown only once:",
+    "pending": "Pending invitations",
+    "noPending": "No pending invitations.",
+    "revoke": "Revoke",
+    "expires": "valid until {{date}}",
+    "removeMember": "Remove from organisation",
+    "removed": "Removed the member",
+    "rolesChanged": "Changed the role",
+    "keys": "API keys",
+    "keysLead": "Keys for integrations (CI, PLM). A key works only in this organisation and cannot manage members.",
+    "keyName": "Key name",
+    "createKey": "Create key",
+    "keyCreated": "Created the key. Copy it now – it will not be shown again:",
+    "rotate": "Rotate",
+    "rotated": "Rotated the key",
+    "lastUsed": "last used: {{date}}",
+    "noKeys": "No API keys.",
+    "usage": "Usage this month",
+    "usageItems": {
+      "runs": "Runs",
+      "llm_calls": "LLM calls",
+      "cost_eur": "LLM cost",
+      "files_uploaded": "Uploaded files"
+    },
+    "of": "of {{limit}}",
+    "sso": "Single sign-on (SSO)",
+    "ssoLead": "Single sign-on through your organisation's identity provider (SAML 2.0 or OpenID Connect), federated in Amazon Cognito in the EU.",
+    "ssoUnavailable": "Single sign-on is available only in the AWS deployment. This deployment signs in with e-mail and password."
+  },
+  "errors": {
+    "notMember": "You do not have access to this organisation. Choose another one.",
+    "notFound": "This item was not found. It may have been deleted or belong to another organisation."
+  },
+  "compare": {
+    "title": "Variant comparison",
+    "open": "Compare variants A and B",
+    "needTwo": "Comparing needs two finished runs of this project. Start a run in “Both and compare” mode.",
+    "left": "First run",
+    "right": "Second run",
+    "metrics": "Run metrics",
+    "metric": "Metric",
+    "lines": "BOM lines",
+    "findings": "Validation findings",
+    "differences_one": "{{count}} difference between the variants",
+    "differences_other": "{{count}} differences between the variants",
+    "same": "Both variants decided the same for every designator.",
+    "missing": "Missing in this variant"
+  },
+  "reference": {
+    "title": "Compare with a reference BOM",
+    "lead": "Upload a verified BOM (CSV with a designator column, e.g. Reference). We compute line precision, recall and F1, MPN coverage and field accuracy. The file is not stored.",
+    "upload": "Upload reference BOM",
+    "metrics": {
+      "line_f1": "Line F1",
+      "line_precision": "Precision",
+      "line_recall": "Recall",
+      "designator_f1": "Designator F1",
+      "mpn_coverage": "MPN coverage"
+    },
+    "diffs_one": "{{count}} mismatch",
+    "diffs_other": "{{count}} mismatches",
+    "field": "Field",
+    "predicted": "In this BOM",
+    "expected": "In the reference"
+  },
+  "kb": {
+    "title": "Knowledge base",
+    "lead": "Datasheets, application notes and standards the agents take evidence from (citations on BOM lines). Your organisation's documents are visible only to your organisation; their content is never treated as instructions for the agents.",
+    "tabs": {
+      "tenant": "Organisation knowledge",
+      "global": "Global corpus"
+    },
+    "file": "File (PDF, Markdown, text)",
+    "kind": "Kind",
+    "kinds": {
+      "datasheet": "Datasheet",
+      "application_note": "Application note",
+      "standard": "Standard",
+      "component_library": "Component library",
+      "correction": "User correction",
+      "other": "Other"
+    },
+    "add": "Add to knowledge base",
+    "added": "Added {{name}} – indexing in progress",
+    "hint": "Up to 32 MB. Files are indexed in the background; scans without a text layer need OCR.",
+    "empty": "No organisation documents yet. Add datasheets of the parts you use – the variant B agent cites them when choosing MPNs.",
+    "globalLead": "Shared corpus of public documents maintained by the platform operator (read-only).",
+    "globalEmpty": "The global corpus is empty in this environment.",
+    "chunks_one": "{{count}} chunk",
+    "chunks_other": "{{count}} chunks",
+    "status": {
+      "pending": "Queued",
+      "indexing": "Indexing",
+      "indexed": "Indexed",
+      "failed": "Failed"
+    }
+  },
+  "sso": {
+    "domains": "Verified e-mail domains",
+    "domainsLead": "Prove that your organisation controls an e-mail domain: add a DNS TXT record, then verify. People from verified domains are sent to your identity provider when they sign in.",
+    "domain": "Domain",
+    "addDomain": "Add domain",
+    "verified": "Verified",
+    "notVerified": "Not verified yet",
+    "verify": "Verify",
+    "verifiedToast": "Domain verified",
+    "txtHint": "Add this DNS TXT record, then select Verify:",
+    "provider": "Identity provider",
+    "protocol": "Protocol",
+    "metadataUrl": "SAML metadata URL",
+    "issuer": "OIDC issuer URL",
+    "clientId": "Client ID",
+    "clientSecret": "Client secret",
+    "secretKept": "Leave empty to keep the stored secret",
+    "defaultRole": "Role of new members",
+    "enforce": "Require single sign-on",
+    "enforceHint": "Members with an e-mail in a verified domain can sign in only through the identity provider. Owners keep password access in case the provider is down.",
+    "status": "Status",
+    "statuses": {
+      "draft": "Draft",
+      "active": "Active",
+      "failed": "Failed"
+    },
+    "acsUrl": "Reply / ACS URL",
+    "entityId": "Entity ID (audience)",
+    "saved": "Identity provider saved",
+    "failed": "The identity provider could not be configured – see the status below",
+    "removeProvider": "Remove identity provider"
+  }
+}

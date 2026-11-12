@@ -1,0 +1,84 @@
+# main: build images (SBOM + provenance), deploy dev -> staging -> prod (ARCHITECTURE.md §13).
+# Each environment runs .github/workflows/deploy-env.yml.
+# Disabled until the AWS accounts exist: vars.AWS_DEPLOY_ENABLED == 'true'.
+# Single account (runbook single-account-dev.md): DEPLOY_ENVIRONMENTS=dev.
+# AWS access: GitHub OIDC -> IAM role per environment (Cicd stack); no long-lived keys and
+# no third-party credential actions (the AWS CLI on the runner assumes the role).
+name: main
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency: { group: deploy-main, cancel-in-progress: false }
+
+env:
+  AWS_REGION: eu-central-1
+
+jobs:
+  images:
+    name: images + SBOM + provenance
+    if: vars.AWS_DEPLOY_ENABLED == 'true'
+    runs-on: ubuntu-24.04-arm # images are linux/arm64 (Graviton): build natively, no QEMU
+    environment: images
+    permissions: { id-token: write, contents: read }
+    strategy:
+      matrix:
+        image:
+          - { name: bomagent-api, dockerfile: python-service, package: bomagent-api, module: bomagent_api }
+          - { name: bomagent-ingest-worker, dockerfile: python-service, package: bomagent-ingest-worker, module: bomagent_ingest }
+          - { name: bomagent-agent-worker, dockerfile: python-service, package: bomagent-agent-worker, module: bomagent_agent_worker }
+          - { name: bomagent-kb-indexer, dockerfile: python-service, package: bomagent-kb-indexer, module: bomagent_kb_indexer }
+          - { name: bomagent-migrate, dockerfile: python-service, package: bomagent-db-migrations, module: bomagent_migrations }
+          - { name: bomagent-llm-gateway, dockerfile: llm-gateway, package: "", module: "" }
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+      - name: render gateway config from the model catalogue (before any credentials)
+        if: matrix.image.dockerfile == 'llm-gateway'
+        run: uv run python -m bomagent_llm.gateway_config --region "$AWS_REGION" > deploy/gateway/config.yaml
+      - name: AWS credentials (GitHub OIDC)
+        env: { ROLE_ARN: "${{ vars.AWS_IMAGES_ROLE_ARN }}" }
+        run: bash .github/scripts/aws-oidc.sh "$ROLE_ARN"
+      - name: build and push (BuildKit SBOM + provenance attestations)
+        env:
+          REGISTRY: "${{ vars.IMAGE_REGISTRY }}"
+          NAME: "${{ matrix.image.name }}"
+          DOCKERFILE: "deploy/docker/${{ matrix.image.dockerfile }}.Dockerfile"
+          PACKAGE: "${{ matrix.image.package }}"
+          MODULE: "${{ matrix.image.module }}"
+        run: |
+          aws ecr get-login-password --region "$AWS_REGION" | docker login --username AWS --password-stdin "$REGISTRY"
+          docker buildx create --use
+          docker buildx build --platform linux/arm64 -f "$DOCKERFILE" \
+            --build-arg PACKAGE="$PACKAGE" --build-arg MODULE="$MODULE" \
+            --sbom=true --provenance=mode=max \
+            -t "$REGISTRY/$NAME:${GITHUB_SHA}" --push .
+
+  # strictly in order; a failure stops the later environments. prod is a protected
+  # environment (required reviewers, deployment branch rule: main only).
+  dev:
+    if: vars.AWS_DEPLOY_ENABLED == 'true'
+    needs: images
+    permissions: { id-token: write, contents: read }
+    uses: ./.github/workflows/deploy-env.yml
+    with: { environment: dev }
+  # vars.DEPLOY_ENVIRONMENTS (default "dev,staging,prod") lets a single-account setup stop
+  # after dev: a skipped environment also skips the ones after it
+  staging:
+    if: contains(format(',{0},', vars.DEPLOY_ENVIRONMENTS || 'dev,staging,prod'), ',staging,')
+    needs: dev
+    permissions: { id-token: write, contents: read }
+    uses: ./.github/workflows/deploy-env.yml
+    with: { environment: staging }
+  prod:
+    if: contains(format(',{0},', vars.DEPLOY_ENVIRONMENTS || 'dev,staging,prod'), ',prod,')
+    needs: staging
+    permissions: { id-token: write, contents: read }
+    uses: ./.github/workflows/deploy-env.yml
+    with: { environment: prod }

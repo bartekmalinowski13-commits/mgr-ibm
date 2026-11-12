@@ -1,15 +1,15 @@
-# ADR-0013: IaC: AWS CDK w TypeScript + cdk-nag
+# ADR-0013: IaC: AWS CDK in TypeScript + cdk-nag
 
-Status: Zaakceptowany · 2026-11-09
+Status: Accepted · 2026-11-09
 
-## Kontekst
-Infrastruktura jako kod, testowalna, z kontrolą zgodności.
+## Context
+Infrastructure as code, testable, with compliance checks.
 
-## Decyzja
-AWS CDK (TypeScript), stacki: network, data, identity, compute, observability, edge, security-baseline. `cdk-nag` w CI, testy snapshot i asercji (`aws-cdk-lib/assertions`).
+## Decision
+AWS CDK (TypeScript), stacks: network, data, identity, compute, observability, edge, security-baseline. `cdk-nag` in CI, snapshot and assertion tests (`aws-cdk-lib/assertions`).
 
-## Konsekwencje
-Pełna typizacja, wysoki poziom abstrakcji, testy jednostkowe infrastruktury.
+## Consequences
+Full typing, a high level of abstraction, unit tests of the infrastructure.
 
-## Rozważane alternatywy
-Terraform (dobry wybór, ale dodatkowy język HCL i stan do utrzymania).
+## Alternatives considered
+Terraform (a good choice, but an additional language, HCL, and state to maintain).

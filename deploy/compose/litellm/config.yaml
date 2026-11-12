@@ -1,0 +1,37 @@
+# LiteLLM gateway - LOCAL configuration (ADR-0006).
+# Locally every model routes to the deterministic fake provider (cassettes), so no real
+# keys are needed and nothing leaves the machine. The cloud catalogue (Bedrock EU,
+# Azure OpenAI EU Data Zone, Mistral) lives in packages/py/llm/catalog/models.yaml and is
+# rendered into the gateway config by the deployment pipeline.
+model_list:
+  - model_name: fake-closed
+    litellm_params:
+      model: openai/fake-closed
+      api_base: http://fake-llm:4010/v1
+      api_key: "not-a-secret"
+    model_info: { license_class: closed, residency: local }
+  - model_name: fake-open-weight
+    litellm_params:
+      model: openai/fake-open-weight
+      api_base: http://fake-llm:4010/v1
+      api_key: "not-a-secret"
+    model_info: { license_class: open-weight, residency: local }
+  - model_name: fake-embedding
+    litellm_params:
+      model: openai/fake-embedding
+      api_base: http://fake-llm:4010/v1
+      api_key: "not-a-secret"
+    model_info: { mode: embedding, residency: local }
+  # Optional local open-weight model (profile "ollama"): `just up-ollama`
+  - model_name: ollama-llama
+    litellm_params:
+      model: ollama_chat/llama3.2
+      api_base: http://ollama:11434
+
+litellm_settings:
+  drop_params: true
+  telemetry: false
+  callbacks: ["otel"]
+
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY

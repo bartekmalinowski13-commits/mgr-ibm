@@ -1,0 +1,38 @@
+[project]
+name = "bomagent-cli"
+version = "0.1.0"
+description = "bomagent command line: parse, eval, run, experiment"
+readme = "README.md"
+requires-python = ">=3.12"
+license = "LicenseRef-Proprietary"
+dependencies = [
+    "typer>=0.15",
+    "bomagent-bom-core",
+    "bomagent-cad-parsers",
+    "bomagent-rules",
+    "bomagent-eval",
+    "bomagent-llm",
+    "bomagent-agents",
+    "bomagent-kb",
+    "bomagent-platform-common",
+]
+
+[project.scripts]
+bomagent = "bomagent_cli.main:app"
+
+[build-system]
+requires = ["hatchling>=1.26"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/bomagent_cli"]
+
+[tool.uv.sources]
+bomagent-bom-core = { workspace = true }
+bomagent-cad-parsers = { workspace = true }
+bomagent-rules = { workspace = true }
+bomagent-eval = { workspace = true }
+bomagent-llm = { workspace = true }
+bomagent-agents = { workspace = true }
+bomagent-kb = { workspace = true }
+bomagent-platform-common = { workspace = true }

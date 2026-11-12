@@ -1,0 +1,190 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<IPC-2581 revision="C" xmlns="http://webstds.ipc.org/2581">
+  <Content roleRef="Owner"><FunctionMode mode="ASSEMBLY"/><StepRef name="ecg-frontend"/><BomRef name="ecg-frontend_BOM"/></Content>
+  <LogisticHeader>
+    <Role id="Owner" roleFunction="SENDER"/>
+    <Enterprise id="V0" name="Analog Devices" code="NONE"/>
+    <Enterprise id="V1" name="JST" code="NONE"/>
+    <Enterprise id="V2" name="Lite-On" code="NONE"/>
+    <Enterprise id="V3" name="Microchip" code="NONE"/>
+    <Enterprise id="V4" name="Molex" code="NONE"/>
+    <Enterprise id="V5" name="Murata" code="NONE"/>
+    <Enterprise id="V6" name="Nexperia" code="NONE"/>
+    <Enterprise id="V7" name="Texas Instruments" code="NONE"/>
+    <Enterprise id="V8" name="Yageo" code="NONE"/>
+  </LogisticHeader>
+  <Bom name="ecg-frontend_BOM">
+    <BomHeader assembly="ecg-frontend" revision="1"/>
+    <BomItem OEMDesignNumberRef="ITEM-1" quantity="1" category="ELECTRICAL" description="Optional bypass">
+      <RefDes name="R9" packageRef="R_0603_1608Metric" populate="false" layerRef="TOP"/>
+      <Characteristics category="ELECTRICAL"><Textual definitionSource="VALUE" textualCharacteristicName="Value" textualCharacteristicValue="0R"/></Characteristics>
+    </BomItem>
+    <BomItem OEMDesignNumberRef="ITEM-2" quantity="1" category="ELECTRICAL" description="">
+      <RefDes name="R5" packageRef="R_0603_1608Metric" populate="true" layerRef="TOP"/>
+      <Characteristics category="ELECTRICAL"><Textual definitionSource="VALUE" textualCharacteristicName="Value" textualCharacteristicValue="100k"/></Characteristics>
+    </BomItem>
+    <BomItem OEMDesignNumberRef="ITEM-3" quantity="2" category="ELECTRICAL" description="">
+      <RefDes name="C1" packageRef="C_0603_1608Metric" populate="true" layerRef="TOP"/>
+      <RefDes name="C2" packageRef="C_0603_1608Metric" populate="true" layerRef="TOP"/>
+      <Characteristics category="ELECTRICAL"><Textual definitionSource="VALUE" textualCharacteristicName="Value" textualCharacteristicValue="100n"/></Characteristics>
+    </BomItem>
+    <BomItem OEMDesignNumberRef="ITEM-4" quantity="1" category="ELECTRICAL" description="">
+      <RefDes name="C7" packageRef="C_0603_1608Metric" populate="true" layerRef="TOP"/>
+      <Characteristics category="ELECTRICAL"><Textual definitionSource="VALUE" textualCharacteristicName="Value" textualCharacteristicValue="100n"/></Characteristics>
+    </BomItem>
+    <BomItem OEMDesignNumberRef="ITEM-5" quantity="2" category="ELECTRICAL" description="Patient protection resistor">
+      <RefDes name="R1" packageRef="R_0603_1608Metric" populate="true" layerRef="TOP"/>
+      <RefDes name="R2" packageRef="R_0603_1608Metric" populate="true" layerRef="TOP"/>
+      <Characteristics category="ELECTRICAL"><Textual definitionSource="VALUE" textualCharacteristicName="Value" textualCharacteristicValue="10M"/></Characteristics>
+    </BomItem>
+    <BomItem OEMDesignNumberRef="ITEM-6" quantity="2" category="ELECTRICAL" description="">
+      <RefDes name="R3" packageRef="R_0603_1608Metric" populate="true" layerRef="TOP"/>
+      <RefDes name="R4" packageRef="R_0603_1608Metric" populate="true" layerRef="TOP"/>
+      <Characteristics category="ELECTRICAL"><Textual definitionSource="VALUE" textualCharacteristicName="Value" textualCharacteristicValue="10k"/></Characteristics>
+    </BomItem>
+    <BomItem OEMDesignNumberRef="ITEM-7" quantity="1" category="ELECTRICAL" description="">
+      <RefDes name="C4" packageRef="C_0603_1608Metric" populate="true" layerRef="TOP"/>
+      <Characteristics category="ELECTRICAL"><Textual definitionSource="VALUE" textualCharacteristicName="Value" textualCharacteristicValue="10n"/></Characteristics>
+    </BomItem>
+    <BomItem OEMDesignNumberRef="ITEM-8" quantity="2" category="ELECTRICAL" description="">
+      <RefDes name="C5" packageRef="C_0603_1608Metric" populate="true" layerRef="TOP"/>
+      <RefDes name="C6" packageRef="C_0603_1608Metric" populate="true" layerRef="TOP"/>
+      <Characteristics category="ELECTRICAL"><Textual definitionSource="VALUE" textualCharacteristicName="Value" textualCharacteristicValue="10u"/></Characteristics>
+    </BomItem>
+    <BomItem OEMDesignNumberRef="ITEM-9" quantity="1" category="ELECTRICAL" description="">
+      <RefDes name="R8" packageRef="R_0603_1608Metric" populate="true" layerRef="TOP"/>
+      <Characteristics category="ELECTRICAL"><Textual definitionSource="VALUE" textualCharacteristicName="Value" textualCharacteristicValue="180k"/></Characteristics>
+    </BomItem>
+    <BomItem OEMDesignNumberRef="ITEM-10" quantity="1" category="ELECTRICAL" description="">
+      <RefDes name="R6" packageRef="R_0603_1608Metric" populate="true" layerRef="TOP"/>
+      <Characteristics category="ELECTRICAL"><Textual definitionSource="VALUE" textualCharacteristicName="Value" textualCharacteristicValue="1M"/></Characteristics>
+    </BomItem>
+    <BomItem OEMDesignNumberRef="ITEM-11" quantity="1" category="ELECTRICAL" description="">
+      <RefDes name="R10" packageRef="R_0603_1608Metric" populate="true" layerRef="TOP"/>
+      <Characteristics category="ELECTRICAL"><Textual definitionSource="VALUE" textualCharacteristicName="Value" textualCharacteristicValue="1k"/></Characteristics>
+    </BomItem>
+    <BomItem OEMDesignNumberRef="ITEM-12" quantity="1" category="ELECTRICAL" description="">
+      <RefDes name="C3" packageRef="C_0603_1608Metric" populate="true" layerRef="TOP"/>
+      <Characteristics category="ELECTRICAL"><Textual definitionSource="VALUE" textualCharacteristicName="Value" textualCharacteristicValue="1n"/></Characteristics>
+    </BomItem>
+    <BomItem OEMDesignNumberRef="ITEM-13" quantity="1" category="ELECTRICAL" description="">
+      <RefDes name="FB1" packageRef="L_0603_1608Metric" populate="true" layerRef="TOP"/>
+      <Characteristics category="ELECTRICAL"><Textual definitionSource="VALUE" textualCharacteristicName="Value" textualCharacteristicValue="220R@100MHz"/></Characteristics>
+    </BomItem>
+    <BomItem OEMDesignNumberRef="ITEM-14" quantity="1" category="ELECTRICAL" description="">
+      <RefDes name="R7" packageRef="R_0603_1608Metric" populate="true" layerRef="TOP"/>
+      <Characteristics category="ELECTRICAL"><Textual definitionSource="VALUE" textualCharacteristicName="Value" textualCharacteristicValue="4k7"/></Characteristics>
+    </BomItem>
+    <BomItem OEMDesignNumberRef="ITEM-15" quantity="1" category="ELECTRICAL" description="Single-lead heart rate monitor front end">
+      <RefDes name="U1" packageRef="QFN-20-1EP_4x4mm_P0.5mm_EP2.5x2.5mm" populate="true" layerRef="TOP"/>
+      <Characteristics category="ELECTRICAL"><Textual definitionSource="VALUE" textualCharacteristicName="Value" textualCharacteristicValue="AD8232"/></Characteristics>
+    </BomItem>
+    <BomItem OEMDesignNumberRef="ITEM-16" quantity="1" category="ELECTRICAL" description="">
+      <RefDes name="J2" packageRef="JST_PH_S2B-PH-K_1x02_P2.00mm_Horizontal" populate="true" layerRef="TOP"/>
+      <Characteristics category="ELECTRICAL"><Textual definitionSource="VALUE" textualCharacteristicName="Value" textualCharacteristicValue="Battery"/></Characteristics>
+    </BomItem>
+    <BomItem OEMDesignNumberRef="ITEM-17" quantity="1" category="ELECTRICAL" description="ECG electrode connector">
+      <RefDes name="J1" packageRef="Molex_KK-254_AE-6410-03A_1x03_P2.54mm_Vertical" populate="true" layerRef="TOP"/>
+      <Characteristics category="ELECTRICAL"><Textual definitionSource="VALUE" textualCharacteristicName="Value" textualCharacteristicValue="Electrodes RA/LA/RL"/></Characteristics>
+    </BomItem>
+    <BomItem OEMDesignNumberRef="ITEM-18" quantity="1" category="ELECTRICAL" description="">
+      <RefDes name="D3" packageRef="LED_0603_1608Metric" populate="true" layerRef="TOP"/>
+      <Characteristics category="ELECTRICAL"><Textual definitionSource="VALUE" textualCharacteristicName="Value" textualCharacteristicValue="Green"/></Characteristics>
+    </BomItem>
+    <BomItem OEMDesignNumberRef="ITEM-19" quantity="1" category="ELECTRICAL" description="">
+      <RefDes name="U3" packageRef="SOT-23" populate="true" layerRef="TOP"/>
+      <Characteristics category="ELECTRICAL"><Textual definitionSource="VALUE" textualCharacteristicName="Value" textualCharacteristicValue="MCP1700-3.3"/></Characteristics>
+    </BomItem>
+    <BomItem OEMDesignNumberRef="ITEM-20" quantity="1" category="ELECTRICAL" description="">
+      <RefDes name="U2" packageRef="SOT-23-5" populate="true" layerRef="TOP"/>
+      <Characteristics category="ELECTRICAL"><Textual definitionSource="VALUE" textualCharacteristicName="Value" textualCharacteristicValue="OPA333"/></Characteristics>
+    </BomItem>
+    <BomItem OEMDesignNumberRef="ITEM-21" quantity="2" category="ELECTRICAL" description="ESD protection RA">
+      <RefDes name="D1" packageRef="D_SOD-323" populate="true" layerRef="TOP"/>
+      <RefDes name="D2" packageRef="D_SOD-323" populate="true" layerRef="TOP"/>
+      <Characteristics category="ELECTRICAL"><Textual definitionSource="VALUE" textualCharacteristicName="Value" textualCharacteristicValue="PESD5V0S1BA"/></Characteristics>
+    </BomItem>
+    <BomItem OEMDesignNumberRef="ITEM-22" quantity="2" category="ELECTRICAL" description="ECG output">
+      <RefDes name="TP1" packageRef="TestPoint_Pad_D1.0mm" populate="true" layerRef="TOP"/>
+      <RefDes name="TP2" packageRef="TestPoint_Pad_D1.0mm" populate="true" layerRef="TOP"/>
+      <Characteristics category="ELECTRICAL"><Textual definitionSource="VALUE" textualCharacteristicName="Value" textualCharacteristicValue="TestPoint"/></Characteristics>
+    </BomItem>
+  </Bom>
+  <Ecad name="design"><CadData><Step name="ecg-frontend">
+    <Component refDes="C1" packageRef="C_0603_1608Metric" layerRef="TOP" part="100n"/>
+    <Component refDes="C2" packageRef="C_0603_1608Metric" layerRef="TOP" part="100n"/>
+    <Component refDes="C3" packageRef="C_0603_1608Metric" layerRef="TOP" part="1n"/>
+    <Component refDes="C4" packageRef="C_0603_1608Metric" layerRef="TOP" part="10n"/>
+    <Component refDes="C5" packageRef="C_0603_1608Metric" layerRef="TOP" part="10u"/>
+    <Component refDes="C6" packageRef="C_0603_1608Metric" layerRef="TOP" part="10u"/>
+    <Component refDes="C7" packageRef="C_0603_1608Metric" layerRef="TOP" part="100n"/>
+    <Component refDes="D1" packageRef="D_SOD-323" layerRef="TOP" part="PESD5V0S1BA"/>
+    <Component refDes="D2" packageRef="D_SOD-323" layerRef="TOP" part="PESD5V0S1BA"/>
+    <Component refDes="D3" packageRef="LED_0603_1608Metric" layerRef="TOP" part="Green"/>
+    <Component refDes="FB1" packageRef="L_0603_1608Metric" layerRef="TOP" part="220R@100MHz"/>
+    <Component refDes="J1" packageRef="Molex_KK-254_AE-6410-03A_1x03_P2.54mm_Vertical" layerRef="TOP" part="Electrodes RA/LA/RL"/>
+    <Component refDes="J2" packageRef="JST_PH_S2B-PH-K_1x02_P2.00mm_Horizontal" layerRef="TOP" part="Battery"/>
+    <Component refDes="R1" packageRef="R_0603_1608Metric" layerRef="TOP" part="10M"/>
+    <Component refDes="R10" packageRef="R_0603_1608Metric" layerRef="TOP" part="1k"/>
+    <Component refDes="R2" packageRef="R_0603_1608Metric" layerRef="TOP" part="10M"/>
+    <Component refDes="R3" packageRef="R_0603_1608Metric" layerRef="TOP" part="10k"/>
+    <Component refDes="R4" packageRef="R_0603_1608Metric" layerRef="TOP" part="10k"/>
+    <Component refDes="R5" packageRef="R_0603_1608Metric" layerRef="TOP" part="100k"/>
+    <Component refDes="R6" packageRef="R_0603_1608Metric" layerRef="TOP" part="1M"/>
+    <Component refDes="R7" packageRef="R_0603_1608Metric" layerRef="TOP" part="4k7"/>
+    <Component refDes="R8" packageRef="R_0603_1608Metric" layerRef="TOP" part="180k"/>
+    <Component refDes="R9" packageRef="R_0603_1608Metric" layerRef="TOP" part="0R"/>
+    <Component refDes="TP1" packageRef="TestPoint_Pad_D1.0mm" layerRef="TOP" part="TestPoint"/>
+    <Component refDes="TP2" packageRef="TestPoint_Pad_D1.0mm" layerRef="TOP" part="TestPoint"/>
+    <Component refDes="U1" packageRef="QFN-20-1EP_4x4mm_P0.5mm_EP2.5x2.5mm" layerRef="TOP" part="AD8232"/>
+    <Component refDes="U2" packageRef="SOT-23-5" layerRef="TOP" part="OPA333"/>
+    <Component refDes="U3" packageRef="SOT-23" layerRef="TOP" part="MCP1700-3.3"/>
+  </Step></CadData></Ecad>
+  <Avl name="AVL">
+    <AvlItem OEMDesignNumber="ITEM-1">
+      <AvlVmpn qualified="true" chosen="true"><AvlMpn name="RC0603JR-070RL" rank="1"/><AvlVendor enterpriseRef="V8"/></AvlVmpn>
+    </AvlItem>
+    <AvlItem OEMDesignNumber="ITEM-4">
+      <AvlVmpn qualified="true" chosen="true"><AvlMpn name="GRM188R71H104KA93D" rank="1"/><AvlVendor enterpriseRef="V5"/></AvlVmpn>
+    </AvlItem>
+    <AvlItem OEMDesignNumber="ITEM-6">
+      <AvlVmpn qualified="true" chosen="true"><AvlMpn name="RC0603FR-0710KL" rank="1"/><AvlVendor enterpriseRef="V8"/></AvlVmpn>
+    </AvlItem>
+    <AvlItem OEMDesignNumber="ITEM-7">
+      <AvlVmpn qualified="true" chosen="true"><AvlMpn name="GRM188R71H103KA01D" rank="1"/><AvlVendor enterpriseRef="V5"/></AvlVmpn>
+    </AvlItem>
+    <AvlItem OEMDesignNumber="ITEM-9">
+      <AvlVmpn qualified="true" chosen="true"><AvlMpn name="RC0603FR-07180KL" rank="1"/><AvlVendor enterpriseRef="V8"/></AvlVmpn>
+    </AvlItem>
+    <AvlItem OEMDesignNumber="ITEM-11">
+      <AvlVmpn qualified="true" chosen="true"><AvlMpn name="RC0603FR-071KL" rank="1"/><AvlVendor enterpriseRef="V8"/></AvlVmpn>
+    </AvlItem>
+    <AvlItem OEMDesignNumber="ITEM-12">
+      <AvlVmpn qualified="true" chosen="true"><AvlMpn name="GRM188R71H102KA01D" rank="1"/><AvlVendor enterpriseRef="V5"/></AvlVmpn>
+    </AvlItem>
+    <AvlItem OEMDesignNumber="ITEM-13">
+      <AvlVmpn qualified="true" chosen="true"><AvlMpn name="BLM18PG221SN1D" rank="1"/><AvlVendor enterpriseRef="V5"/></AvlVmpn>
+    </AvlItem>
+    <AvlItem OEMDesignNumber="ITEM-15">
+      <AvlVmpn qualified="true" chosen="true"><AvlMpn name="AD8232ACPZ-R7" rank="1"/><AvlVendor enterpriseRef="V0"/></AvlVmpn>
+    </AvlItem>
+    <AvlItem OEMDesignNumber="ITEM-16">
+      <AvlVmpn qualified="true" chosen="true"><AvlMpn name="S2B-PH-K-S(LF)(SN)" rank="1"/><AvlVendor enterpriseRef="V1"/></AvlVmpn>
+    </AvlItem>
+    <AvlItem OEMDesignNumber="ITEM-17">
+      <AvlVmpn qualified="true" chosen="true"><AvlMpn name="22-23-2031" rank="1"/><AvlVendor enterpriseRef="V4"/></AvlVmpn>
+    </AvlItem>
+    <AvlItem OEMDesignNumber="ITEM-18">
+      <AvlVmpn qualified="true" chosen="true"><AvlMpn name="LTST-C191KGKT" rank="1"/><AvlVendor enterpriseRef="V2"/></AvlVmpn>
+    </AvlItem>
+    <AvlItem OEMDesignNumber="ITEM-19">
+      <AvlVmpn qualified="true" chosen="true"><AvlMpn name="MCP1700T-3302E/TT" rank="1"/><AvlVendor enterpriseRef="V3"/></AvlVmpn>
+    </AvlItem>
+    <AvlItem OEMDesignNumber="ITEM-20">
+      <AvlVmpn qualified="true" chosen="true"><AvlMpn name="OPA333AIDBVR" rank="1"/><AvlVendor enterpriseRef="V7"/></AvlVmpn>
+    </AvlItem>
+    <AvlItem OEMDesignNumber="ITEM-21">
+      <AvlVmpn qualified="true" chosen="true"><AvlMpn name="PESD5V0S1BA" rank="1"/><AvlVendor enterpriseRef="V6"/></AvlVmpn>
+    </AvlItem>
+  </Avl>
+</IPC-2581>

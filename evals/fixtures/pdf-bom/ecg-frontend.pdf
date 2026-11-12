@@ -1,0 +1,168 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 842 595] /Contents 4 0 R /Resources << /Font << /F1 5 0 R /F2 6 0 R >> >> >>
+endobj
+4 0 obj
+<< /Length 5383 >>
+stream
+BT /F1 12 Tf 40 560 Td (Bill of materials - ecg-frontend) Tj ET
+BT /F2 8 Tf 40 530 Td (Designator) Tj ET
+BT /F2 8 Tf 150 530 Td (Qty) Tj ET
+BT /F2 8 Tf 180 530 Td (Value) Tj ET
+BT /F2 8 Tf 230 530 Td (Footprint) Tj ET
+BT /F2 8 Tf 410 530 Td (Manufacturer) Tj ET
+BT /F2 8 Tf 520 530 Td (MPN) Tj ET
+BT /F2 8 Tf 640 530 Td (DNP) Tj ET
+BT /F1 8 Tf 40 516 Td (C1, C2, C7) Tj ET
+BT /F1 8 Tf 150 516 Td (3) Tj ET
+BT /F1 8 Tf 180 516 Td (100n) Tj ET
+BT /F1 8 Tf 230 516 Td (C_0603_1608Metric) Tj ET
+BT /F1 8 Tf 410 516 Td (Murata) Tj ET
+BT /F1 8 Tf 520 516 Td (GRM188R71H104KA93D) Tj ET
+BT /F1 8 Tf 40 502 Td (C3) Tj ET
+BT /F1 8 Tf 150 502 Td (1) Tj ET
+BT /F1 8 Tf 180 502 Td (1n) Tj ET
+BT /F1 8 Tf 230 502 Td (C_0603_1608Metric) Tj ET
+BT /F1 8 Tf 410 502 Td (Murata) Tj ET
+BT /F1 8 Tf 520 502 Td (GRM188R71H102KA01D) Tj ET
+BT /F1 8 Tf 40 488 Td (C4) Tj ET
+BT /F1 8 Tf 150 488 Td (1) Tj ET
+BT /F1 8 Tf 180 488 Td (10n) Tj ET
+BT /F1 8 Tf 230 488 Td (C_0603_1608Metric) Tj ET
+BT /F1 8 Tf 410 488 Td (Murata) Tj ET
+BT /F1 8 Tf 520 488 Td (GRM188R71H103KA01D) Tj ET
+BT /F1 8 Tf 40 474 Td (C5, C6) Tj ET
+BT /F1 8 Tf 150 474 Td (2) Tj ET
+BT /F1 8 Tf 180 474 Td (10u) Tj ET
+BT /F1 8 Tf 230 474 Td (C_0603_1608Metric) Tj ET
+BT /F1 8 Tf 410 474 Td (Samsung Electro-Mechanics) Tj ET
+BT /F1 8 Tf 520 474 Td (CL10A106KP8NNNC) Tj ET
+BT /F1 8 Tf 40 460 Td (D1, D2) Tj ET
+BT /F1 8 Tf 150 460 Td (2) Tj ET
+BT /F1 8 Tf 180 460 Td (PESD5V0S1BA) Tj ET
+BT /F1 8 Tf 230 460 Td (D_SOD-323) Tj ET
+BT /F1 8 Tf 410 460 Td (Nexperia) Tj ET
+BT /F1 8 Tf 520 460 Td (PESD5V0S1BA) Tj ET
+BT /F1 8 Tf 40 446 Td (D3) Tj ET
+BT /F1 8 Tf 150 446 Td (1) Tj ET
+BT /F1 8 Tf 180 446 Td (Green) Tj ET
+BT /F1 8 Tf 230 446 Td (LED_0603_1608Metric) Tj ET
+BT /F1 8 Tf 410 446 Td (Lite-On) Tj ET
+BT /F1 8 Tf 520 446 Td (LTST-C191KGKT) Tj ET
+BT /F1 8 Tf 40 432 Td (FB1) Tj ET
+BT /F1 8 Tf 150 432 Td (1) Tj ET
+BT /F1 8 Tf 180 432 Td (220R@100MHz) Tj ET
+BT /F1 8 Tf 230 432 Td (L_0603_1608Metric) Tj ET
+BT /F1 8 Tf 410 432 Td (Murata) Tj ET
+BT /F1 8 Tf 520 432 Td (BLM18PG221SN1D) Tj ET
+BT /F1 8 Tf 40 418 Td (J1) Tj ET
+BT /F1 8 Tf 150 418 Td (1) Tj ET
+BT /F1 8 Tf 180 418 Td (Electrodes RA/LA/RL) Tj ET
+BT /F1 8 Tf 230 418 Td (Molex_KK-254_AE-6410-03A_1x03_P2.54mm_Vertical) Tj ET
+BT /F1 8 Tf 410 418 Td (Molex) Tj ET
+BT /F1 8 Tf 520 418 Td (22-23-2031) Tj ET
+BT /F1 8 Tf 40 404 Td (J2) Tj ET
+BT /F1 8 Tf 150 404 Td (1) Tj ET
+BT /F1 8 Tf 180 404 Td (Battery) Tj ET
+BT /F1 8 Tf 230 404 Td (JST_PH_S2B-PH-K_1x02_P2.00mm_Horizontal) Tj ET
+BT /F1 8 Tf 410 404 Td (JST) Tj ET
+BT /F1 8 Tf 520 404 Td (S2B-PH-K-S\(LF\)\(SN\)) Tj ET
+BT /F1 8 Tf 40 390 Td (R1, R2) Tj ET
+BT /F1 8 Tf 150 390 Td (2) Tj ET
+BT /F1 8 Tf 180 390 Td (10M) Tj ET
+BT /F1 8 Tf 230 390 Td (R_0603_1608Metric) Tj ET
+BT /F1 8 Tf 410 390 Td (Yageo) Tj ET
+BT /F1 8 Tf 520 390 Td (RC0603FR-0710ML) Tj ET
+BT /F1 8 Tf 40 376 Td (R3, R4) Tj ET
+BT /F1 8 Tf 150 376 Td (2) Tj ET
+BT /F1 8 Tf 180 376 Td (10k) Tj ET
+BT /F1 8 Tf 230 376 Td (R_0603_1608Metric) Tj ET
+BT /F1 8 Tf 410 376 Td (Yageo) Tj ET
+BT /F1 8 Tf 520 376 Td (RC0603FR-0710KL) Tj ET
+BT /F1 8 Tf 40 362 Td (R5) Tj ET
+BT /F1 8 Tf 150 362 Td (1) Tj ET
+BT /F1 8 Tf 180 362 Td (100k) Tj ET
+BT /F1 8 Tf 230 362 Td (R_0603_1608Metric) Tj ET
+BT /F1 8 Tf 410 362 Td (Yageo) Tj ET
+BT /F1 8 Tf 520 362 Td (RC0603FR-07100KL) Tj ET
+BT /F1 8 Tf 40 348 Td (R6) Tj ET
+BT /F1 8 Tf 150 348 Td (1) Tj ET
+BT /F1 8 Tf 180 348 Td (1M) Tj ET
+BT /F1 8 Tf 230 348 Td (R_0603_1608Metric) Tj ET
+BT /F1 8 Tf 410 348 Td (Yageo) Tj ET
+BT /F1 8 Tf 520 348 Td (RC0603FR-071ML) Tj ET
+BT /F1 8 Tf 40 334 Td (R7) Tj ET
+BT /F1 8 Tf 150 334 Td (1) Tj ET
+BT /F1 8 Tf 180 334 Td (4k7) Tj ET
+BT /F1 8 Tf 230 334 Td (R_0603_1608Metric) Tj ET
+BT /F1 8 Tf 410 334 Td (Yageo) Tj ET
+BT /F1 8 Tf 520 334 Td (RC0603FR-074K7L) Tj ET
+BT /F1 8 Tf 40 320 Td (R8) Tj ET
+BT /F1 8 Tf 150 320 Td (1) Tj ET
+BT /F1 8 Tf 180 320 Td (180k) Tj ET
+BT /F1 8 Tf 230 320 Td (R_0603_1608Metric) Tj ET
+BT /F1 8 Tf 410 320 Td (Yageo) Tj ET
+BT /F1 8 Tf 520 320 Td (RC0603FR-07180KL) Tj ET
+BT /F1 8 Tf 40 306 Td (R9) Tj ET
+BT /F1 8 Tf 150 306 Td (1) Tj ET
+BT /F1 8 Tf 180 306 Td (0R) Tj ET
+BT /F1 8 Tf 230 306 Td (R_0603_1608Metric) Tj ET
+BT /F1 8 Tf 410 306 Td (Yageo) Tj ET
+BT /F1 8 Tf 520 306 Td (RC0603JR-070RL) Tj ET
+BT /F1 8 Tf 640 306 Td (DNP) Tj ET
+BT /F1 8 Tf 40 292 Td (R10) Tj ET
+BT /F1 8 Tf 150 292 Td (1) Tj ET
+BT /F1 8 Tf 180 292 Td (1k) Tj ET
+BT /F1 8 Tf 230 292 Td (R_0603_1608Metric) Tj ET
+BT /F1 8 Tf 410 292 Td (Yageo) Tj ET
+BT /F1 8 Tf 520 292 Td (RC0603FR-071KL) Tj ET
+BT /F1 8 Tf 40 278 Td (TP1, TP2) Tj ET
+BT /F1 8 Tf 150 278 Td (2) Tj ET
+BT /F1 8 Tf 180 278 Td (TestPoint) Tj ET
+BT /F1 8 Tf 230 278 Td (TestPoint_Pad_D1.0mm) Tj ET
+BT /F1 8 Tf 40 264 Td (U1) Tj ET
+BT /F1 8 Tf 150 264 Td (1) Tj ET
+BT /F1 8 Tf 180 264 Td (AD8232) Tj ET
+BT /F1 8 Tf 230 264 Td (QFN-20-1EP_4x4mm_P0.5mm_EP2.5x2.5mm) Tj ET
+BT /F1 8 Tf 410 264 Td (Analog Devices) Tj ET
+BT /F1 8 Tf 520 264 Td (AD8232ACPZ-R7) Tj ET
+BT /F1 8 Tf 40 250 Td (U2) Tj ET
+BT /F1 8 Tf 150 250 Td (1) Tj ET
+BT /F1 8 Tf 180 250 Td (OPA333) Tj ET
+BT /F1 8 Tf 230 250 Td (SOT-23-5) Tj ET
+BT /F1 8 Tf 410 250 Td (Texas Instruments) Tj ET
+BT /F1 8 Tf 520 250 Td (OPA333AIDBVR) Tj ET
+BT /F1 8 Tf 40 236 Td (U3) Tj ET
+BT /F1 8 Tf 150 236 Td (1) Tj ET
+BT /F1 8 Tf 180 236 Td (MCP1700-3.3) Tj ET
+BT /F1 8 Tf 230 236 Td (SOT-23) Tj ET
+BT /F1 8 Tf 410 236 Td (Microchip) Tj ET
+BT /F1 8 Tf 520 236 Td (MCP1700T-3302E/TT) Tj ET
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+6 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>
+endobj
+xref
+0 7
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000251 00000 n 
+0000005686 00000 n 
+0000005783 00000 n 
+trailer
+<< /Size 7 /Root 1 0 R >>
+startxref
+5885
+%%EOF

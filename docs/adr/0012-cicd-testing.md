@@ -1,15 +1,15 @@
-# ADR-0012: CI/CD w GitHub Actions i strategia testów
+# ADR-0012: CI/CD in GitHub Actions and the testing strategy
 
-Status: Zaakceptowany · 2026-11-09
+Status: Accepted · 2026-11-09
 
-## Kontekst
-Wymagane testy E2E, smoke i wszystko zielone przed wydaniem.
+## Context
+E2E and smoke tests required, and everything green before a release.
 
-## Decyzja
-Pipeline opisany w `ARCHITECTURE.md §13` i `TESTING.md`. Trunk-based: krótkie gałęzie `feat/<moduł>-<opis>`, PR, squash merge po zielonym CI. Conventional Commits + release-please. Deploy przez OIDC, wyłączony do czasu konfiguracji AWS.
+## Decision
+The pipeline is described in `ARCHITECTURE.md §13` and `TESTING.md`. Trunk-based: short `feat/<module>-<description>` branches, PR, squash merge after green CI. Conventional Commits + release-please. Deploy via OIDC, disabled until AWS is configured.
 
-## Konsekwencje
-Każda zmiana przechodzi tę samą bramkę jakości. Testy z LLM są deterministyczne (fałszywy dostawca / nagrania).
+## Consequences
+Every change passes the same quality gate. Tests with an LLM are deterministic (fake provider / recordings).
 
-## Rozważane alternatywy
-GitFlow (długie gałęzie, konflikty).
+## Alternatives considered
+GitFlow (long-lived branches, conflicts).

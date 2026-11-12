@@ -1,0 +1,24 @@
+[project]
+name = "bomagent-cad-parsers"
+version = "0.1.0"
+description = "Format parser plugins (KiCad, CSV BOM, ...) producing ParsedDesign"
+readme = "README.md"
+requires-python = ">=3.12"
+license = "LicenseRef-Proprietary"
+dependencies = [
+    "pydantic>=2.9",
+    "defusedxml>=0.7",
+    "pypdf>=5.1",
+    "bomagent-bom-core",
+    "ezdxf>=1.4",
+]
+
+[build-system]
+requires = ["hatchling>=1.26"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/bomagent_cad"]
+
+[tool.uv.sources]
+bomagent-bom-core = { workspace = true }

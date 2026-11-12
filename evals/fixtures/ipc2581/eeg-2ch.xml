@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<IPC-2581 revision="C" xmlns="http://webstds.ipc.org/2581">
+  <Content roleRef="Owner"><FunctionMode mode="ASSEMBLY"/><StepRef name="eeg-2ch"/><BomRef name="eeg-2ch_BOM"/></Content>
+  <LogisticHeader>
+    <Role id="Owner" roleFunction="SENDER"/>
+    <Enterprise id="V0" name="Molex" code="NONE"/>
+    <Enterprise id="V1" name="Murata" code="NONE"/>
+    <Enterprise id="V2" name="Texas Instruments" code="NONE"/>
+    <Enterprise id="V3" name="Yageo" code="NONE"/>
+  </LogisticHeader>
+  <Bom name="eeg-2ch_BOM">
+    <BomHeader assembly="eeg-2ch" revision="1"/>
+    <BomItem OEMDesignNumberRef="ITEM-1" quantity="1" category="ELECTRICAL" description="">
+      <RefDes name="C1" packageRef="C_0603_1608Metric" populate="true" layerRef="TOP"/>
+      <Characteristics category="ELECTRICAL"><Textual definitionSource="VALUE" textualCharacteristicName="Value" textualCharacteristicValue="100n"/></Characteristics>
+    </BomItem>
+    <BomItem OEMDesignNumberRef="ITEM-2" quantity="2" category="ELECTRICAL" description="">
+      <RefDes name="C102" packageRef="C_0603_1608Metric" populate="true" layerRef="TOP"/>
+      <RefDes name="C202" packageRef="C_0603_1608Metric" populate="true" layerRef="TOP"/>
+      <Characteristics category="ELECTRICAL"><Textual definitionSource="VALUE" textualCharacteristicName="Value" textualCharacteristicValue="100n"/></Characteristics>
+    </BomItem>
+    <BomItem OEMDesignNumberRef="ITEM-3" quantity="1" category="ELECTRICAL" description="">
+      <RefDes name="C2" packageRef="C_0603_1608Metric" populate="true" layerRef="TOP"/>
+      <Characteristics category="ELECTRICAL"><Textual definitionSource="VALUE" textualCharacteristicName="Value" textualCharacteristicValue="10u"/></Characteristics>
+    </BomItem>
+    <BomItem OEMDesignNumberRef="ITEM-4" quantity="4" category="ELECTRICAL" description="">
+      <RefDes name="R102" packageRef="R_0603_1608Metric" populate="true" layerRef="TOP"/>
+      <RefDes name="R103" packageRef="R_0603_1608Metric" populate="true" layerRef="TOP"/>
+      <RefDes name="R202" packageRef="R_0603_1608Metric" populate="true" layerRef="TOP"/>
+      <RefDes name="R203" packageRef="R_0603_1608Metric" populate="true" layerRef="TOP"/>
+      <Characteristics category="ELECTRICAL"><Textual definitionSource="VALUE" textualCharacteristicName="Value" textualCharacteristicValue="1M"/></Characteristics>
+    </BomItem>
+    <BomItem OEMDesignNumberRef="ITEM-5" quantity="1" category="ELECTRICAL" description="ADC clock (optional, internal oscillator used)">
+      <RefDes name="Y1" packageRef="Crystal_SMD_3225-4Pin_3.2x2.5mm" populate="false" layerRef="TOP"/>
+      <Characteristics category="ELECTRICAL"><Textual definitionSource="VALUE" textualCharacteristicName="Value" textualCharacteristicValue="2.048MHz"/></Characteristics>
+    </BomItem>
+    <BomItem OEMDesignNumberRef="ITEM-6" quantity="2" category="ELECTRICAL" description="">
+      <RefDes name="C101" packageRef="C_0603_1608Metric" populate="true" layerRef="TOP"/>
+      <RefDes name="C201" packageRef="C_0603_1608Metric" populate="true" layerRef="TOP"/>
+      <Characteristics category="ELECTRICAL"><Textual definitionSource="VALUE" textualCharacteristicName="Value" textualCharacteristicValue="47n"/></Characteristics>
+    </BomItem>
+    <BomItem OEMDesignNumberRef="ITEM-7" quantity="2" category="ELECTRICAL" description="INA gain resistor (G=3)">
+      <RefDes name="R101" packageRef="R_0603_1608Metric" populate="true" layerRef="TOP"/>
+      <RefDes name="R201" packageRef="R_0603_1608Metric" populate="true" layerRef="TOP"/>
+      <Characteristics category="ELECTRICAL"><Textual definitionSource="VALUE" textualCharacteristicName="Value" textualCharacteristicValue="49k9"/></Characteristics>
+    </BomItem>
+    <BomItem OEMDesignNumberRef="ITEM-8" quantity="1" category="ELECTRICAL" description="2-channel 24-bit AFE">
+      <RefDes name="U1" packageRef="TQFP-32_5x5mm_P0.5mm" populate="true" layerRef="TOP"/>
+      <Characteristics category="ELECTRICAL"><Textual definitionSource="VALUE" textualCharacteristicName="Value" textualCharacteristicValue="ADS1292R"/></Characteristics>
+    </BomItem>
+    <BomItem OEMDesignNumberRef="ITEM-9" quantity="1" category="ELECTRICAL" description="">
+      <RefDes name="J1" packageRef="Molex_KK-254_AE-6410-05A_1x05_P2.54mm_Vertical" populate="true" layerRef="TOP"/>
+      <Characteristics category="ELECTRICAL"><Textual definitionSource="VALUE" textualCharacteristicName="Value" textualCharacteristicValue="Electrodes"/></Characteristics>
+    </BomItem>
+    <BomItem OEMDesignNumberRef="ITEM-10" quantity="2" category="ELECTRICAL" description="">
+      <RefDes name="U101" packageRef="MSOP-8_3x3mm_P0.65mm" populate="true" layerRef="TOP"/>
+      <RefDes name="U201" packageRef="MSOP-8_3x3mm_P0.65mm" populate="true" layerRef="TOP"/>
+      <Characteristics category="ELECTRICAL"><Textual definitionSource="VALUE" textualCharacteristicName="Value" textualCharacteristicValue="INA333"/></Characteristics>
+    </BomItem>
+    <BomItem OEMDesignNumberRef="ITEM-11" quantity="2" category="ELECTRICAL" description="Dual op-amp, units A/B used">
+      <RefDes name="U102" packageRef="SOIC-8_3.9x4.9mm_P1.27mm" populate="true" layerRef="TOP"/>
+      <RefDes name="U202" packageRef="SOIC-8_3.9x4.9mm_P1.27mm" populate="true" layerRef="TOP"/>
+      <Characteristics category="ELECTRICAL"><Textual definitionSource="VALUE" textualCharacteristicName="Value" textualCharacteristicValue="OPA2333"/></Characteristics>
+    </BomItem>
+  </Bom>
+  <Ecad name="design"><CadData><Step name="eeg-2ch">
+    <Component refDes="C1" packageRef="C_0603_1608Metric" layerRef="TOP" part="100n"/>
+    <Component refDes="C101" packageRef="C_0603_1608Metric" layerRef="TOP" part="47n"/>
+    <Component refDes="C102" packageRef="C_0603_1608Metric" layerRef="TOP" part="100n"/>
+    <Component refDes="C2" packageRef="C_0603_1608Metric" layerRef="TOP" part="10u"/>
+    <Component refDes="C201" packageRef="C_0603_1608Metric" layerRef="TOP" part="47n"/>
+    <Component refDes="C202" packageRef="C_0603_1608Metric" layerRef="TOP" part="100n"/>
+    <Component refDes="J1" packageRef="Molex_KK-254_AE-6410-05A_1x05_P2.54mm_Vertical" layerRef="TOP" part="Electrodes"/>
+    <Component refDes="R101" packageRef="R_0603_1608Metric" layerRef="TOP" part="49k9"/>
+    <Component refDes="R102" packageRef="R_0603_1608Metric" layerRef="TOP" part="1M"/>
+    <Component refDes="R103" packageRef="R_0603_1608Metric" layerRef="TOP" part="1M"/>
+    <Component refDes="R201" packageRef="R_0603_1608Metric" layerRef="TOP" part="49k9"/>
+    <Component refDes="R202" packageRef="R_0603_1608Metric" layerRef="TOP" part="1M"/>
+    <Component refDes="R203" packageRef="R_0603_1608Metric" layerRef="TOP" part="1M"/>
+    <Component refDes="U1" packageRef="TQFP-32_5x5mm_P0.5mm" layerRef="TOP" part="ADS1292R"/>
+    <Component refDes="U101" packageRef="MSOP-8_3x3mm_P0.65mm" layerRef="TOP" part="INA333"/>
+    <Component refDes="U102" packageRef="SOIC-8_3.9x4.9mm_P1.27mm" layerRef="TOP" part="OPA2333"/>
+    <Component refDes="U201" packageRef="MSOP-8_3x3mm_P0.65mm" layerRef="TOP" part="INA333"/>
+    <Component refDes="U202" packageRef="SOIC-8_3.9x4.9mm_P1.27mm" layerRef="TOP" part="OPA2333"/>
+    <Component refDes="Y1" packageRef="Crystal_SMD_3225-4Pin_3.2x2.5mm" layerRef="TOP" part="2.048MHz"/>
+  </Step></CadData></Ecad>
+  <Avl name="AVL">
+    <AvlItem OEMDesignNumber="ITEM-2">
+      <AvlVmpn qualified="true" chosen="true"><AvlMpn name="GRM188R71H104KA93D" rank="1"/><AvlVendor enterpriseRef="V1"/></AvlVmpn>
+    </AvlItem>
+    <AvlItem OEMDesignNumber="ITEM-4">
+      <AvlVmpn qualified="true" chosen="true"><AvlMpn name="RC0603FR-071ML" rank="1"/><AvlVendor enterpriseRef="V3"/></AvlVmpn>
+    </AvlItem>
+    <AvlItem OEMDesignNumber="ITEM-8">
+      <AvlVmpn qualified="true" chosen="true"><AvlMpn name="ADS1292RIPBSR" rank="1"/><AvlVendor enterpriseRef="V2"/></AvlVmpn>
+    </AvlItem>
+    <AvlItem OEMDesignNumber="ITEM-9">
+      <AvlVmpn qualified="true" chosen="true"><AvlMpn name="22-23-2051" rank="1"/><AvlVendor enterpriseRef="V0"/></AvlVmpn>
+    </AvlItem>
+    <AvlItem OEMDesignNumber="ITEM-10">
+      <AvlVmpn qualified="true" chosen="true"><AvlMpn name="INA333AIDGKR" rank="1"/><AvlVendor enterpriseRef="V2"/></AvlVmpn>
+    </AvlItem>
+    <AvlItem OEMDesignNumber="ITEM-11">
+      <AvlVmpn qualified="true" chosen="true"><AvlMpn name="OPA2333AIDR" rank="1"/><AvlVendor enterpriseRef="V2"/></AvlVmpn>
+    </AvlItem>
+  </Avl>
+</IPC-2581>

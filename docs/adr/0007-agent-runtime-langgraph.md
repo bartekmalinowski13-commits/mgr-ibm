@@ -1,15 +1,15 @@
-# ADR-0007: Runtime agentów: LangGraph + adapter Claude Agent SDK
+# ADR-0007: Agent runtime: LangGraph + Claude Agent SDK adapter
 
-Status: Zaakceptowany · 2026-11-09
+Status: Accepted · 2026-11-09
 
-## Kontekst
-Dwa warianty systemu do porównania; potrzebny pełny ślad kroków, wznawianie i szybkość.
+## Context
+Two system variants to compare; a full step trace, resumption and speed are needed.
 
-## Decyzja
-Interfejs `VariantRuntime`. Implementacje: `langgraph_a` (100% LLM), `langgraph_b` (hybryda), `claude_agent_sdk_a` (wariant A na gotowej pętli agentowej). Checkpointy LangGraph w Postgresie. Równoległy fan-out pozycji, tiering modeli, structured output, budżety czasu/tokenów.
+## Decision
+A `VariantRuntime` interface. Implementations: `langgraph_a` (100% LLM), `langgraph_b` (hybrid), `claude_agent_sdk_a` (variant A on an off-the-shelf agentic loop). LangGraph checkpoints in Postgres. Parallel fan-out of items, model tiering, structured output, time/token budgets.
 
-## Konsekwencje
-Uczciwe porównanie: ten sam kontrakt wejścia/wyjścia i te same biblioteki domenowe. Koszt: utrzymanie dwóch frameworków – Claude Agent SDK tylko w jednym adapterze.
+## Consequences
+A fair comparison: the same input/output contract and the same domain libraries. Cost: maintaining two frameworks – the Claude Agent SDK in only one adapter.
 
-## Rozważane alternatywy
-CrewAI/AutoGen (mniej kontroli nad stanem); własny orkiestrator (więcej kodu do utrzymania).
+## Alternatives considered
+CrewAI/AutoGen (less control over state); a custom orchestrator (more code to maintain).

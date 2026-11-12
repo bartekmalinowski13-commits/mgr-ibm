@@ -1,0 +1,25 @@
+{
+  "name": "@bomagent/infra",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "BOM Agent AWS infrastructure (CDK, synth only - deployment is a human-run pipeline)",
+  "scripts": {
+    "synth": "cdk synth --quiet --all",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome check bin lib test"
+  },
+  "dependencies": {
+    "aws-cdk-lib": "2.275.0",
+    "cdk-nag": "3.0.2",
+    "constructs": "10.8.1"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.5",
+    "aws-cdk": "2.1148.0",
+    "tsx": "4.23.15",
+    "typescript": "~5.9.3",
+    "vitest": "5.1.0"
+  }
+}

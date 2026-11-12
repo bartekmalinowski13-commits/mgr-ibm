@@ -1,0 +1,52 @@
+# bomagent-cad-parsers (`bomagent_cad`)
+
+**Responsibility:** turn untrusted design files into `ParsedDesign` (FORMATS.md, ADR-0009).
+Runs inside the sandboxed `ingest-worker`.
+
+## Public interface
+- `FileRef(name, data)`, `FormatParser` protocol: `format_id`, `version`, `sniff(file) -> 0..1`, `parse(files) -> ParsedDesign`
+- `parse_files(files)`, `detect(files)`; `ParseError` / `UnsupportedFormatError` carry a `code` for the UI i18n catalogue (`kicad.legacy`, `unsupported.allegro_brd`, ...)
+
+| Plugin | Formats | Notes |
+|---|---|---|
+| `kicad.KicadParser` | KiCad 6-9 `.kicad_sch` (+ `.kicad_pro`, optional `.kicad_pcb`) | hierarchical sheets incl. a sheet used several times, KiCad 6 `symbol_instances`, multi-unit symbols, `in_bom`/`dnp` flags and `DNP` field, PCB footprint cross-check; KiCad 5 `.sch` rejected with a conversion hint |
+| `ipc2581.Ipc2581Parser` | IPC-2581 rev B/C `.xml`/`.cvg` | `defusedxml` (DTD/entities refused), namespace-agnostic; BOM items + AVL (MPN, manufacturer, chosen/best-ranked part) + placements; without a BOM section: placements only, confidence 0.6 |
+| `edif.EdifParser` | EDIF 2.0.0 `.edf`/`.edif`/`.edn` | bounded S-expression reader; `rename` for designators, properties to value/footprint/MPN/manufacturer/DNP (others kept as fields), nets from `portRef`; `%nn%` escapes decoded |
+| `odbpp.OdbppParser` | ODB++ job `.tgz`/`.tar.gz`/`.zip` | read in memory under limits (decompressed total, entries), absolute paths / `..` / links reject the archive; `comp_+_top|bot/components` (`CMP` + `PRP` records) and package names from `eda/data`; `.Z`-compressed members reported |
+| `dxf.DxfParser` | DXF (ASCII/binary) mechanical parts lists | `ezdxf` recovery loader from memory; block attributes (reliable) or an exploded text table (layout heuristics, lower confidence); rows become `MP<pos>` parts, quantity N -> N designators (`MP2A`..); `ACAD_TABLE` not read |
+| `pdf_bom.PdfBomParser` | BOM tables in PDF | `pypdf` text fragments with page positions (not a plain-text rendering, which glues columns); header by the CSV column names, cells by x, wrapped cells joined, repeated page headers skipped; confidence <= 0.75 and "review" limitation; scans (no text layer) and encrypted PDFs reported |
+| `csv_bom.CsvBomParser` | CSV/TSV BOM | header aliases, `,`/`;`/tab, preambles, ranges `R1-R4`, Qty mismatch and duplicates reported as limitations |
+
+Unsupported formats (Allegro `.brd`, Altium, OrCAD, DWG, XLSX) produce an actionable hint
+instead of a guess (`docs/plans/M7-formats.md`).
+
+## Safety
+Every parser error is a `ParseError` with a stable code: `parse_files` converts anything
+else a parser or library raises into `parse.internal`, so a hostile file never crashes the
+worker or loops its queue message. Archives are sniffed cheaply (zip entry count from the
+end-of-central-directory record, tar headers in a 16 MB prefix). Invalid designators,
+unknown DNP values, duplicate BOM sections and quantity mismatches are skipped or kept,
+and always reported as limitations. Regression and fuzz tests: `tests/test_hostile_inputs.py`.
+
+Workers do not call `parse_files` directly: `bomagent_cad.sandbox.parse_files_sandboxed`
+runs it in a separate `python -I` process with `RLIMIT_AS` (default 1 GiB), `RLIMIT_CPU`
+(60 s), a wall-clock timeout (90 s), core dumps off and a minimal environment (no database
+URLs or cloud credentials). A killed or over-limit child becomes `ParseError` with code
+`parse.resource_limit` or `parse.timeout`, so the file is marked failed instead of the
+message being redelivered. Limits: `SandboxLimits` / `BOMAGENT_PARSE_MEMORY_MB`,
+`BOMAGENT_PARSE_CPU_SECONDS`, `BOMAGENT_PARSE_TIMEOUT_SECONDS`;
+`BOMAGENT_PARSE_SANDBOX=inprocess` disables the subprocess (unit tests only). Linux
+enforces memory/CPU; elsewhere only the timeout applies. Tests: `tests/test_sandbox.py`.
+
+`sexpr.parse` is iterative with limits on size (64 MB), depth (512) and token count; no
+recursion on file content; UTF-8 decoding is strict; files are never executed.
+
+## Testing
+`uv run pytest packages/py/cad-parsers` - fixture projects in `evals/fixtures/kicad/`
+(regenerate with `uv run python tools/fixtures/gen_kicad_fixtures.py evals/fixtures/kicad`),
+robustness cases (truncated, nesting bomb, binary, legacy, recursive sheets, XXE and
+entity expansion). IPC-2581, EDIF, ODB++, DXF and PDF BOM fixtures (`evals/fixtures/{ipc2581,edif,odbpp,dxf,pdf-bom}/`)
+are generated from the KiCad fixtures by `uv run python tools/make_format_fixtures.py`;
+the electronic formats must parse into exactly the KiCad parts (cross-format consistency);
+the two DXF fixtures encode the same enclosure parts list in two ways; the PDF BOMs must
+parse into exactly the CSV reference BOMs they were printed from.

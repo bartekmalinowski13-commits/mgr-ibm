@@ -1,0 +1,428 @@
+{
+  "app": {
+    "name": "BOM Agent"
+  },
+  "common": {
+    "cancel": "Anuluj",
+    "close": "Zamknij",
+    "save": "Zapisz",
+    "loading": "Wczytywanie…",
+    "retry": "Spróbuj ponownie",
+    "copy": "Kopiuj",
+    "copied": "Skopiowano",
+    "remove": "Usuń",
+    "never": "nigdy",
+    "unknownError": "Coś poszło nie tak. Spróbuj ponownie za chwilę."
+  },
+  "login": {
+    "title": "Zaloguj się do BOM Agent",
+    "lead": "Zestawienia materiałowe z plików projektowych, z pochodzeniem każdej decyzji.",
+    "email": "E-mail",
+    "name": "Imię",
+    "submit": "Zaloguj się",
+    "devNote": "Środowisko lokalne: logowanie przez wbudowany testowy dostawca tożsamości. W chmurze logujesz się przez Amazon Cognito lub SSO organizacji.",
+    "cloudNote": "Przy logowaniu jednokrotnym (SSO) podaj służbowy e-mail – przejdziesz od razu do logowania swojej organizacji. W pozostałych przypadkach logujesz się na stronie BOM Agent (Amazon Cognito w regionie UE).",
+    "callbackError": "Nie udało się dokończyć logowania (link wygasł albo został już użyty).",
+    "retry": "Zaloguj się ponownie",
+    "continue": "Dalej",
+    "supabase": {
+      "title": "Zaloguj się kontem",
+      "create": "Utwórz konto",
+      "signIn": "Zaloguj się",
+      "password": "Hasło",
+      "fullName": "Imię i nazwisko",
+      "forgot": "Nie pamiętam hasła",
+      "haveAccount": "Mam już konto",
+      "newHere": "Nowy tutaj? Utwórz konto",
+      "checkInbox": "Sprawdź skrzynkę: wysłaliśmy link potwierdzający na adres {{email}}. Potwierdź e-mail, a potem zaloguj się.",
+      "recoverSent": "Jeśli dla tego adresu istnieje konto, wysłaliśmy link do zmiany hasła.",
+      "recoverNeedsEmail": "Najpierw wpisz swój e-mail powyżej.",
+      "note": "Hostowane na Supabase. Logowanie jednokrotne (SSO) jest dostępne tylko we wdrożeniu AWS.",
+      "errors": {
+        "invalidCredentials": "Nieprawidłowy e-mail lub hasło.",
+        "emailNotConfirmed": "Najpierw potwierdź e-mail: otwórz link, który wysłaliśmy.",
+        "userExists": "Konto z tym adresem już istnieje. Zaloguj się.",
+        "weakPassword": "Hasło jest zbyt słabe. Użyj co najmniej 8 znaków.",
+        "rateLimited": "Zbyt wiele prób. Spróbuj ponownie za kilka minut.",
+        "signupDisabled": "Tworzenie kont jest wyłączone w tym wdrożeniu.",
+        "network": "Nie można połączyć się z usługą logowania. Sprawdź połączenie.",
+        "unknown": "Coś poszło nie tak. Spróbuj ponownie za chwilę."
+      }
+    }
+  },
+  "onboarding": {
+    "title": "Załóż organizację",
+    "lead": "Organizacja to wspólna przestrzeń zespołu: projekty, przebiegi, baza wiedzy i log audytu. Dane organizacji są oddzielone od innych.",
+    "name": "Nazwa organizacji",
+    "slug": "Adres",
+    "slugHint": "Małe litery, cyfry i myślniki, np. medtech-krakow.",
+    "create": "Utwórz organizację",
+    "inviteTitle": "Masz zaproszenie?",
+    "inviteLead": "Wklej kod z zaproszenia, które dostałeś od administratora organizacji.",
+    "token": "Kod zaproszenia",
+    "join": "Dołącz do organizacji",
+    "joined": "Dołączono do organizacji {{name}}"
+  },
+  "nav": {
+    "label": "Nawigacja główna",
+    "start": "Start",
+    "newRun": "Nowy przebieg",
+    "projects": "Projekty",
+    "runs": "Przebiegi",
+    "audit": "Log audytu",
+    "settings": "Ustawienia",
+    "recent": "Ostatnie projekty",
+    "switchOrg": "Przełącz organizację",
+    "newOrg": "Załóż nową organizację",
+    "signOut": "Wyloguj",
+    "language": "English",
+    "kb": "Baza wiedzy"
+  },
+  "plan": {
+    "pill": "Plan {{plan}}",
+    "names": {
+      "pilot": "Pilot",
+      "team": "Team",
+      "business": "Business",
+      "enterprise": "Enterprise"
+    },
+    "budget": "LLM w tym miesiącu: {{used}} z {{limit}}"
+  },
+  "start": {
+    "greeting": "Cześć, {{name}}",
+    "newRunTitle": "Nowy przebieg BOM",
+    "newRunLead": "Zacznij od pustego projektu albo od szablonu urządzenia – szablon wypełni wymagania (część aplikacyjna, zasilanie).",
+    "blank": "Pusty projekt",
+    "blankHint": "Własne pliki KiCad",
+    "stats": {
+      "activeRuns": "Aktywne przebiegi",
+      "activeRunsEmpty": "Nic się teraz nie liczy. Uruchom przebieg dla projektu.",
+      "projects": "Projekty",
+      "projectsEmpty": "Nie masz jeszcze projektu. Załóż pierwszy i wgraj pliki.",
+      "completed": "Gotowe zestawienia",
+      "completedEmpty": "Tu pojawią się zestawienia do przeglądu."
+    },
+    "templates": {
+      "ecg": {
+        "title": "EKG noszony",
+        "hint": "Część BF, bateria"
+      },
+      "pulseox": {
+        "title": "Pulsoksymetr",
+        "hint": "Część BF, USB"
+      },
+      "eeg": {
+        "title": "Wzmacniacz EEG",
+        "hint": "Część CF, bateria"
+      },
+      "infusion": {
+        "title": "Pompa infuzyjna",
+        "hint": "Część CF, sieć"
+      }
+    }
+  },
+  "projects": {
+    "title": "Projekty",
+    "new": "Nowy projekt",
+    "name": "Nazwa projektu",
+    "description": "Opis",
+    "create": "Utwórz projekt",
+    "created": "Utworzono projekt",
+    "empty": "Projekt to zestaw plików jednego urządzenia. Utwórz pierwszy projekt, a potem wgraj pliki KiCad.",
+    "files": "Pliki projektowe",
+    "drop": "Przeciągnij tutaj pliki projektu (KiCad .kicad_sch/.kicad_pro/.kicad_pcb, IPC-2581 .xml, EDIF .edf, ODB++ .tgz/.zip, DXF z listą części, BOM w PDF/CSV) albo",
+    "browse": "wybierz z dysku",
+    "dropHint": "Do 64 MB na plik. Pliki są sprawdzane w izolowanym środowisku przed użyciem.",
+    "uploaded": "Wgrano {{count}} plików",
+    "noFiles": "Brak plików. Wgraj schemat KiCad, żeby uruchomić przebieg.",
+    "runs": "Przebiegi projektu",
+    "noRuns": "Ten projekt nie ma jeszcze przebiegu.",
+    "startRun": "Uruchom przebieg",
+    "components": "{{count}} komponentów",
+    "fileStatus": {
+      "uploaded": "Sprawdzanie",
+      "parsed": "Gotowy",
+      "failed": "Odrzucony"
+    }
+  },
+  "newRun": {
+    "title": "Nowy przebieg",
+    "lead": "Wybierz projekt, wariant systemu i model. Wynik zobaczysz na żywo.",
+    "project": "Projekt",
+    "pickProject": "Wybierz projekt",
+    "noProjects": "Najpierw utwórz projekt i wgraj pliki.",
+    "variant": "Wariant",
+    "variantA": "A – tylko LLM",
+    "variantAHint": "Agenci LLM wykonują wszystkie kroki.",
+    "variantB": "B – hybryda",
+    "variantBHint": "Reguły rozstrzygają, co się da; LLM tylko resztę.",
+    "variantBoth": "Oba i porównanie",
+    "variantBothHint": "Dwa przebiegi na tych samych plikach.",
+    "model": "Model",
+    "closed": "zamknięty",
+    "openWeight": "otwarte wagi",
+    "device": "Nazwa urządzenia",
+    "appliedPart": "Część aplikacyjna",
+    "appliedParts": {
+      "none": "Brak",
+      "B": "Typ B",
+      "BF": "Typ BF",
+      "CF": "Typ CF"
+    },
+    "power": "Zasilanie",
+    "powers": {
+      "battery": "Bateria",
+      "usb": "USB",
+      "mains": "Sieć",
+      "external_psu": "Zasilacz zewnętrzny"
+    },
+    "defib": "Odporność na defibrylację",
+    "submit": "Uruchom przebieg",
+    "started": "Uruchomiono przebieg"
+  },
+  "run": {
+    "title": "Przebieg",
+    "variant": "Wariant {{variant}}",
+    "status": {
+      "queued": "W kolejce",
+      "running": "W toku",
+      "completed": "Gotowy",
+      "failed": "Nieudany",
+      "budget_exceeded": "Przekroczony budżet"
+    },
+    "steps": "Kroki agentów",
+    "llmCalls": "Wywołania LLM",
+    "tokens": "Tokeny",
+    "cost": "Koszt",
+    "time": "Czas",
+    "waiting": "Przebieg czeka na wolnego agenta.",
+    "failedHelp": "Przebieg się nie udał: {{error}}. Sprawdź pliki projektu i uruchom go ponownie.",
+    "export": "Eksportuj CSV",
+    "exported": "Wyeksportowano CSV",
+    "version": "Wersja {{version}}",
+    "findings": "{{count}} uwag walidacji",
+    "lastStep": "Ostatni zakończony krok: {{step}}",
+    "starting": "Uruchamianie agentów…",
+    "timeline": "Kroki przebiegu",
+    "stepCalls_one": "{{count}} wywołanie LLM",
+    "stepCalls_few": "{{count}} wywołania LLM",
+    "stepCalls_many": "{{count}} wywołań LLM",
+    "stepCalls_other": "{{count}} wywołania LLM",
+    "stepRule": "bez LLM"
+  },
+  "bom": {
+    "title": "Zestawienie BOM",
+    "onlyFindings": "Tylko z uwagami",
+    "origin": "Kto zdecydował",
+    "columns": {
+      "line": "Poz.",
+      "refdes": "Oznaczenia",
+      "qty": "Ilość",
+      "value": "Wartość",
+      "footprint": "Obudowa",
+      "manufacturer": "Producent",
+      "mpn": "MPN",
+      "notes": "Uwagi"
+    },
+    "provenance": {
+      "agent": "Agent LLM",
+      "rule": "Reguła",
+      "parser": "Plik projektu",
+      "user": "Użytkownik"
+    },
+    "dnp": "Nie montować",
+    "empty": "To zestawienie nie ma pozycji.",
+    "noMatches": "Żadna pozycja nie ma uwag."
+  },
+  "panel": {
+    "title": "Pozycja {{line}}",
+    "fields": "Pochodzenie pól",
+    "rationale": "Uzasadnienie",
+    "citations": "Źródła z bazy wiedzy",
+    "page": "str. {{page}}",
+    "findings": "Uwagi walidacji",
+    "noFindings": "Reguły nie zgłosiły uwag do tej pozycji.",
+    "edit": "Popraw pozycję",
+    "editLead": "Poprawka tworzy nową wersję zestawienia i trafia do wiedzy Twojej organizacji (nigdy do innych).",
+    "reason": "Powód zmiany",
+    "reasonHint": "Np. „Zamiennik z magazynu, zatwierdzony przez dział jakości”.",
+    "saveFix": "Zapisz poprawkę",
+    "saved": "Zapisano poprawkę jako wersję {{version}}",
+    "rule": "Reguła {{rule}} ({{pack}} {{version}})",
+    "agent": "{{agent}} · model {{model}}",
+    "parser": "Odczytane z pliku ({{parser}})",
+    "user": "Zmienione przez {{user}}"
+  },
+  "runs": {
+    "title": "Przebiegi",
+    "empty": "Nie ma jeszcze przebiegów. Uruchom pierwszy z ekranu Start."
+  },
+  "audit": {
+    "title": "Log audytu",
+    "objectType": "Obiekt",
+    "actor": "Kto",
+    "all": "Wszystkie",
+    "when": "Kiedy",
+    "action": "Zdarzenie",
+    "verify": "Sprawdź integralność",
+    "verifyOk": "Łańcuch audytu jest nienaruszony ({{count}} zdarzeń).",
+    "verifyBroken": "Łańcuch audytu jest przerwany od zdarzenia #{{seq}}. Zgłoś to administratorowi bezpieczeństwa.",
+    "more": "Pokaż starsze",
+    "empty": "Brak zdarzeń dla tych filtrów."
+  },
+  "settings": {
+    "title": "Ustawienia organizacji",
+    "tabs": {
+      "members": "Członkowie",
+      "keys": "Klucze API",
+      "usage": "Zużycie i limity",
+      "sso": "SSO"
+    },
+    "members": "Członkowie",
+    "role": "Rola",
+    "roles": {
+      "owner": "Właściciel",
+      "admin": "Administrator",
+      "engineer": "Inżynier",
+      "reviewer": "Recenzent",
+      "viewer": "Podgląd"
+    },
+    "invite": "Zaproś osobę",
+    "inviteEmail": "E-mail",
+    "sendInvite": "Utwórz zaproszenie",
+    "invited": "Utworzono zaproszenie. Przekaż ten kod osobie zapraszanej – pokazujemy go tylko raz:",
+    "pending": "Oczekujące zaproszenia",
+    "noPending": "Brak oczekujących zaproszeń.",
+    "revoke": "Unieważnij",
+    "expires": "ważne do {{date}}",
+    "removeMember": "Usuń z organizacji",
+    "removed": "Usunięto członka",
+    "rolesChanged": "Zmieniono rolę",
+    "keys": "Klucze API",
+    "keysLead": "Klucze dla integracji (CI, PLM). Klucz działa tylko w tej organizacji i nie może zarządzać członkami.",
+    "keyName": "Nazwa klucza",
+    "createKey": "Utwórz klucz",
+    "keyCreated": "Utworzono klucz. Skopiuj go teraz – nie pokażemy go ponownie:",
+    "rotate": "Wymień",
+    "rotated": "Wymieniono klucz",
+    "lastUsed": "ostatnio użyty: {{date}}",
+    "noKeys": "Brak kluczy API.",
+    "usage": "Zużycie w tym miesiącu",
+    "usageItems": {
+      "runs": "Przebiegi",
+      "llm_calls": "Wywołania LLM",
+      "cost_eur": "Koszt LLM",
+      "files_uploaded": "Wgrane pliki"
+    },
+    "of": "z {{limit}}",
+    "sso": "Logowanie jednokrotne (SSO)",
+    "ssoLead": "Logowanie przez dostawcę tożsamości organizacji (SAML 2.0 lub OpenID Connect), federowane w Amazon Cognito w UE.",
+    "ssoUnavailable": "Logowanie jednokrotne jest dostępne tylko we wdrożeniu AWS. To wdrożenie loguje e-mailem i hasłem."
+  },
+  "errors": {
+    "notMember": "Nie masz dostępu do tej organizacji. Wybierz inną organizację.",
+    "notFound": "Nie znaleziono tego elementu. Mógł zostać usunięty albo należy do innej organizacji."
+  },
+  "compare": {
+    "title": "Porównanie wariantów",
+    "open": "Porównaj warianty A i B",
+    "needTwo": "Do porównania potrzebne są dwa gotowe przebiegi tego projektu. Uruchom przebieg w trybie „Oba i porównanie”.",
+    "left": "Pierwszy przebieg",
+    "right": "Drugi przebieg",
+    "metrics": "Metryki przebiegów",
+    "metric": "Metryka",
+    "lines": "Pozycje BOM",
+    "findings": "Uwagi walidacji",
+    "differences_one": "{{count}} różnica między wariantami",
+    "differences_few": "{{count}} różnice między wariantami",
+    "differences_many": "{{count}} różnic między wariantami",
+    "differences_other": "{{count}} różnicy między wariantami",
+    "same": "Oba warianty zdecydowały tak samo dla każdego oznaczenia.",
+    "missing": "Brak w tym wariancie"
+  },
+  "reference": {
+    "title": "Porównanie z BOM referencyjnym",
+    "lead": "Wgraj zweryfikowany BOM (CSV z kolumną oznaczeń, np. Reference). Policzymy precyzję, czułość i F1 pozycji, pokrycie MPN i dokładność pól. Plik nie jest zapisywany.",
+    "upload": "Wgraj BOM referencyjny",
+    "metrics": {
+      "line_f1": "F1 pozycji",
+      "line_precision": "Precyzja",
+      "line_recall": "Czułość",
+      "designator_f1": "F1 oznaczeń",
+      "mpn_coverage": "Pokrycie MPN"
+    },
+    "diffs_one": "{{count}} rozbieżność",
+    "diffs_few": "{{count}} rozbieżności",
+    "diffs_many": "{{count}} rozbieżności",
+    "diffs_other": "{{count}} rozbieżności",
+    "field": "Pole",
+    "predicted": "W zestawieniu",
+    "expected": "W referencji"
+  },
+  "kb": {
+    "title": "Baza wiedzy",
+    "lead": "Datasheety, noty aplikacyjne i normy, z których agenci biorą dowody (cytaty przy pozycjach BOM). Dokumenty organizacji widzi tylko Twoja organizacja; treść dokumentów nigdy nie jest traktowana jako polecenie dla agentów.",
+    "tabs": {
+      "tenant": "Wiedza organizacji",
+      "global": "Korpus globalny"
+    },
+    "file": "Plik (PDF, Markdown, tekst)",
+    "kind": "Rodzaj",
+    "kinds": {
+      "datasheet": "Datasheet",
+      "application_note": "Nota aplikacyjna",
+      "standard": "Norma",
+      "component_library": "Biblioteka komponentów",
+      "correction": "Poprawka użytkownika",
+      "other": "Inny"
+    },
+    "add": "Dodaj do bazy",
+    "added": "Dodano {{name}} – indeksowanie trwa",
+    "hint": "Do 32 MB. Pliki są indeksowane w tle; skany bez warstwy tekstu wymagają OCR.",
+    "empty": "Brak dokumentów organizacji. Dodaj datasheety części, których używacie – agent wariantu B cytuje je przy wyborze MPN.",
+    "globalLead": "Wspólny korpus dokumentów publicznych utrzymywany przez operatora platformy (tylko odczyt).",
+    "globalEmpty": "Korpus globalny jest pusty w tym środowisku.",
+    "chunks_one": "{{count}} fragment",
+    "chunks_few": "{{count}} fragmenty",
+    "chunks_many": "{{count}} fragmentów",
+    "chunks_other": "{{count}} fragmentu",
+    "status": {
+      "pending": "W kolejce",
+      "indexing": "Indeksowanie",
+      "indexed": "Zaindeksowany",
+      "failed": "Błąd"
+    }
+  },
+  "sso": {
+    "domains": "Zweryfikowane domeny e-mail",
+    "domainsLead": "Potwierdź, że organizacja kontroluje domenę e-mail: dodaj rekord DNS TXT i kliknij Weryfikuj. Osoby z zweryfikowanych domen przy logowaniu trafiają do Waszego dostawcy tożsamości.",
+    "domain": "Domena",
+    "addDomain": "Dodaj domenę",
+    "verified": "Zweryfikowana",
+    "notVerified": "Jeszcze niezweryfikowana",
+    "verify": "Weryfikuj",
+    "verifiedToast": "Domena zweryfikowana",
+    "txtHint": "Dodaj ten rekord DNS TXT, a potem kliknij Weryfikuj:",
+    "provider": "Dostawca tożsamości",
+    "protocol": "Protokół",
+    "metadataUrl": "Adres metadanych SAML",
+    "issuer": "Adres wystawcy OIDC (issuer)",
+    "clientId": "Identyfikator klienta",
+    "clientSecret": "Sekret klienta",
+    "secretKept": "Zostaw puste, aby zachować zapisany sekret",
+    "defaultRole": "Rola nowych członków",
+    "enforce": "Wymagaj logowania jednokrotnego",
+    "enforceHint": "Członkowie z adresem w zweryfikowanej domenie mogą logować się tylko przez dostawcę tożsamości. Właściciele zachowują logowanie hasłem na wypadek awarii dostawcy.",
+    "status": "Stan",
+    "statuses": {
+      "draft": "Szkic",
+      "active": "Aktywny",
+      "failed": "Błąd"
+    },
+    "acsUrl": "Adres odpowiedzi / ACS",
+    "entityId": "Identyfikator encji (audience)",
+    "saved": "Dostawca tożsamości zapisany",
+    "failed": "Nie udało się skonfigurować dostawcy – zobacz stan poniżej",
+    "removeProvider": "Usuń dostawcę tożsamości"
+  }
+}

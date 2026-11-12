@@ -1,15 +1,15 @@
-# ADR-0005: Tożsamość: OIDC, Amazon Cognito, SSO per organizacja
+# ADR-0005: Identity: OIDC, Amazon Cognito, SSO per organization
 
-Status: Zaakceptowany · 2026-11-09
+Status: Accepted · 2026-11-09
 
-## Kontekst
-Klienci B2B oczekują SSO (SAML/OIDC), MFA i ról.
+## Context
+B2B customers expect SSO (SAML/OIDC), MFA and roles.
 
-## Decyzja
-Cognito w `eu-central-1` z federacją SAML 2.0 / OIDC konfigurowaną per organizacja; aplikacja zależy tylko od standardu OIDC (JWT). RBAC: owner, admin, engineer, reviewer, viewer; polityki w module `authz` w stylu Cedar. Klucze API per organizacja. SCIM – osobny ADR przy pierwszym kliencie Enterprise.
+## Decision
+Cognito in `eu-central-1` with SAML 2.0 / OIDC federation configured per organization; the application depends only on the OIDC standard (JWT). RBAC: owner, admin, engineer, reviewer, viewer; policies in the `authz` module in the Cedar style. API keys per organization. SCIM – a separate ADR at the first Enterprise customer.
 
-## Konsekwencje
-Dane tożsamości w UE, zarządzana usługa. Ograniczenie: Cognito nie ma SCIM – dlatego zależność tylko od OIDC, żeby można było przejść na Keycloak.
+## Consequences
+Identity data in the EU, a managed service. Limitation: Cognito has no SCIM – hence the dependency only on OIDC, so that a move to Keycloak is possible.
 
-## Rozważane alternatywy
-Keycloak self-hosted (pełna kontrola, ale operacje i aktualizacje bezpieczeństwa po naszej stronie); Auth0/Clerk/WorkOS (świetne DX, ale dodatkowy podprocesor danych i kwestia rezydencji).
+## Alternatives considered
+Self-hosted Keycloak (full control, but operations and security updates on our side); Auth0/Clerk/WorkOS (great DX, but an additional data sub-processor and a residency question).

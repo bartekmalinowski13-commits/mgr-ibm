@@ -1,69 +1,69 @@
-# Architektura platformy BOM Agent (docelowa, produkcyjna)
+# BOM Agent platform architecture (target, production)
 
-Status: **zaakceptowana do implementacji** (szczegóły decyzji w `docs/adr/`). Autor rekomendacji: Claude, na podstawie wymagań Bartka (2026-11-09).
+Status: **accepted for implementation** (decision details in `docs/adr/`). Author of the recommendation: Claude, based on Bartek's requirements (2026-11-09).
 
-## 1. Wymagania, które napędzają architekturę
+## 1. Requirements that drive the architecture
 
-| # | Wymaganie | Skutek architektoniczny |
+| # | Requirement | Architectural consequence |
 |---|---|---|
-| R1 | Klienci to zewnętrzne firmy (B2B SaaS), wiele organizacji | multi-tenancy od pierwszego commita, SSO per organizacja, RBAC, onboarding self-service |
-| R2 | Dane i przetwarzanie wyłącznie w UE | AWS `eu-central-1`, SCP blokujące regiony spoza UE, dostawcy LLM z gwarancją przetwarzania w UE |
-| R3 | Modele zamknięte (najwyższa półka: Anthropic, OpenAI) **i** otwarte (open-weight), z rozróżnieniem w eksperymentach | LLM Gateway z katalogiem modeli i politykami routingu per tenant |
-| R4 | Wspólna baza wiedzy, ale izolowane przestrzenie; organizacje nie uczą się od siebie | korpus globalny (publiczny, tylko do odczytu) + przestrzenie per tenant, RLS, brak fine-tuningu na danych klientów |
-| R5 | Wszystkie formaty: KiCad, Altium, Cadence (OrCAD/Allegro), PDF, DXF/DWG | wtyczkowa warstwa parserów, izolowany serwis ingestii z ciężkimi zależnościami |
-| R6 | Modułowo, nie monolit; mikroserwisy tylko tam, gdzie uzasadnione | 4 serwisy wdrożeniowe + biblioteki domenowe z twardymi granicami (patrz §3) |
-| R7 | Szybkie agenty | deterministyczne kroki najpierw, równoległy fan-out, tiering modeli, prompt caching, streaming |
-| R8 | Obserwowalność, monitoring, audytowalność | OpenTelemetry wszędzie, śledzenie LLM (Langfuse), niezmienny log audytu |
-| R9 | Testy E2E, smoke, wszystko „legit” | piramida testów + testy izolacji tenantów + ewaluacje LLM jako testy regresyjne (patrz `TESTING.md`) |
-| R10 | Praca magisterska: porównanie A vs B | warianty jako wymienne „runtime’y” na wspólnym kontrakcie; eksperyment przypinany do wersji modelu, promptów, reguł i snapshotu bazy wiedzy |
+| R1 | Customers are external companies (B2B SaaS), many organizations | multi-tenancy from the first commit, SSO per organization, RBAC, self-service onboarding |
+| R2 | Data and processing exclusively in the EU | AWS `eu-central-1`, SCPs blocking non-EU regions, LLM providers with an EU processing guarantee |
+| R3 | Closed models (top tier: Anthropic, OpenAI) **and** open models (open-weight), distinguished in experiments | LLM Gateway with a model catalogue and per-tenant routing policies |
+| R4 | Shared knowledge base, but isolated spaces; organizations do not learn from each other | global corpus (public, read-only) + per-tenant spaces, RLS, no fine-tuning on customer data |
+| R5 | All formats: KiCad, Altium, Cadence (OrCAD/Allegro), PDF, DXF/DWG | pluggable parser layer, isolated ingestion service with heavy dependencies |
+| R6 | Modular, not a monolith; microservices only where justified | 4 deployment services + domain libraries with hard boundaries (see §3) |
+| R7 | Fast agents | deterministic steps first, parallel fan-out, model tiering, prompt caching, streaming |
+| R8 | Observability, monitoring, auditability | OpenTelemetry everywhere, LLM tracing (Langfuse), immutable audit log |
+| R9 | E2E tests, smoke tests, everything "legit" | test pyramid + tenant isolation tests + LLM evaluations as regression tests (see `TESTING.md`) |
+| R10 | Master's thesis: comparison of A vs B | variants as interchangeable "runtimes" on a shared contract; the experiment is pinned to the model version, prompts, rules and knowledge base snapshot |
 
-## 2. Widok kontekstowy (C4 – poziom 1)
+## 2. Context view (C4 – level 1)
 
 ```mermaid
 flowchart LR
-  user["Inżynier / admin organizacji klienta"] -->|HTTPS, SSO| app["BOM Agent (SaaS)"]
-  idp["IdP klienta (Entra ID, Okta, Google)"] -->|SAML / OIDC| app
-  app -->|inferencja, przetwarzanie w UE| llm["Dostawcy LLM w UE: Bedrock (Claude, open-weight), Azure OpenAI EU Data Zone, Mistral"]
-  app -->|e-mail transakcyjny| ses["Amazon SES (eu-central-1)"]
-  ops["Zespół platformy"] -->|GitHub Actions, OIDC| app
-  researcher["Badacz (praca mgr)"] -->|eval-runner, wyniki| app
+  user["Engineer / admin of the customer organization"] -->|HTTPS, SSO| app["BOM Agent (SaaS)"]
+  idp["Customer IdP (Entra ID, Okta, Google)"] -->|SAML / OIDC| app
+  app -->|inference, processing in the EU| llm["LLM providers in the EU: Bedrock (Claude, open-weight), Azure OpenAI EU Data Zone, Mistral"]
+  app -->|transactional e-mail| ses["Amazon SES (eu-central-1)"]
+  ops["Platform team"] -->|GitHub Actions, OIDC| app
+  researcher["Researcher (master's thesis)"] -->|eval-runner, results| app
 ```
 
-## 3. Widok kontenerów (C4 – poziom 2)
+## 3. Container view (C4 – level 2)
 
-![Architektura produkcyjna](../img/platform-architecture.png)
+![Production architecture](../img/platform-architecture.png)
 
-Źródło: `docs/img/platform-architecture.svg` (generator: `tools/platform_arch.py`). Ten sam widok jako Mermaid (edytowalny):
+Source: `docs/img/platform-architecture.svg` (generator: `tools/platform_arch.py`). The same view as Mermaid (editable):
 
 ```mermaid
 flowchart LR
-  subgraph edge["Brzeg"]
+  subgraph edge["Edge"]
     cf["CloudFront + AWS WAF"]
-    web["apps/web<br/>SPA React na S3"]
+    web["apps/web<br/>React SPA on S3"]
   end
-  subgraph svc["ECS Fargate, podsieci prywatne eu-central-1"]
-    api["services/api<br/>FastAPI, moduły:<br/>tenancy, identity, projects,<br/>runs, bom, kb-admin,<br/>audit, metering"]
-    ingest["services/ingest-worker<br/>parsery CAD / PDF / DXF<br/>sandbox, bez sieci"]
-    agent["services/agent-worker<br/>warianty A i B<br/>LangGraph + Claude Agent SDK"]
-    kbi["services/kb-indexer<br/>chunking, embeddingi"]
-    gw["llm-gateway<br/>LiteLLM: katalog modeli,<br/>budżety, polityki UE"]
+  subgraph svc["ECS Fargate, private subnets eu-central-1"]
+    api["services/api<br/>FastAPI, modules:<br/>tenancy, identity, projects,<br/>runs, bom, kb-admin,<br/>audit, metering"]
+    ingest["services/ingest-worker<br/>CAD / PDF / DXF parsers<br/>sandbox, no network"]
+    agent["services/agent-worker<br/>variants A and B<br/>LangGraph + Claude Agent SDK"]
+    kbi["services/kb-indexer<br/>chunking, embeddings"]
+    gw["llm-gateway<br/>LiteLLM: model catalogue,<br/>budgets, EU policies"]
   end
-  subgraph data["Dane"]
+  subgraph data["Data"]
     sqs["SQS + DLQ"]
     pg[("Aurora PostgreSQL<br/>pgvector + RLS")]
-    s3[("S3, SSE-KMS<br/>prefiks per tenant")]
+    s3[("S3, SSE-KMS<br/>per-tenant prefix")]
     eb["EventBridge"]
-    audit[("S3 Object Lock<br/>archiwum audytu")]
+    audit[("S3 Object Lock<br/>audit archive")]
   end
-  subgraph llm["Modele, przetwarzanie w UE"]
+  subgraph llm["Models, processing in the EU"]
     bedrock["Bedrock EU<br/>Claude + open-weight"]
     azure["Azure OpenAI<br/>EU Data Zone"]
-    mistral["Mistral (UE)"]
-    vllm["vLLM self-hosted<br/>GPU, opcjonalnie"]
+    mistral["Mistral (EU)"]
+    vllm["vLLM self-hosted<br/>GPU, optional"]
   end
-  subgraph obs["Obserwowalność"]
+  subgraph obs["Observability"]
     otel["OTel Collector<br/>→ Prometheus, Grafana,<br/>CloudWatch"]
-    lf["Langfuse<br/>ślady LLM"]
+    lf["Langfuse<br/>LLM traces"]
   end
   cf --> web
   cf --> api
@@ -90,124 +90,124 @@ flowchart LR
   gw -.-> lf
 ```
 
-### Dlaczego dokładnie te serwisy (a nie więcej)
-| Jednostka wdrożeniowa | Dlaczego osobno |
+### Why exactly these services (and no more)
+| Deployment unit | Why separate |
 |---|---|
-| `api` | Zwykłe CRUD + orkiestracja żądań. **Modularny serwis**, nie mikroserwisy: moduły domenowe mają twarde granice (import-linter, osobne schematy tabel), ale wspólny proces – bo dzielą transakcje i nie mają różnych profili skalowania. |
-| `ingest-worker` | Przetwarza **niezaufane pliki** i ma ciężkie natywne zależności (kicad-cli, konwertery DWG, Docling/OCR). Izolacja bezpieczeństwa + inny profil zasobów. |
-| `agent-worker` | Długie zadania (sekundy–minuty), skalowanie po długości kolejki, intensywny ruch do LLM. Inny profil skalowania niż API. |
-| `kb-indexer` | Wsadowe embeddingi dużych dokumentów; skalowanie niezależne, nie może blokować przebiegów agentów. |
-| `llm-gateway` | Jedno miejsce egzekwowania polityk UE, budżetów per tenant, logowania, fallbacku między dostawcami. Gotowy komponent (LiteLLM), nie piszemy go od zera. |
-| `model-serving` | GPU – inna infrastruktura (EC2 GPU, Fargate nie obsługuje GPU). Włączane flagą; domyślnie open-weight przez Bedrock. |
+| `api` | Plain CRUD + request orchestration. A **modular service**, not microservices: domain modules have hard boundaries (import-linter, separate table schemas) but share a process – because they share transactions and do not have different scaling profiles. |
+| `ingest-worker` | Processes **untrusted files** and has heavy native dependencies (kicad-cli, DWG converters, Docling/OCR). Security isolation + a different resource profile. |
+| `agent-worker` | Long tasks (seconds to minutes), scaling by queue length, heavy LLM traffic. A different scaling profile than the API. |
+| `kb-indexer` | Batch embeddings of large documents; scales independently, must not block agent runs. |
+| `llm-gateway` | A single place to enforce EU policies, per-tenant budgets, logging and fallback between providers. A ready-made component (LiteLLM), we do not write it from scratch. |
+| `model-serving` | GPU – different infrastructure (EC2 GPU, Fargate does not support GPUs). Enabled by a flag; by default open-weight via Bedrock. |
 
-Mikroserwisami **nie** są: reguły walidacji, parsery formatów, logika BOM, eval – to biblioteki (`packages/py/*`) używane przez serwisy. Dzięki temu warianty A i B korzystają z dokładnie tego samego kodu domenowego.
+The following are **not** microservices: validation rules, format parsers, BOM logic, eval – they are libraries (`packages/py/*`) used by the services. As a result, variants A and B use exactly the same domain code.
 
-## 4. Układ repozytorium (monorepo)
+## 4. Repository layout (monorepo)
 
 ```
 apps/web/                      React + Vite + TanStack Router/Query + Tailwind + shadcn/ui
-packages/ts/ui/                design system (komponenty na bazie shadcn/ui, tokeny)
-packages/ts/api-client/        klient generowany z OpenAPI
-services/api/                  FastAPI, moduły domenowe
+packages/ts/ui/                design system (components based on shadcn/ui, tokens)
+packages/ts/api-client/        client generated from OpenAPI
+services/api/                  FastAPI, domain modules
 services/ingest-worker/
 services/agent-worker/
 services/kb-indexer/
-packages/py/platform-common/   kontekst tenanta, auth, OTel, logowanie, emiter audytu, konfiguracja
-packages/py/bom-core/          model domenowy BOM, JSON Schema, normalizacja jednostek, grupowanie
-packages/py/cad-parsers/       wtyczki formatów (KiCad, Altium, Cadence, IPC-2581, ODB++, EDIF, PDF, DXF/DWG)
-packages/py/rules/             deterministyczne walidatory, wersjonowane pakiety reguł (np. IEC 60601 checklist)
-packages/py/kb/                retrieval: hybryda wektor + pełnotekst, reranking, zakresy (global/tenant)
-packages/py/llm/               klient do llm-gateway, katalog modeli, structured output
-packages/py/agents/            definicje agentów, prompty (wersjonowane), grafy LangGraph wariantów A i B
-packages/py/eval/              metryki, porównanie z BOM referencyjnym, raporty do pracy
-evals/                         zbiory ewaluacyjne (manifest + sumy kontrolne; pliki duże w Git LFS)
-infra/cdk/                     AWS CDK (TypeScript): stacki per warstwa
-deploy/compose/                lokalny stos (Postgres+pgvector, emulator S3/SQS, LiteLLM, Langfuse, Grafana LGTM, Ollama)
-docs/                          architektura, ADR, design, praca mgr
+packages/py/platform-common/   tenant context, auth, OTel, logging, audit emitter, configuration
+packages/py/bom-core/          BOM domain model, JSON Schema, unit normalization, grouping
+packages/py/cad-parsers/       format plugins (KiCad, Altium, Cadence, IPC-2581, ODB++, EDIF, PDF, DXF/DWG)
+packages/py/rules/             deterministic validators, versioned rule packs (e.g. IEC 60601 checklist)
+packages/py/kb/                retrieval: hybrid vector + full-text, reranking, scopes (global/tenant)
+packages/py/llm/               llm-gateway client, model catalogue, structured output
+packages/py/agents/            agent definitions, prompts (versioned), LangGraph graphs of variants A and B
+packages/py/eval/              metrics, comparison with the reference BOM, reports for the thesis
+evals/                         evaluation datasets (manifest + checksums; large files in Git LFS)
+infra/cdk/                     AWS CDK (TypeScript): stacks per layer
+deploy/compose/                local stack (Postgres+pgvector, S3/SQS emulator, LiteLLM, Langfuse, Grafana LGTM, Ollama)
+docs/                          architecture, ADRs, design, master's thesis
 ```
 
-## 5. Multi-tenancy i izolacja (ADR-0004)
+## 5. Multi-tenancy and isolation (ADR-0004)
 
-Model: **pooled** (wspólna infrastruktura) z izolacją na każdej warstwie; plan **Enterprise** może dostać **silo** (dedykowany klaster Aurora + dedykowany klucz KMS) bez zmian w kodzie – routing połączenia po `tenant_id`.
+Model: **pooled** (shared infrastructure) with isolation at every layer; the **Enterprise** plan can get **silo** (a dedicated Aurora cluster + a dedicated KMS key) without code changes – connection routing by `tenant_id`.
 
-| Warstwa | Mechanizm |
+| Layer | Mechanism |
 |---|---|
-| Tożsamość | JWT z IdP zawiera `org_id`, `roles`; użytkownik może należeć do wielu organizacji, aktywna organizacja wybierana w UI (przełącznik w lewym górnym rogu) |
-| API | zależność FastAPI ustawia `TenantContext`; brak kontekstu = 401/403, nigdy „wszystkie dane” |
-| Baza | Postgres **RLS** na każdej tabeli tenanta: `USING (tenant_id = current_setting('app.tenant_id')::uuid)`; `SET LOCAL app.tenant_id` w każdej transakcji; rola aplikacji bez `BYPASSRLS`; migracje osobną rolą |
-| Pliki | S3 `s3://…/tenants/{tenant_id}/…`, dostęp przez role z tagami sesji (ABAC) ograniczonymi do prefiksu; SSE-KMS (Enterprise: CMK per tenant) |
-| Kolejki/zdarzenia | każda wiadomość niesie `tenant_id`; worker odtwarza kontekst i ustawia RLS przed dostępem do danych |
-| Baza wiedzy | patrz §7 |
-| LLM | budżety i limity per tenant w gateway; klucze cache’u promptów i pamięci agentów zawierają `tenant_id`; brak treningu na danych klientów |
-| Obserwowalność | `tenant_id` jako atrybut zasobu/spanu; logi bez treści plików klienta |
-| Testy | zestaw testów „cross-tenant” (próby odczytu/zapisu cudzych danych przez API, SQL, S3, KB) – blokuje merge |
+| Identity | The JWT from the IdP contains `org_id`, `roles`; a user can belong to many organizations, the active organization is selected in the UI (switcher in the top-left corner) |
+| API | A FastAPI dependency sets `TenantContext`; no context = 401/403, never "all data" |
+| Database | Postgres **RLS** on every tenant table: `USING (tenant_id = current_setting('app.tenant_id')::uuid)`; `SET LOCAL app.tenant_id` in every transaction; application role without `BYPASSRLS`; migrations with a separate role |
+| Files | S3 `s3://…/tenants/{tenant_id}/…`, access through roles with session tags (ABAC) restricted to the prefix; SSE-KMS (Enterprise: CMK per tenant) |
+| Queues/events | every message carries `tenant_id`; the worker restores the context and sets RLS before accessing data |
+| Knowledge base | see §7 |
+| LLM | budgets and limits per tenant in the gateway; prompt cache keys and agent memory contain `tenant_id`; no training on customer data |
+| Observability | `tenant_id` as a resource/span attribute; logs without customer file content |
+| Tests | a "cross-tenant" test suite (attempts to read/write other tenants' data via API, SQL, S3, KB) – blocks merge |
 
-Onboarding organizacji: rejestracja → weryfikacja domeny e-mail → utworzenie tenanta (workflow: rekord, role domyślne, limity planu, opcjonalnie konfiguracja SSO SAML/OIDC, opcjonalnie silo) → zaproszenia członków. Offboarding: eksport danych + kasowanie (RODO), z dowodem w logu audytu.
+Organization onboarding: registration → e-mail domain verification → tenant creation (workflow: record, default roles, plan limits, optionally SSO SAML/OIDC configuration, optionally silo) → member invitations. Offboarding: data export + deletion (GDPR), with proof in the audit log.
 
-## 6. Tożsamość i uprawnienia (ADR-0005)
-- **Amazon Cognito** (`eu-central-1`) jako broker tożsamości: konta lokalne + federacja **SAML 2.0 / OIDC per organizacja** (Entra ID, Okta, Google Workspace); MFA wymagane dla ról admin.
-- Aplikacja zależy wyłącznie od standardu **OIDC** – dostawcę da się zamienić (np. Keycloak) bez zmian w modułach.
-- Role: `owner`, `admin`, `engineer`, `reviewer`, `viewer`; uprawnienia jako polityki w kodzie (moduł `authz`, format zgodny z Cedar – możliwa późniejsza migracja do Amazon Verified Permissions).
-- Klucze API dla integracji (per organizacja, z zakresem, rotacja, hash w bazie).
-- Przyszłe: SCIM 2.0 do provisioningu użytkowników (ADR do napisania przy pierwszym kliencie Enterprise).
+## 6. Identity and permissions (ADR-0005)
+- **Amazon Cognito** (`eu-central-1`) as the identity broker: local accounts + **SAML 2.0 / OIDC federation per organization** (Entra ID, Okta, Google Workspace); MFA required for admin roles.
+- The application depends solely on the **OIDC** standard – the provider can be replaced (e.g. with Keycloak) without changes in the modules.
+- Roles: `owner`, `admin`, `engineer`, `reviewer`, `viewer`; permissions as policies in code (`authz` module, Cedar-compatible format – a later migration to Amazon Verified Permissions is possible).
+- API keys for integrations (per organization, scoped, rotation, hash in the database).
+- Future: SCIM 2.0 for user provisioning (ADR to be written at the first Enterprise customer).
 
-## 7. Baza wiedzy (ADR-0008)
-- Jeden magazyn: **pgvector w Aurora PostgreSQL** + pełnotekstowe wyszukiwanie Postgresa (hybryda) + reranker.
-- **Zakresy (scope):** `global` – publiczne datasheety, utrzymywane przez platformę, dla wszystkich tylko do odczytu; `tenant` – prywatne dokumenty i biblioteki komponentów organizacji, widoczne wyłącznie dla niej (RLS).
-- Polityka RLS dla `kb_chunks`: `tenant_id = current_tenant OR scope = 'global'`; zapis do `global` tylko rolą pipeline’u platformy.
-- **Brak uczenia między organizacjami:** poprawki użytkowników (np. zmieniony MPN) zapisują się jako wiedza tenanta i są używane tylko w jego przebiegach; żadne dane tenanta nie trafiają do korpusu globalnego ani do fine-tuningu; embeddingi liczone osobno per dokument tenanta.
-- Wersjonowanie: każdy przebieg zapisuje `kb_snapshot_id` (dla powtarzalności eksperymentów).
+## 7. Knowledge base (ADR-0008)
+- A single store: **pgvector in Aurora PostgreSQL** + Postgres full-text search (hybrid) + a reranker.
+- **Scopes:** `global` – public datasheets, maintained by the platform, read-only for everyone; `tenant` – the organization's private documents and component libraries, visible only to it (RLS).
+- RLS policy for `kb_chunks`: `tenant_id = current_tenant OR scope = 'global'`; writes to `global` only by the platform pipeline role.
+- **No learning across organizations:** user corrections (e.g. a changed MPN) are stored as tenant knowledge and used only in that tenant's runs; no tenant data ends up in the global corpus or in fine-tuning; embeddings are computed separately per tenant document.
+- Versioning: every run stores `kb_snapshot_id` (for experiment repeatability).
 
-## 8. LLM: modele zamknięte i otwarte (ADR-0006)
+## 8. LLM: closed and open models (ADR-0006)
 
-**LiteLLM** jako gateway (open source) z katalogiem modeli, w którym każdy model ma atrybuty: `provider`, `license_class` (`closed` | `open-weight`), `residency` (`eu-region` | `eu-geo`), `capabilities`, koszt.
+**LiteLLM** as the gateway (open source) with a model catalogue in which each model has attributes: `provider`, `license_class` (`closed` | `open-weight`), `residency` (`eu-region` | `eu-geo`), `capabilities`, cost.
 
-| Klasa | Dostawca | Uwaga o UE |
+| Class | Provider | EU note |
 |---|---|---|
-| Zamknięte, najwyższa półka – Anthropic Claude | Amazon Bedrock, profil wnioskowania **EU** (cross-region w obrębie UE) lub in-region, gdzie dostępne | profil „EU” trzyma dane w regionach europejskich; sprawdzić listę regionów docelowych profilu (niektóre profile obejmują Zurych – Szwajcaria, poza UE, ale z decyzją o adekwatności RODO). Do pełnego „tylko UE” użyć profilu aplikacyjnego / in-region. |
-| Zamknięte, najwyższa półka – OpenAI | **Azure OpenAI, wdrożenie Data Zone Standard (EU)** w regionie UE (np. Sweden Central) lub OpenAI API z rezydencją EU | nie używać wdrożeń „Global”; batch tylko w wariancie Data Zone |
-| Otwarte (open-weight) | Bedrock (modele open-weight dostępne w UE) **lub** self-hosted **vLLM** na GPU w `eu-central-1`; Mistral (firma z UE) | self-hosted = pełna kontrola, wyższy koszt stały; domyślnie Bedrock |
-| Lokalnie (dev) | **Ollama** | tylko środowisko deweloperskie |
+| Closed, top tier – Anthropic Claude | Amazon Bedrock, **EU** inference profile (cross-region within the EU) or in-region where available | the "EU" profile keeps data in European regions; check the list of the profile's destination regions (some profiles include Zurich – Switzerland, outside the EU, but with a GDPR adequacy decision). For a full "EU only" use an application profile / in-region. |
+| Closed, top tier – OpenAI | **Azure OpenAI, Data Zone Standard (EU) deployment** in an EU region (e.g. Sweden Central) or the OpenAI API with EU residency | do not use "Global" deployments; batch only in the Data Zone variant |
+| Open (open-weight) | Bedrock (open-weight models available in the EU) **or** self-hosted **vLLM** on GPU in `eu-central-1`; Mistral (an EU company) | self-hosted = full control, higher fixed cost; Bedrock by default |
+| Local (dev) | **Ollama** | development environment only |
 
-Zasady: wywołania wyłącznie przez gateway; allowlista endpointów (egress); konfiguracja „no training / zero data retention” tam, gdzie dostawca ją oferuje; dokładne ID modeli w konfiguracji (nie w kodzie) i **weryfikowane przy włączaniu**, bo dostępność modeli w regionach się zmienia.
+Rules: calls only through the gateway; endpoint allowlist (egress); "no training / zero data retention" configuration wherever the provider offers it; exact model IDs in configuration (not in code) and **verified when enabling**, because model availability in regions changes.
 
-Eksperyment do pracy: macierz **{wariant A, wariant B} × {model zamknięty, model otwarty}** na tym samym zbiorze – rozróżnienie zamknięte/otwarte to dodatkowy wymiar wyników.
+Thesis experiment: a matrix **{variant A, variant B} × {closed model, open model}** on the same dataset – the closed/open distinction is an additional dimension of the results.
 
-## 9. Runtime agentów i szybkość (ADR-0007)
-- **LangGraph** – orkiestracja obu wariantów jako grafów stanu; checkpointy w Postgresie (wznawianie, human-in-the-loop, pełny ślad kroków).
-- **Claude Agent SDK** – drugi adapter runtime’u dla wariantu A (agentowa pętla z narzędziami), za wspólnym interfejsem `VariantRuntime`; pozwala porównać „własny graf” z „gotowym agentem”.
-- Wspólny kontrakt: wejście `ParsedDesign + Requirements + RunConfig`, wyjście `BomVersion + Trace + Usage`.
-- Szybkość:
-  1. deterministyczne kroki przed LLM (wariant B rozstrzyga regułami większość pozycji),
-  2. równoległy fan-out pozycji BOM (LangGraph `Send` / map-reduce) z limitem współbieżności per tenant,
-  3. tiering modeli: szybki model do klasyfikacji i prostych dopasowań, najmocniejszy do trudnych,
-  4. prompt caching wspólnych prefiksów, batchowanie zapytań do KB,
-  5. structured output (JSON Schema) – brak ponownych prób parsowania,
-  6. streaming postępu do UI przez SSE,
-  7. budżety: limit czasu, tokenów i iteracji per przebieg.
+## 9. Agent runtime and speed (ADR-0007)
+- **LangGraph** – orchestration of both variants as state graphs; checkpoints in Postgres (resumption, human-in-the-loop, full step trace).
+- **Claude Agent SDK** – a second runtime adapter for variant A (an agentic loop with tools), behind the shared `VariantRuntime` interface; lets us compare a "custom graph" with an "off-the-shelf agent".
+- Shared contract: input `ParsedDesign + Requirements + RunConfig`, output `BomVersion + Trace + Usage`.
+- Speed:
+  1. deterministic steps before the LLM (variant B resolves most items with rules),
+  2. parallel fan-out of BOM items (LangGraph `Send` / map-reduce) with a per-tenant concurrency limit,
+  3. model tiering: a fast model for classification and simple matches, the strongest for hard ones,
+  4. prompt caching of shared prefixes, batching of KB queries,
+  5. structured output (JSON Schema) – no parse retries,
+  6. progress streaming to the UI over SSE,
+  7. budgets: time, token and iteration limit per run.
 
-## 10. Ingestia formatów (ADR-0009, szczegóły: `FORMATS.md`)
-Wtyczki `cad-parsers` z jednym interfejsem `parse(file) -> ParsedDesign` i metadanymi „pewności”. Ścieżki: natywne parsery tam, gdzie format jest otwarty (KiCad, DXF, IPC-2581, ODB++, EDIF); dla formatów zamkniętych binarnych – parsery open source po spike’u albo eksporty z narzędzia klienta (to jest uczciwe ograniczenie, opisane w UI). Parsery działają w osobnym zadaniu ECS: bez dostępu do sieci, read-only FS, non-root, limity CPU/RAM/czasu, skan malware (GuardDuty Malware Protection for S3) przed parsowaniem.
+## 10. Format ingestion (ADR-0009, details: `FORMATS.md`)
+`cad-parsers` plugins with a single interface `parse(file) -> ParsedDesign` and "confidence" metadata. Paths: native parsers where the format is open (KiCad, DXF, IPC-2581, ODB++, EDIF); for closed binary formats – open-source parsers after a spike, or exports from the customer's tool (this is an honest limitation, described in the UI). Parsers run in a separate ECS task: no network access, read-only FS, non-root, CPU/RAM/time limits, malware scan (GuardDuty Malware Protection for S3) before parsing.
 
-## 11. Obserwowalność i audyt (ADR-0010, ADR-0011)
-- **OpenTelemetry** (traces, metrics, logs) w każdym serwisie, auto-instrumentacja FastAPI/SQLAlchemy/httpx, konwencje semantyczne GenAI dla wywołań LLM; propagacja kontekstu przez SQS (atrybuty wiadomości).
-- Chmura: ADOT Collector → Amazon Managed Service for Prometheus + Amazon Managed Grafana + CloudWatch Logs / X-Ray. Lokalnie: obraz `grafana/otel-lgtm`.
-- **Langfuse** (self-hosted w UE) – ślady LLM, koszty, oceny; źródło danych do metryk w pracy.
-- SLO: dostępność API, p95 opóźnienia API, odsetek udanych przebiegów, wiek najstarszej wiadomości w kolejce; alarmy → SNS.
-- **Audyt:** każda operacja zmieniająca dane emituje `AuditEvent` (kto, tenant, co, kiedy, skąd, przed/po – bez treści plików); zapis do tabeli append-only z łańcuchem skrótów (hash chain) + eksport do S3 z Object Lock (tryb compliance). Każda pozycja BOM ma **pochodzenie**: reguła (z wersją pakietu reguł) albo agent (model, wersja promptu, cytowane fragmenty KB). UI pokazuje to wprost.
+## 11. Observability and audit (ADR-0010, ADR-0011)
+- **OpenTelemetry** (traces, metrics, logs) in every service, auto-instrumentation of FastAPI/SQLAlchemy/httpx, GenAI semantic conventions for LLM calls; context propagation through SQS (message attributes).
+- Cloud: ADOT Collector → Amazon Managed Service for Prometheus + Amazon Managed Grafana + CloudWatch Logs / X-Ray. Locally: the `grafana/otel-lgtm` image.
+- **Langfuse** (self-hosted in the EU) – LLM traces, costs, evaluations; a data source for the thesis metrics.
+- SLOs: API availability, API latency p95, share of successful runs, age of the oldest message in the queue; alarms → SNS.
+- **Audit:** every data-changing operation emits an `AuditEvent` (who, tenant, what, when, from where, before/after – without file content); written to an append-only table with a hash chain + export to S3 with Object Lock (compliance mode). Every BOM item has **provenance**: a rule (with the rule pack version) or an agent (model, prompt version, cited KB fragments). The UI shows this explicitly.
 
-## 12. Infrastruktura i środowiska (ADR-0002, ADR-0003, ADR-0013)
-- AWS Organizations: konta `management`, `security` (GuardDuty, Security Hub – administrator delegowany), `log-archive` (CloudTrail organizacji, Object Lock), `shared-services` (ECR), `dev`, `staging`, `prod`. SCP: odmowa regionów spoza UE (z wyjątkami dla usług globalnych).
-- Region główny `eu-central-1`; kopie zapasowe (AWS Backup) do drugiego regionu UE (`eu-west-1`).
-- Compute: **ECS Fargate** (API, workery, gateway, Langfuse), autoskalowanie po CPU/kolejce; **Lambda** tylko do kleju zdarzeń (np. reakcja na upload do S3); **bez Kubernetes** na tym etapie (koszt operacyjny nieuzasadniony – ADR-0003 opisuje, kiedy wrócić do tematu).
-- IaC: **AWS CDK (TypeScript)** + `cdk-nag` (reguły AWS Solutions + HIPAA/NIST jako punkt odniesienia).
-- Sieć: VPC z podsieciami prywatnymi, VPC endpoints (S3, SQS, Bedrock, Secrets Manager, ECR, Logs, KMS), egress przez NAT z allowlistą domen (Azure OpenAI EU, Mistral).
+## 12. Infrastructure and environments (ADR-0002, ADR-0003, ADR-0013)
+- AWS Organizations: accounts `management`, `security` (GuardDuty, Security Hub – delegated administrator), `log-archive` (organization CloudTrail, Object Lock), `shared-services` (ECR), `dev`, `staging`, `prod`. SCP: deny non-EU regions (with exceptions for global services).
+- Primary region `eu-central-1`; backups (AWS Backup) to a second EU region (`eu-west-1`).
+- Compute: **ECS Fargate** (API, workers, gateway, Langfuse), autoscaling by CPU/queue; **Lambda** only for event glue (e.g. reacting to an upload to S3); **no Kubernetes** at this stage (operational cost not justified – ADR-0003 describes when to revisit).
+- IaC: **AWS CDK (TypeScript)** + `cdk-nag` (AWS Solutions rules + HIPAA/NIST as a reference point).
+- Network: VPC with private subnets, VPC endpoints (S3, SQS, Bedrock, Secrets Manager, ECR, Logs, KMS), egress through NAT with a domain allowlist (Azure OpenAI EU, Mistral).
 
 ## 13. CI/CD (ADR-0012)
-GitHub Actions, połączenie z AWS przez **OIDC** (bez długoterminowych kluczy), akcje przypięte do SHA.
-- PR: lint/typy/granice modułów → testy jednostkowe → integracyjne (Testcontainers) → kontraktowe (Schemathesis na OpenAPI) → testy izolacji tenantów → E2E Playwright na lokalnym stosie z fałszywym dostawcą LLM → skany (CodeQL, Trivy, gitleaks, zależności) → `cdk synth` + cdk-nag.
-- `main`: budowa obrazów, SBOM (Syft), podpis (cosign) → dev → smoke → staging → smoke + E2E → ręczne zatwierdzenie → prod (rolling z circuit breakerem) → smoke prod.
-- Joby wdrożeniowe wyłączone, dopóki `vars.AWS_DEPLOY_ENABLED != 'true'` (konto AWS jeszcze nie skonfigurowane).
+GitHub Actions, connection to AWS via **OIDC** (no long-lived keys), actions pinned to SHA.
+- PR: lint/types/module boundaries → unit tests → integration (Testcontainers) → contract (Schemathesis on OpenAPI) → tenant isolation tests → Playwright E2E on the local stack with a fake LLM provider → scans (CodeQL, Trivy, gitleaks, dependencies) → `cdk synth` + cdk-nag.
+- `main`: image build, SBOM (Syft), signing (cosign) → dev → smoke → staging → smoke + E2E → manual approval → prod (rolling with circuit breaker) → prod smoke.
+- Deployment jobs are disabled while `vars.AWS_DEPLOY_ENABLED != 'true'` (the AWS account is not configured yet).
 
-## 14. Co jest poza zakresem v1 (świadomie)
-SCIM, rozliczenia płatnicze (jest tylko metering zużycia), multi-region active-active, marketplace integracji (dystrybutorzy komponentów, PLM), podpis elektroniczny zgodny z 21 CFR Part 11.
+## 14. Out of scope for v1 (deliberately)
+SCIM, payment billing (there is only usage metering), multi-region active-active, an integration marketplace (component distributors, PLM), an electronic signature compliant with 21 CFR Part 11.

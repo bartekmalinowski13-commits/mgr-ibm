@@ -1,42 +1,42 @@
-# Strategia testów
+# Testing strategy
 
-Zasada: **TDD** (skill `test-driven-development` z superpowers) – test przed kodem. CI jest bramką: nic nie trafia do `main` bez zielonego pipeline’u.
+Principle: **TDD** (the `test-driven-development` skill from superpowers) – test before code. CI is the gate: nothing reaches `main` without a green pipeline.
 
-## Piramida
-| Poziom | Narzędzia | Zakres | Kiedy |
+## Pyramid
+| Level | Tools | Scope | When |
 |---|---|---|---|
-| Statyczne | ruff, mypy --strict, import-linter, biome, tsc, cdk-nag, gitleaks | styl, typy, granice modułów, sekrety, zgodność IaC | każdy commit (pre-commit) i PR |
-| Jednostkowe | pytest, Hypothesis, vitest, Testing Library | logika domenowa, normalizacja wartości, reguły, komponenty UI | PR |
-| Integracyjne | pytest + Testcontainers (Postgres+pgvector), emulator S3/SQS, LiteLLM z fałszywym dostawcą | repozytoria, RLS, kolejki, workery, retrieval | PR |
-| Izolacja tenantów | pytest (osobny marker `isolation`) | próby dostępu do cudzych danych przez API, SQL, S3, KB, zdarzenia | PR – **blokuje merge** |
-| Kontraktowe | Schemathesis na OpenAPI; test zgodności klienta TS z kontraktem | API vs specyfikacja | PR |
-| E2E | Playwright na lokalnym stosie (docker compose) z fałszywym dostawcą LLM | pełne ścieżki użytkownika w UI | PR (zestaw krytyczny), nocny (pełny) |
-| Smoke | pytest + Playwright (tag `@smoke`) | czy wdrożenie działa | po każdym wdrożeniu (dev, staging, prod) i lokalnie `just smoke` |
-| Ewaluacje LLM | `packages/py/eval` + `evals/` | jakość BOM vs referencja (F1, halucynacje, koszt) | nocny pipeline z prawdziwymi modelami (tylko gdy są sekrety), lokalnie na żądanie; regresja = alarm |
-| Wydajnościowe | k6 | API p95, przepustowość kolejki | nocny na stagingu |
-| Bezpieczeństwa | CodeQL, Trivy, OWASP ZAP baseline | podatności | PR / nocny |
-| Infrastruktura | `aws-cdk-lib/assertions`, snapshoty, cdk-nag | stacki CDK | PR |
+| Static | ruff, mypy --strict, import-linter, biome, tsc, cdk-nag, gitleaks | style, types, module boundaries, secrets, IaC compliance | every commit (pre-commit) and PR |
+| Unit | pytest, Hypothesis, vitest, Testing Library | domain logic, value normalization, rules, UI components | PR |
+| Integration | pytest + Testcontainers (Postgres+pgvector), S3/SQS emulator, LiteLLM with a fake provider | repositories, RLS, queues, workers, retrieval | PR |
+| Tenant isolation | pytest (separate `isolation` marker) | attempts to access other tenants' data via API, SQL, S3, KB, events | PR – **blocks merge** |
+| Contract | Schemathesis on OpenAPI; TS client conformance test against the contract | API vs specification | PR |
+| E2E | Playwright on the local stack (docker compose) with a fake LLM provider | full user paths in the UI | PR (critical suite), nightly (full) |
+| Smoke | pytest + Playwright (tag `@smoke`) | whether the deployment works | after every deployment (dev, staging, prod) and locally `just smoke` |
+| LLM evaluations | `packages/py/eval` + `evals/` | BOM quality vs reference (F1, hallucinations, cost) | nightly pipeline with real models (only when secrets are available), locally on demand; regression = alarm |
+| Performance | k6 | API p95, queue throughput | nightly on staging |
+| Security | CodeQL, Trivy, OWASP ZAP baseline | vulnerabilities | PR / nightly |
+| Infrastructure | `aws-cdk-lib/assertions`, snapshots, cdk-nag | CDK stacks | PR |
 
-## Deterministyczność testów z LLM
-- W CI dostawca LLM = **fałszywy model** w LiteLLM (odpowiedzi z nagrań w `tests/cassettes/` dopasowywane po haszu promptu) – testy nie zależą od sieci ani od kosztów.
-- Testy jakości modeli to **ewaluacje**, nie testy jednostkowe – raportują metryki, nie „pass/fail” na pojedynczym przykładzie (poza progami regresji).
+## Determinism of LLM tests
+- In CI the LLM provider = a **fake model** in LiteLLM (responses from recordings in `tests/cassettes/` matched by prompt hash) – tests do not depend on the network or on cost.
+- Model quality tests are **evaluations**, not unit tests – they report metrics, not "pass/fail" on a single example (apart from regression thresholds).
 
-## Testy smoke (minimalny zestaw, musi przejść po każdym wdrożeniu)
-1. `GET /healthz` i `/readyz` dla każdego serwisu (w tym gateway).
-2. Logowanie użytkownika testowego tenanta `smoke-a` (lokalnie: konto lokalne; w chmurze: dedykowany użytkownik).
-3. Upload przykładowego projektu KiCad → status `parsed`.
-4. Uruchomienie przebiegu wariantu B (fałszywy LLM lokalnie / najtańszy model w chmurze) → status `completed`, BOM ma > 0 pozycji.
-5. Eksport CSV zwraca plik.
-6. Istnieje zdarzenie audytowe dla przebiegu.
-7. Użytkownik tenanta `smoke-b` dostaje 404 przy próbie odczytu przebiegu `smoke-a`.
-8. Trace przebiegu jest widoczny w kolektorze OTel (lokalnie: zapytanie do Tempo).
+## Smoke tests (minimal suite, must pass after every deployment)
+1. `GET /healthz` and `/readyz` for each service (including the gateway).
+2. Login of the test user of tenant `smoke-a` (locally: local account; in the cloud: a dedicated user).
+3. Upload of a sample KiCad project → status `parsed`.
+4. Start of a variant B run (fake LLM locally / cheapest model in the cloud) → status `completed`, the BOM has > 0 items.
+5. CSV export returns a file.
+6. An audit event exists for the run.
+7. A user of tenant `smoke-b` gets 404 when trying to read a run of `smoke-a`.
+8. The run's trace is visible in the OTel collector (locally: a query to Tempo).
 
-## Scenariusze E2E (Playwright)
-- Rejestracja organizacji → zaproszenie członka → przełączanie organizacji.
-- Nowy przebieg z szablonu (modal z wyborem wariantu) → podgląd postępu na żywo → przegląd BOM → panel pochodzenia pozycji → akceptacja/poprawka pozycji (zapis jako wiedza tenanta) → eksport.
-- Porównanie wariantów A i B na tym samym projekcie.
-- Admin: konfiguracja SSO (formularz), role, limity, log audytu z filtrowaniem.
-- Dostępność: `@axe-core/playwright` na każdej stronie (brak naruszeń WCAG 2.2 AA).
+## E2E scenarios (Playwright)
+- Organization registration → member invitation → organization switching.
+- New run from a template (modal with variant choice) → live progress view → BOM review → item provenance panel → accepting/correcting an item (saved as tenant knowledge) → export.
+- Comparison of variants A and B on the same project.
+- Admin: SSO configuration (form), roles, limits, audit log with filtering.
+- Accessibility: `@axe-core/playwright` on every page (no WCAG 2.2 AA violations).
 
-## Progi
-Pokrycie: ≥ 85% dla `packages/py/*` (rdzeń domeny), ≥ 75% dla serwisów i frontendu; brak spadku pokrycia w PR. Zero naruszeń axe. Zero krytycznych/wysokich podatności bez wyjątku z uzasadnieniem.
+## Thresholds
+Coverage: ≥ 85% for `packages/py/*` (domain core), ≥ 75% for services and the frontend; no drop in coverage in a PR. Zero axe violations. Zero critical/high vulnerabilities without an exception with justification.

@@ -2,3 +2,35 @@ __pycache__/
 *.pyc
 ~$*.docx
 .DS_Store
+# Python
+.venv/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.hypothesis/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+dist/
+build/
+*.egg-info/
+# Node
+node_modules/
+.pnpm-store/
+apps/*/dist/
+packages/ts/*/dist/
+playwright-report/
+test-results/
+# CDK
+infra/cdk/cdk.out/
+# Secrets - never commit
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+# Local outputs
+evals/reports/local/
+deploy/gateway/config.yaml
+.claude/worktrees/

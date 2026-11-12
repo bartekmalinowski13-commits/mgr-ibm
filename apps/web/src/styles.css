@@ -1,0 +1,58 @@
+@import "tailwindcss";
+@import "@fontsource-variable/bricolage-grotesque/wght.css";
+@import "@fontsource/ibm-plex-sans/400.css";
+@import "@fontsource/ibm-plex-sans/500.css";
+@import "@fontsource/ibm-plex-sans/600.css";
+@import "@fontsource/ibm-plex-mono/400.css";
+@source "../../../packages/ts/ui/src";
+
+/* Tokens (docs/design/UX_GUIDELINES.md §3, plan: docs/plans/M5-frontend.md) */
+@theme {
+  --color-paper: #eceff2;
+  --color-surface: #ffffff;
+  --color-ink: #18212b;
+  --color-ink-hover: #2c3846;
+  --color-muted: #56616d;
+  --color-line: #d3d9df;
+  --color-focus: #2f6fdb;
+  --color-llm: #5b3fd6; /* provenance: agent (LLM) decision */
+  --color-rule: #13704a; /* provenance: deterministic rule (solder-mask green) */
+  --color-parser: #7a8691; /* provenance: read from the design file */
+  --color-user: #18212b; /* provenance: a person decided */
+  --color-ok: #13704a;
+  --color-warn: #a35a00;
+  --color-error: #b42318;
+
+  --font-display: "Bricolage Grotesque Variable", system-ui, sans-serif;
+  --font-sans: "IBM Plex Sans", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+
+  /* radius follows hierarchy: panels > cards > controls */
+  --radius-panel: 18px;
+  --radius-card: 12px;
+  --radius-control: 8px;
+  --shadow-dialog: 0 24px 64px -24px rgb(24 33 43 / 0.35);
+}
+
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+}
+
+html {
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  -webkit-font-smoothing: antialiased;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    transition-duration: 1ms !important;
+  }
+}
