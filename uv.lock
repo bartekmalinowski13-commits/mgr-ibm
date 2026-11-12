@@ -10,6 +10,7 @@ resolution-markers = [
 members = [
     "bomagent-agent-worker",
     "bomagent-agents",
+    "bomagent-all-in-one",
     "bomagent-api",
     "bomagent-bom-core",
     "bomagent-cad-parsers",
@@ -241,6 +242,39 @@ requires-dist = [
     { name = "langgraph", specifier = ">=0.2.60" },
     { name = "opentelemetry-api", specifier = ">=1.28" },
     { name = "pydantic", specifier = ">=2.9" },
+    { name = "uvicorn", extras = ["standard"], specifier = ">=0.32" },
+]
+
+[[package]]
+name = "bomagent-all-in-one"
+version = "0.1.0"
+source = { editable = "services/all-in-one" }
+dependencies = [
+    { name = "bomagent-agent-worker" },
+    { name = "bomagent-agents" },
+    { name = "bomagent-api" },
+    { name = "bomagent-db-migrations" },
+    { name = "bomagent-ingest-worker" },
+    { name = "bomagent-kb" },
+    { name = "bomagent-kb-indexer" },
+    { name = "bomagent-llm" },
+    { name = "bomagent-platform-common" },
+    { name = "fastapi" },
+    { name = "uvicorn", extra = ["standard"] },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "bomagent-agent-worker", editable = "services/agent-worker" },
+    { name = "bomagent-agents", editable = "packages/py/agents" },
+    { name = "bomagent-api", editable = "services/api" },
+    { name = "bomagent-db-migrations", editable = "packages/py/db-migrations" },
+    { name = "bomagent-ingest-worker", editable = "services/ingest-worker" },
+    { name = "bomagent-kb", editable = "packages/py/kb" },
+    { name = "bomagent-kb-indexer", editable = "services/kb-indexer" },
+    { name = "bomagent-llm", editable = "packages/py/llm" },
+    { name = "bomagent-platform-common", editable = "packages/py/platform-common" },
+    { name = "fastapi", specifier = ">=0.115" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.32" },
 ]
 
@@ -546,6 +580,7 @@ source = { virtual = "." }
 dependencies = [
     { name = "bomagent-agent-worker" },
     { name = "bomagent-agents" },
+    { name = "bomagent-all-in-one" },
     { name = "bomagent-api" },
     { name = "bomagent-bom-core" },
     { name = "bomagent-cad-parsers" },
@@ -584,6 +619,7 @@ dev = [
 requires-dist = [
     { name = "bomagent-agent-worker", editable = "services/agent-worker" },
     { name = "bomagent-agents", editable = "packages/py/agents" },
+    { name = "bomagent-all-in-one", editable = "services/all-in-one" },
     { name = "bomagent-api", editable = "services/api" },
     { name = "bomagent-bom-core", editable = "packages/py/bom-core" },
     { name = "bomagent-cad-parsers", editable = "packages/py/cad-parsers" },

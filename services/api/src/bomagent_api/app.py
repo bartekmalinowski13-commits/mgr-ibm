@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Mapping
 from typing import Any, Literal
 
 from fastapi import FastAPI, Request, Response
@@ -109,6 +109,7 @@ def create_app(
     store: ObjectStore | None = None,
     queues: dict[str, Queue] | None = None,
     kb: KnowledgeBase | None = None,
+    readiness: Mapping[str, ReadinessCheck] | None = None,
 ) -> FastAPI:
     settings = settings or Settings()
     local = settings.environment in {"local", "test"}
@@ -125,20 +126,20 @@ def create_app(
     if platform_engine is None and settings.platform_database_url:
         platform_engine = make_engine(settings.platform_database_url, pool_size=2)
 
-    readiness: dict[str, ReadinessCheck] = {}
+    checks: dict[str, ReadinessCheck] = dict(readiness or {})
     if engine is not None:
         db = engine
 
         async def database() -> bool:
             return await ping(db)
 
-        readiness["database"] = database
+        checks["database"] = database
 
     app = create_service_app(
         settings,
         version=__version__,
         title="BOM Agent API",
-        readiness=readiness,
+        readiness=checks,
         docs=True,
         lifespan=maintenance.lifespan(settings.maintenance_interval_s, settings.run_timeout_s),
     )

@@ -17,6 +17,7 @@ dependencies = [
     "bomagent-ingest-worker",
     "bomagent-agent-worker",
     "bomagent-kb-indexer",
+    "bomagent-all-in-one",
     "bomagent-db-migrations",
 ]
 
@@ -40,6 +41,7 @@ bomagent-api = { workspace = true }
 bomagent-ingest-worker = { workspace = true }
 bomagent-agent-worker = { workspace = true }
 bomagent-kb-indexer = { workspace = true }
+bomagent-all-in-one = { workspace = true }
 bomagent-db-migrations = { workspace = true }
 bomagent-testing = { workspace = true }
 
@@ -97,7 +99,7 @@ known-first-party = [
     "bomagent_common", "bomagent_bom", "bomagent_cad", "bomagent_rules", "bomagent_kb",
     "bomagent_llm", "bomagent_agents", "bomagent_eval", "bomagent_cli", "bomagent_api",
     "bomagent_ingest", "bomagent_agent_worker", "bomagent_kb_indexer", "bomagent_migrations",
-    "bomagent_testing",
+    "bomagent_testing", "bomagent_allinone",
 ]
 
 # ---------------------------------------------------------------- mypy
@@ -163,6 +165,7 @@ root_packages = [
     "bomagent_common", "bomagent_bom", "bomagent_cad", "bomagent_rules", "bomagent_kb",
     "bomagent_llm", "bomagent_agents", "bomagent_eval", "bomagent_cli", "bomagent_api",
     "bomagent_ingest", "bomagent_agent_worker", "bomagent_kb_indexer", "bomagent_migrations",
+    "bomagent_allinone",
 ]
 include_external_packages = true
 
@@ -170,6 +173,9 @@ include_external_packages = true
 name = "Layered architecture: services > cli > agents > domain libraries > foundation"
 type = "layers"
 layers = [
+    # the Supabase pilot's single process composes the four services, so it sits above
+    # them (the services stay independent of each other)
+    "bomagent_allinone",
     "bomagent_api | bomagent_ingest | bomagent_agent_worker | bomagent_kb_indexer",
     "bomagent_cli",
     "bomagent_agents",

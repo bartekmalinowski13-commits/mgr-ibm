@@ -3,7 +3,7 @@ set dotenv-load := false
 set shell := ["bash", "-euo", "pipefail", "-c"]
 
 compose := "docker compose -f deploy/compose/compose.yaml"
-py_modules := "-p bomagent_common -p bomagent_migrations -p bomagent_testing -p bomagent_bom -p bomagent_cad -p bomagent_rules -p bomagent_eval -p bomagent_llm -p bomagent_kb -p bomagent_agents -p bomagent_cli -p bomagent_api -p bomagent_ingest -p bomagent_agent_worker -p bomagent_kb_indexer"
+py_modules := "-p bomagent_common -p bomagent_migrations -p bomagent_testing -p bomagent_bom -p bomagent_cad -p bomagent_rules -p bomagent_eval -p bomagent_llm -p bomagent_kb -p bomagent_agents -p bomagent_cli -p bomagent_api -p bomagent_ingest -p bomagent_agent_worker -p bomagent_kb_indexer -p bomagent_allinone"
 
 default:
     @just --list
