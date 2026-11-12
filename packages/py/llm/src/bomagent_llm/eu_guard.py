@@ -41,7 +41,11 @@ _AZURE_HOST_SUFFIXES = (
     ".services.ai.azure.com",
 )
 _BEDROCK_HOST = re.compile(r"^bedrock-runtime\.(?P<region>[a-z0-9-]+)\.amazonaws\.com$")
-_MISTRAL_HOST = "api.mistral.ai"
+#: only the regional endpoint guarantees EU inference
+#: (docs.mistral.ai/inference/regional-inference);
+#: the default api.mistral.ai and api.us.mistral.ai do not
+_MISTRAL_HOST = "api.eu.mistral.ai"
+MISTRAL_EU_BASE = f"https://{_MISTRAL_HOST}/v1"
 _ENV_API_BASE = {"azure_openai": "os.environ/AZURE_API_BASE"}
 #: names that must never appear anywhere in a rendered config (no EU processing guarantee)
 _FORBIDDEN_MARKERS = ("dashscope", "aliyun", "alibaba", "api.openai.com", "api.anthropic.com")
@@ -132,6 +136,9 @@ def check_gateway_config(config: Mapping[str, Any]) -> list[str]:
             problems += _bedrock_problems(label, str(params.get("model", "")), region)
         elif provider == "azure_openai":
             problems += _azure_problems(label, info.get("region"))
+        if provider == "mistral" and not params.get("api_base"):
+            # LiteLLM would default to api.mistral.ai, which is not EU-guaranteed
+            problems.append(f"{label}: Mistral needs an explicit api_base ({MISTRAL_EU_BASE})")
         if base := params.get("api_base"):
             problems += _base_problems(label, provider, str(base))
     return problems

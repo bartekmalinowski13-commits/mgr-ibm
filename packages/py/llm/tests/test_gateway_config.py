@@ -37,6 +37,17 @@ def test_key_based_providers_reference_environment_variables_only():
     assert config["litellm_settings"]["drop_params"] is True
 
 
+def test_mistral_entries_are_pinned_to_the_eu_endpoint():
+    config = render(
+        _catalog_with({"mistral-large-eu", "ministral-8b-mistral-eu"}), region="eu-central-1"
+    )
+    assert len(config["model_list"]) == 2
+    for entry in config["model_list"]:
+        assert entry["litellm_params"]["api_base"] == "https://api.eu.mistral.ai/v1"
+        assert entry["litellm_params"]["api_key"] == "os.environ/MISTRAL_API_KEY"
+    assert "https://api.mistral.ai" not in str(config)
+
+
 def test_rendered_entries_carry_provider_and_region_for_the_eu_guard():
     config = render(_catalog_with({"claude-sonnet-eu", "openai-eu"}), region="eu-central-1")
     infos = {e["model_info"]["provider"]: e["model_info"]["region"] for e in config["model_list"]}
