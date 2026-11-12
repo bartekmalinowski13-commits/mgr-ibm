@@ -1,29 +1,37 @@
 """Queue messages carrying tenant and trace context (ARCHITECTURE.md §5, §11).
 
 Every message has ``tenant_id``; workers restore :class:`TenantContext` and the W3C trace
-context before touching data. Two transports: Amazon SQS (moto locally) and in-memory
-(unit tests). Failed messages are not acknowledged, so SQS redrives them to the DLQ after
-``maxReceiveCount`` attempts.
+context before touching data. Three transports: Amazon SQS (AWS; moto locally), a
+PostgreSQL table (``PostgresQueue``, the Supabase pilot deployment without SQS) and
+in-memory (unit tests). Failed messages are not acknowledged, so they are redelivered after
+the visibility timeout and dead-lettered after ``maxReceiveCount`` receives.
 """
 
 from __future__ import annotations
 
 import asyncio
 import contextlib
+import re
+import time
 import uuid
 from collections import defaultdict, deque
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
 
 from opentelemetry import context as otel_context
 from opentelemetry import trace
 from opentelemetry.propagate import extract, inject
 from pydantic import BaseModel, Field
+from sqlalchemy import text
 
+from bomagent_common.db import platform_transaction, tenant_transaction
 from bomagent_common.logging import get_logger
-from bomagent_common.tenancy import TenantContext, tenant_scope
+from bomagent_common.tenancy import TenantContext, current_tenant, tenant_scope
+
+if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncEngine
 
 log = get_logger(__name__)
 tracer = trace.get_tracer(__name__)
@@ -156,6 +164,153 @@ class SqsQueue:
         await asyncio.to_thread(
             self._client.delete_message, QueueUrl=self._url, ReceiptHandle=received.receipt
         )
+
+
+_QUEUE_NAME = re.compile(r"^[a-z][a-z0-9_-]{0,62}$")
+
+
+class PostgresQueue:
+    """Queue in ``app.queue_messages`` (migration 0013) with SQS semantics.
+
+    * ``send`` runs with the **producer** engine (``bomagent_app``) in the message's
+      tenant context: RLS lets the app role insert rows of that tenant only.
+    * ``receive``/``ack`` run with the **consumer** engine (``bomagent_platform``), which
+      may read and update the delivery bookkeeping across tenants (explicit policies in
+      0013, no BYPASSRLS); handlers then work in the message's tenant (``process_one``).
+    * A received message is invisible for ``visibility_timeout_s`` and comes back unless
+      it is acknowledged; once it was received ``max_receive_count`` times and is visible
+      again, it is dead-lettered (``dead_at``) instead of delivered, like an SQS redrive.
+    * Rows are claimed with ``FOR UPDATE SKIP LOCKED``: concurrent consumers (threads,
+      processes, machines) never receive the same message at the same time.
+    * ``receive(wait_seconds=...)`` long-polls by re-querying every ``poll_interval_s``.
+    """
+
+    def __init__(
+        self,
+        name: str,
+        *,
+        producer_engine: AsyncEngine | None = None,
+        consumer_engine: AsyncEngine | None = None,
+        visibility_timeout_s: float = 900.0,
+        max_receive_count: int = 5,
+        poll_interval_s: float = 1.0,
+    ) -> None:
+        if not _QUEUE_NAME.fullmatch(name):
+            raise ValueError(f"invalid queue name {name!r}")
+        self.name = name
+        self._producer = producer_engine
+        self._consumer = consumer_engine
+        self._visibility = visibility_timeout_s
+        self._max_receive = max_receive_count
+        self._poll = poll_interval_s
+
+    def _engine(self, side: str) -> AsyncEngine:
+        engine = self._producer if side == "producer" else self._consumer
+        if engine is None:
+            raise RuntimeError(f"PostgresQueue {self.name!r} has no {side} engine")
+        return engine
+
+    async def send(self, message: Message) -> None:
+        active = current_tenant()
+        if active is not None and active.tenant_id != message.tenant_id:
+            raise PermissionError("message belongs to another tenant than the active context")
+        async with tenant_transaction(self._engine("producer"), message.tenant_id) as conn:
+            await conn.execute(
+                text(
+                    "INSERT INTO app.queue_messages (id, tenant_id, queue, message)"
+                    " VALUES (:i, :t, :q, CAST(:m AS jsonb))"
+                ),
+                {
+                    "i": uuid.uuid4(),
+                    "t": message.tenant_id,
+                    "q": self.name,
+                    "m": message.model_dump_json(),
+                },
+            )
+
+    async def _receive_once(self, max_messages: int) -> list[Received]:
+        async with platform_transaction(self._engine("consumer")) as conn:
+            dead = await conn.execute(
+                text(
+                    "UPDATE app.queue_messages SET dead_at = now() WHERE id IN ("
+                    " SELECT id FROM app.queue_messages WHERE queue = :q AND dead_at IS NULL"
+                    " AND visible_at <= now() AND receive_count >= :max"
+                    " FOR UPDATE SKIP LOCKED) RETURNING id"
+                ),
+                {"q": self.name, "max": self._max_receive},
+            )
+            for row_id in dead.scalars():
+                log.error("queue_message_dead", queue=self.name, queue_message_id=str(row_id))
+            rows = (
+                await conn.execute(
+                    text(
+                        "WITH picked AS ("
+                        " SELECT id FROM app.queue_messages WHERE queue = :q"
+                        " AND dead_at IS NULL AND visible_at <= now()"
+                        " ORDER BY visible_at, enqueued_at LIMIT :n FOR UPDATE SKIP LOCKED)"
+                        " UPDATE app.queue_messages m SET receive_count = m.receive_count + 1,"
+                        " visible_at = clock_timestamp() + make_interval(secs => :vt),"
+                        " receipt = gen_random_uuid()"
+                        " FROM picked WHERE m.id = picked.id"
+                        " RETURNING m.id, m.receipt, m.message, m.visible_at"
+                    ),
+                    {"q": self.name, "n": max_messages, "vt": self._visibility},
+                )
+            ).all()
+        out: list[Received] = []
+        for row in sorted(rows, key=lambda r: r.visible_at):
+            try:
+                message = Message.model_validate(row.message)
+            except ValueError:
+                # poison message: never acknowledged, so it is dead-lettered after
+                # max_receive_count receives; it never blocks other messages of the batch
+                log.warning("message_invalid", queue_message_id=str(row.id))
+                continue
+            out.append(Received(message, f"{row.id}:{row.receipt}"))
+        return out
+
+    async def receive(self, *, max_messages: int = 10, wait_seconds: int = 10) -> list[Received]:
+        deadline = time.monotonic() + max(wait_seconds, 0)
+        while True:
+            out = await self._receive_once(max_messages)
+            if out or time.monotonic() >= deadline:
+                return out
+            await asyncio.sleep(min(self._poll, max(deadline - time.monotonic(), 0)))
+
+    async def ack(self, received: Received) -> None:
+        """Delete the message - only while ``received`` is its latest delivery (a stale
+        receipt after the visibility timeout expired and another consumer took the
+        message leaves it alone, as SQS does for an expired receipt handle)."""
+        row_id, receipt = received.receipt.split(":", 1)
+        async with platform_transaction(self._engine("consumer")) as conn:
+            await conn.execute(
+                text("DELETE FROM app.queue_messages WHERE id = :i AND receipt = :r"),
+                {"i": uuid.UUID(row_id), "r": uuid.UUID(receipt)},
+            )
+
+    async def dead_letter_count(self) -> int:
+        async with platform_transaction(self._engine("consumer")) as conn:
+            count = await conn.scalar(
+                text(
+                    "SELECT count(*) FROM app.queue_messages"
+                    " WHERE queue = :q AND dead_at IS NOT NULL"
+                ),
+                {"q": self.name},
+            )
+        return int(count or 0)
+
+    async def purge_dead(self, *, older_than_s: float = 14 * 24 * 3600) -> int:
+        """Delete dead letters older than ``older_than_s`` (default 14 days, like the
+        SQS dead-letter queues' retention in AWS)."""
+        async with platform_transaction(self._engine("consumer")) as conn:
+            result = await conn.execute(
+                text(
+                    "DELETE FROM app.queue_messages WHERE queue = :q AND dead_at IS NOT NULL"
+                    " AND dead_at <= now() - make_interval(secs => :age)"
+                ),
+                {"q": self.name, "age": older_than_s},
+            )
+        return int(result.rowcount)
 
 
 Handler = Callable[[Message], Awaitable[None]]

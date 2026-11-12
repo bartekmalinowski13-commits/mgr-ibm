@@ -36,6 +36,15 @@ without context, so "no context" means "no rows".
   `BOMAGENT_ADMIN_USER`/`BOMAGENT_ADMIN_PASSWORD`/`BOMAGENT_DATABASE_HOST`, passwords from
   `BOMAGENT_{MIGRATOR,APP,PLATFORM}_PASSWORD`)
 
+## Platform-role exceptions
+
+The platform role sees tenant rows only through explicit, named policies:
+`platform_onboarding` (`tenancy.tenants`, `tenancy.memberships`), `kb_global_write`
+(global corpus only) and, since 0013, `queue_consumer_*` on `app.queue_messages` (the
+PostgreSQL queue of the Supabase pilot): SELECT/DELETE and UPDATE of the delivery columns
+only (`visible_at`, `receive_count`, `receipt`, `dead_at`), no INSERT. The app role may
+only INSERT queue rows of its own tenant (no SELECT). Rationale in the migration docstring.
+
 ## Adding a tenant table
 
 Use `bomagent_migrations.rls.tenant_table_rls("schema.table")` and add isolation tests in
