@@ -27,14 +27,24 @@ without context, so "no context" means "no rows".
 
 - `bomagent_migrations.bootstrap(admin_url, passwords)` - create roles (idempotent)
 - `bomagent_migrations.upgrade(url, revision="head")`, `downgrade(url, revision)`
-- `bomagent_migrations.prepare_database(admin_url, passwords)` - as the cluster administrator
-  (Aurora master user, not a superuser): roles + passwords, pgvector, database owned by
-  the migrator, CONNECT for the runtime roles. Idempotent; used by the AWS `dbbootstrap`
-  task and by the test fixtures.
+- `bomagent_migrations.prepare_database(admin_url, passwords, database=None)` - as the
+  cluster administrator (Aurora master user or Supabase's `postgres` role: CREATEROLE +
+  CREATEDB, not a superuser): roles + passwords, creates `database` when it differs from
+  the one `admin_url` points at (Supabase: connect to `postgres`, prepare `bomagent`),
+  pgvector (a clear `RuntimeError` when the administrator may not install it), database
+  owned by the migrator, CONNECT for the runtime roles. Refuses `postgres`/`template0`/
+  `template1` (the platform never takes over a system database). Idempotent; used by the
+  AWS `dbbootstrap` task, the Supabase pilot and the test fixtures.
+- `bomagent_migrations.upgrade(url)` runs Alembic and then `revoke_data_api_roles(url)`:
+  **only when** Supabase's Data API roles (`anon`, `authenticated`, `service_role`) exist,
+  they lose every privilege on our database and schemas, CONNECT/TEMPORARY on the database
+  and USAGE on `public` are revoked from PUBLIC (the runtime roles get explicit grants).
+  A no-op on plain PostgreSQL and Aurora.
 - CLI: `bomagent-migrate upgrade|downgrade` (env `BOMAGENT_MIGRATOR_DATABASE_URL`);
   `bomagent-migrate bootstrap` (env `BOMAGENT_ADMIN_DATABASE_URL` or
   `BOMAGENT_ADMIN_USER`/`BOMAGENT_ADMIN_PASSWORD`/`BOMAGENT_DATABASE_HOST`, passwords from
-  `BOMAGENT_{MIGRATOR,APP,PLATFORM}_PASSWORD`)
+  `BOMAGENT_{MIGRATOR,APP,PLATFORM}_PASSWORD`; `BOMAGENT_DATABASE_NAME` names the database
+  to prepare, created when missing)
 
 ## Platform-role exceptions
 
