@@ -1,5 +1,8 @@
 # Handoff - continue here in a new session
 
+> **Owner:** your steps are in `docs/OWNER_CHECKLIST.md` (local demo, merge, Supabase pilot,
+> AWS single-account dev, thesis experiment).
+
 Written 2026-11-11 at the end of the first long build session. A new session should read
 this file first, then `CLAUDE.md`, `docs/STATUS.md` (per-milestone state) and
 `docs/DECISIONS_LOG.md` (assumptions awaiting the owner's acceptance). This file says
@@ -72,6 +75,17 @@ subprocess, `sslmode=verify-full` to RDS, translation of the specification docum
 
 Also done: reviews of all of the above with fixes (sandbox/M4 review: project size bound,
 non-dumpable workers, one message per receive, outbox give-up after 24 h, pinned RDS CA).
+
+Session 2026-11-12: AWS single-account dev path (CDK + pipeline + runbook), Supabase pilot
+variant (ADR-0017 proposed: queue, all-in-one, storage, auth, web sign-in, image, Fly config,
+runbook), security review of it with fixes. Nothing is deployed yet.
+
+Next for Claude Code when the owner comes back:
+- First deployments (AWS dev and/or Supabase pilot) will surface environment issues: fix them
+  from the owner's logs (GitHub Actions, `fly logs`). Assumptions to verify are listed in
+  `deploy/supabase/README.md` and `single-account-dev.md`.
+- After Bedrock access: enable the verified models in
+  `packages/py/llm/src/bomagent_llm/catalog/models.yaml`.
 
 Still open (in this order):
 

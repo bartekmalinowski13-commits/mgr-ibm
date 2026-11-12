@@ -4,6 +4,25 @@
 
 _Updated by Claude Code after every milestone (see `docs/prompts/CLAUDE_CODE_MASTER_PROMPT.md` §5)._
 
+## 2026-11-12 - deployment paths ready (AWS single-account dev, Supabase pilot); nothing deployed yet
+
+> **Owner: start with `docs/OWNER_CHECKLIST.md`** - what is ready and your steps in order.
+
+### Session 2026-11-12
+
+- **AWS, one account, dev only:** `bomagent:singleAccount` (ECR repositories + GitHub push role
+  in the account), `bomagent:monthlyBudgetUsd` (AWS Budget with e-mail alerts),
+  `DEPLOY_ENVIRONMENTS=dev` stops the pipeline after dev; runbook
+  `docs/platform/runbooks/single-account-dev.md`.
+- **Supabase pilot variant (ADR-0017, proposed):** PostgreSQL queue with RLS (migration 0013),
+  queue backend switch, S3-compatible storage, Supabase JWT verification (asymmetric keys only,
+  e-mail confirmed with Supabase Auth), database preparation as a non-superuser admin, one
+  `services/all-in-one` container (API + workers + SPA), image + Fly.io config, web sign-in mode
+  (e-mail + password); runbook `docs/platform/runbooks/supabase-pilot.md`; CI builds and runs the
+  image.
+- Security review of the Supabase variant: no CRITICAL/HIGH; M1, L1, L3 fixed, rest documented.
+- Tests: 620 Python (+42 contract subtests), 36 infra, 26 web unit, 5 E2E - green.
+
 ## 2026-11-11 - M0-M5 and M7 done, M6 code done (not deployed), M8 tool done (real experiment waits for data)
 
 > **Where the code is:** all work is on branch `claude/code-master-prompt-part-2-5651f9` (the
