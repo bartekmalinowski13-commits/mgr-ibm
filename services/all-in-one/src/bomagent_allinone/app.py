@@ -176,6 +176,11 @@ def create_app(
         readiness=readiness,
     )
     app.state.workers = workers
+    if isinstance(default_chat, FakeChat):
+        # every run is answered by the fake provider anyway, so its catalogue entries
+        # (``fake-closed``, the default model; residency ``local``) must be selectable
+        # outside local/test; with the gateway the API's rule (no local models) applies
+        app.state.allow_local_models = True
     _wrap_lifespan(app, workers)
     _install_frontend(app, settings)
     return app

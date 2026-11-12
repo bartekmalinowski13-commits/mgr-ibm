@@ -44,6 +44,21 @@ def test_backend_and_platform_url_come_from_the_environment(monkeypatch):
     )
 
 
+def test_role_login_names_for_supabase_pooler(monkeypatch):
+    """Supavisor addresses a project's roles as ``<role>.<project-ref>``."""
+    monkeypatch.setenv("BOMAGENT_DATABASE_HOST", "aws-0-eu-central-1.pooler.supabase.com")
+    monkeypatch.setenv("BOMAGENT_DATABASE_USER", "bomagent_app.abcdefghijklmnop")
+    monkeypatch.setenv("BOMAGENT_DATABASE_PASSWORD", "a")
+    monkeypatch.setenv("BOMAGENT_PLATFORM_DATABASE_USER", "bomagent_platform.abcdefghijklmnop")
+    monkeypatch.setenv("BOMAGENT_PLATFORM_DATABASE_PASSWORD", "p")
+    settings = ServiceSettings()
+    host = "aws-0-eu-central-1.pooler.supabase.com:5432/bomagent?sslmode=require"
+    assert settings.database_url == (f"postgresql+psycopg://bomagent_app.abcdefghijklmnop:a@{host}")
+    assert settings.platform_database_url == (
+        f"postgresql+psycopg://bomagent_platform.abcdefghijklmnop:p@{host}"
+    )
+
+
 def test_make_queue_sqs_by_default():
     with mock_aws():
         queue = make_queue(ServiceSettings(), "runs", sqs_url="https://sqs.example/q")

@@ -43,6 +43,8 @@ class ServiceSettings(BaseSettings):
     # queue. Same cluster and database as the app role; composed like ``database_url``.
     platform_database_url: str | None = Field(default=None, repr=False)
     platform_database_password: str | None = Field(default=None, repr=False)
+    # login names differ behind Supabase's pooler: ``<role>.<project-ref>``
+    platform_database_user: str = PLATFORM_ROLE
 
     # Message transport: ``sqs`` (AWS, default) or ``postgres`` (``app.queue_messages``,
     # the Supabase pilot deployment without SQS; consumers need the platform role).
@@ -83,7 +85,7 @@ class ServiceSettings(BaseSettings):
             and self.platform_database_password
         ):
             self.platform_database_url = postgres_url(
-                PLATFORM_ROLE,
+                self.platform_database_user,
                 self.platform_database_password,
                 self.database_host,
                 self.database_port,

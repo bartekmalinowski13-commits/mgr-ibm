@@ -85,6 +85,27 @@ def test_csp_allows_the_supabase_origin_only_for_connections():
     assert spa_csp(None).count("connect-src 'self';") == 1
 
 
+@pytest.mark.integration
+@pytest.mark.parametrize("gateway", [False, True])
+async def test_fake_provider_models_are_selectable_only_without_a_gateway(
+    app_engine, platform_engine, gateway
+):
+    extra = {"llm_gateway_url": "https://gateway.example.eu", "llm_gateway_key": "k"}
+    app = create_app(
+        Settings(
+            environment="dev",
+            supabase_url=SUPABASE_URL,
+            supabase_anon_key="anon",
+            start_workers=False,
+            **(extra if gateway else {}),
+        ),
+        engine=app_engine,
+        platform_engine=platform_engine,
+        store=InMemoryObjectStore(),
+    )
+    assert app.state.allow_local_models is (not gateway)
+
+
 # ---------------------------------------------------------------- HTTP surface
 
 
