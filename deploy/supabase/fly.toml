@@ -1,0 +1,62 @@
+# Fly.io configuration of the Supabase pilot: ONE machine running the all-in-one image
+# (API + ingest/agent/KB workers + SPA), region Frankfurt next to the Supabase project.
+# Deploy from the repository root (the build context must be the whole repository):
+#   fly deploy . --config deploy/supabase/fly.toml \
+#     --dockerfile deploy/docker/allinone.Dockerfile --ha=false
+# Secrets are set with `fly secrets set` (deploy/supabase/README.md), never in this file.
+app = "REPLACE-ME-bomagent-pilot"
+primary_region = "fra"
+kill_signal = "SIGTERM"
+kill_timeout = "60s" # workers finish the current message (30 s grace) before exit
+
+[build]
+  dockerfile = "../docker/allinone.Dockerfile"
+
+[deploy]
+  # Alembic upgrade as the migrator role, in a temporary machine before the new release
+  release_command = "python -m bomagent_allinone migrate"
+  strategy = "immediate" # a single machine: no rolling/canary
+
+[env]
+  BOMAGENT_ENVIRONMENT = "dev"
+  BOMAGENT_PORT = "8000"
+  BOMAGENT_QUEUE_BACKEND = "postgres"
+  BOMAGENT_DATABASE_NAME = "bomagent" # our own database, never Supabase's "postgres"
+  BOMAGENT_DATABASE_PORT = "5432"     # Supavisor session mode (IPv4)
+  BOMAGENT_AWS_REGION = "eu-central-1"
+  BOMAGENT_S3_REGION = "eu-central-1" # the Supabase project's region
+  BOMAGENT_S3_FORCE_PATH_STYLE = "true"
+  BOMAGENT_FILES_BUCKET = "bomagent-files"
+  # uvicorn trusts X-Forwarded-* only from Fly's proxy, the only route to the port
+  FORWARDED_ALLOW_IPS = "*"
+  # project-specific, not secret - set here before the first deploy:
+  # BOMAGENT_SUPABASE_URL = "https://<ref>.supabase.co"
+  # BOMAGENT_SUPABASE_ANON_KEY = "<anon / publishable key>"
+  # BOMAGENT_S3_ENDPOINT_URL = "https://<ref>.supabase.co/storage/v1/s3"
+  # BOMAGENT_DATABASE_HOST = "aws-0-eu-central-1.pooler.supabase.com"
+  # BOMAGENT_DATABASE_USER = "bomagent_app.<ref>"
+  # BOMAGENT_PLATFORM_DATABASE_USER = "bomagent_platform.<ref>"
+
+[http_service]
+  internal_port = 8000
+  force_https = true
+  # the workers run in this process: never stop the machine when HTTP traffic is idle
+  auto_stop_machines = "off"
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [http_service.concurrency]
+    type = "requests"
+    soft_limit = 50
+    hard_limit = 100
+
+  [[http_service.checks]]
+    grace_period = "30s"
+    interval = "15s"
+    timeout = "5s"
+    method = "GET"
+    path = "/readyz" # database reachable and all queue consumers alive
+
+[[vm]]
+  size = "shared-cpu-2x"
+  memory = "2gb" # API + workers + one sandboxed parse child (RLIMIT_AS 1 GiB)
