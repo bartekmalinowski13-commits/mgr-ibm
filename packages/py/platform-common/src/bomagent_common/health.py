@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Awaitable, Callable, Mapping
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
 ReadinessCheck = Callable[[], Awaitable[bool]]
@@ -22,13 +22,19 @@ def health_router(
         return {"status": "ok", "service": service_name, "version": version}
 
     @router.get("/readyz", summary="Readiness probe", response_model=None)
-    async def readyz() -> JSONResponse:
+    async def readyz(request: Request) -> JSONResponse:
         names = list(checks)
         results = await asyncio.gather(*(checks[n]() for n in names), return_exceptions=True)
         status = {n: (r is True) for n, r in zip(names, results, strict=True)}
         ok = all(status.values())
         return JSONResponse(
-            {"status": "ok" if ok else "unavailable", "service": service_name, "checks": status},
+            {
+                "status": "ok" if ok else "unavailable",
+                "service": service_name,
+                "checks": status,
+                # non-sensitive facts a service publishes in ``app.state.readyz_info``
+                **getattr(request.app.state, "readyz_info", {}),
+            },
             status_code=200 if ok else 503,
         )
 

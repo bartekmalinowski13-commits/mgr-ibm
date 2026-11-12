@@ -21,6 +21,7 @@ import uuid
 from collections.abc import AsyncIterator, Callable
 from pathlib import Path
 from typing import Any, Self
+from urllib.parse import urlsplit
 
 from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, JSONResponse, Response
@@ -79,6 +80,10 @@ class Settings(ApiSettings):
     db_pool_size: int = 5  # app role; the platform role uses 2 (mind the pooler's limits)
     dead_letter_retention_s: float = 14 * 24 * 3600.0
     use_docling: bool = False
+    #: allow the deterministic fake LLM provider when no gateway is configured. ``None``
+    #: (default) = allowed only in local/test; the pilot sets it explicitly while it still
+    #: runs without a gateway (``BOMAGENT_ALLOW_FAKE_LLM``)
+    allow_fake_llm: bool | None = None
 
     @property
     def social_provider_ids(self) -> list[str]:
@@ -104,10 +109,25 @@ class Settings(ApiSettings):
             # confirmed where it matters (organisation creation, invitations)
             self.oidc_userinfo_url = self.oidc_userinfo_url or f"{self.supabase_url}/auth/v1/user"
             self.oidc_userinfo_apikey = self.oidc_userinfo_apikey or self.supabase_anon_key
-        if self.environment not in ("local", "test"):
-            # no private network here: the gateway and Supabase are reached over the internet
-            require_https(self, (*self._HTTPS_ONLY, "supabase_url", "llm_gateway_url"))
+        local = self.environment in ("local", "test")
+        if self.allow_fake_llm is None:
+            self.allow_fake_llm = local  # fail closed outside local/test (see ``_llm``)
+        if not local:
+            # Supabase is reached over the internet; so is the gateway unless it is another
+            # Fly app of the same organisation on the private 6PN network (``*.internal``)
+            require_https(self, (*self._HTTPS_ONLY, "supabase_url"))
+            if not _is_private_network_url(self.llm_gateway_url):
+                require_https(self, ("llm_gateway_url",))
         return self
+
+
+def _is_private_network_url(url: str | None) -> bool:
+    """``http(s)://<app>.internal[:port]``: Fly's private 6PN DNS (WireGuard, same org)."""
+    if not url:
+        return False
+    parsed = urlsplit(url)
+    host = parsed.hostname or ""
+    return parsed.scheme in ("http", "https") and host.endswith(".internal") and len(host) > 9
 
 
 def spa_csp(supabase_url: str | None) -> str:
@@ -122,15 +142,24 @@ def spa_csp(supabase_url: str | None) -> str:
 
 
 def _llm(settings: Settings) -> tuple[ChatClient, EmbeddingClient]:
-    """The EU LLM gateway when configured, else the deterministic fake provider."""
-    if settings.llm_gateway_url and settings.llm_gateway_key:
-        return (
-            GatewayChat(settings.llm_gateway_url, settings.llm_gateway_key),
-            GatewayEmbeddings(
-                settings.llm_gateway_url, settings.llm_gateway_key, settings.embedding_model
-            ),
+    """The EU LLM gateway when configured; the fake provider only when explicitly allowed."""
+    url, key = settings.llm_gateway_url, settings.llm_gateway_key
+    if bool(url) != bool(key):
+        raise RuntimeError(
+            "BOMAGENT_LLM_GATEWAY_URL and BOMAGENT_LLM_GATEWAY_KEY must be set both or not at all"
         )
-    log.warning("llm_fake_provider", reason="BOMAGENT_LLM_GATEWAY_URL/KEY not set")
+    if url and key:
+        return (
+            GatewayChat(url, key),
+            GatewayEmbeddings(url, key, settings.embedding_model),
+        )
+    if not settings.allow_fake_llm:
+        raise RuntimeError(
+            "no LLM gateway configured: set BOMAGENT_LLM_GATEWAY_URL and BOMAGENT_LLM_GATEWAY_KEY"
+            " (EU gateway, ADR-0006) or, for a demo without real models,"
+            " BOMAGENT_ALLOW_FAKE_LLM=true"
+        )
+    log.warning("llm_fake_provider", reason="BOMAGENT_ALLOW_FAKE_LLM and no gateway configured")
     return FakeChat(heuristic_responder), HashingEmbeddings()
 
 
@@ -200,7 +229,9 @@ def create_app(
         readiness=readiness,
     )
     app.state.workers = workers
-    if isinstance(default_chat, FakeChat):
+    fake = isinstance(default_chat, FakeChat)
+    app.state.readyz_info = {"llm": "fake" if fake else "gateway"}  # shown by /readyz
+    if fake:
         # every run is answered by the fake provider anyway, so its catalogue entries
         # (``fake-closed``, the default model; residency ``local``) must be selectable
         # outside local/test; with the gateway the API's rule (no local models) applies

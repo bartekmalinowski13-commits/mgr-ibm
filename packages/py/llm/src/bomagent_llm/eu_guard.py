@@ -35,7 +35,11 @@ EU_AZURE_REGIONS = frozenset(
 ALLOWED_PROVIDERS = frozenset({"bedrock", "azure_openai", "mistral", "vllm", "fake", "ollama"})
 #: geographic inference-profile prefixes of Bedrock; only ``eu.`` stays in the EU
 _GEO_PREFIXES = frozenset({"us", "us-gov", "global", "apac", "ap", "au", "jp", "ca", "eu"})
-_AZURE_HOST_SUFFIXES = (".openai.azure.com", ".cognitiveservices.azure.com", ".services.ai.azure.com")
+_AZURE_HOST_SUFFIXES = (
+    ".openai.azure.com",
+    ".cognitiveservices.azure.com",
+    ".services.ai.azure.com",
+)
 _BEDROCK_HOST = re.compile(r"^bedrock-runtime\.(?P<region>[a-z0-9-]+)\.amazonaws\.com$")
 _MISTRAL_HOST = "api.mistral.ai"
 _ENV_API_BASE = {"azure_openai": "os.environ/AZURE_API_BASE"}
@@ -112,7 +116,9 @@ def check_gateway_config(config: Mapping[str, Any]) -> list[str]:
     """Problems of a rendered LiteLLM config (what the gateway would actually call)."""
     problems: list[str] = []
     text = str(config).lower()
-    problems += [f"config mentions forbidden endpoint '{w}'" for w in _FORBIDDEN_MARKERS if w in text]
+    problems += [
+        f"config mentions forbidden endpoint '{w}'" for w in _FORBIDDEN_MARKERS if w in text
+    ]
     for entry in config.get("model_list", []):
         params = entry.get("litellm_params", {})
         info = entry.get("model_info", {})
