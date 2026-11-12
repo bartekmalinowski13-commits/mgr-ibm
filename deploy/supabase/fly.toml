@@ -33,7 +33,7 @@ kill_timeout = "60s" # workers finish the current message (30 s grace) before ex
   # project-specific, not secret (the publishable key is public by design)
   BOMAGENT_SUPABASE_URL = "https://wdjhfugsduoymelipimq.supabase.co"
   BOMAGENT_SUPABASE_ANON_KEY = "sb_publishable__cbNLHQOkii26ujSI5YHGg_ivkSiG70"
-  BOMAGENT_S3_ENDPOINT_URL = "https://wdjhfugsduoymelipimq.supabase.co/storage/v1/s3"
+  BOMAGENT_S3_ENDPOINT_URL = "https://wdjhfugsduoymelipimq.storage.supabase.co/storage/v1/s3"
   BOMAGENT_DATABASE_HOST = "aws-0-eu-west-1.pooler.supabase.com"
   BOMAGENT_DATABASE_USER = "bomagent_app.wdjhfugsduoymelipimq"
   BOMAGENT_PLATFORM_DATABASE_USER = "bomagent_platform.wdjhfugsduoymelipimq"
