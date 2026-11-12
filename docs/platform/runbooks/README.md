@@ -2,7 +2,7 @@
 
 All cloud operations are performed by a **human** (or a pipeline started by a human) – never by a Claude Code session (CLAUDE.md §6).
 
-> **Starting out?** One AWS account, dev only: [`single-account-dev.md`](single-account-dev.md). Quick pilot on Supabase + Fly.io (ADR-0017): [`supabase-pilot.md`](supabase-pilot.md).
+> **Starting out?** One AWS account, dev only: [`single-account-dev.md`](single-account-dev.md). Quick pilot on Supabase + Fly.io (ADR-0017): [`supabase-pilot.md`](supabase-pilot.md); social sign-in there: [`social-login.md`](social-login.md).
 
 ## first-deployment – first deployment of an environment
 1. **Accounts (AWS Organizations):** management, security, log-archive, shared-services, dev, staging, prod. Apply the SCPs from `infra/cdk/policies/` (first in test mode on the dev OU).

@@ -159,6 +159,31 @@ async def test_config_json_for_supabase_auth(app_engine, platform_engine):
     assert resp.headers["cache-control"] == "no-store"
 
 
+def test_social_providers_are_parsed_from_a_comma_separated_value():
+    assert Settings(environment="test").social_provider_ids == []
+    s = Settings(environment="test", social_providers=" Google, azure ,apple,google,facebook,, ")
+    assert s.social_provider_ids == ["google", "azure", "apple"]
+
+
+@pytest.mark.integration
+async def test_config_json_lists_enabled_social_providers(app_engine, platform_engine):
+    app = create_app(
+        _settings(
+            auth_mode="oidc",
+            supabase_url=SUPABASE_URL,
+            supabase_anon_key="public-anon-key",
+            social_providers="google,azure",
+            start_workers=False,
+        ),
+        engine=app_engine,
+        platform_engine=platform_engine,
+        store=InMemoryObjectStore(),
+    )
+    async with running(app) as client:
+        resp = await client.get("/config.json")
+    assert resp.json()["auth"]["providers"] == ["google", "azure"]
+
+
 @pytest.mark.integration
 async def test_config_json_in_local_mode_and_without_supabase(app_engine, platform_engine):
     app = create_app(
