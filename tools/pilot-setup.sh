@@ -25,9 +25,12 @@ if [ ! -f "$VAULT" ]; then
 fi
 set -a; . "$VAULT"; set +a
 
+# the Supabase password may contain characters that are special in a URL
+DBPASS_ENC="$(printf %s "$DBPASS" | python3 -c 'import sys,urllib.parse;print(urllib.parse.quote(sys.stdin.read(),safe=""))')"
+
 echo "== 1/3 database preparation (creates database bomagent, 3 roles, pgvector)"
 uv sync --all-packages --quiet
-BOMAGENT_ADMIN_DATABASE_URL="postgresql+psycopg://postgres.${REF}:${DBPASS}@${POOLER}:5432/postgres?sslmode=require" \
+BOMAGENT_ADMIN_DATABASE_URL="postgresql+psycopg://postgres.${REF}:${DBPASS_ENC}@${POOLER}:5432/postgres?sslmode=require" \
 BOMAGENT_DATABASE_NAME=bomagent \
   uv run python -m bomagent_allinone bootstrap
 
