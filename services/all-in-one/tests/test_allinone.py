@@ -251,3 +251,30 @@ async def test_upload_and_variant_b_run_complete_in_one_process(
         bom = (await c.get(f"/v1/runs/{run_id}/bom", headers=auth)).json()
         assert bom["version"] == 1
         assert bom["bom"]["items"]
+
+
+# ---------------------------------------------------------------- entrypoint
+
+
+def test_entrypoint_dispatches_commands(monkeypatch):
+    import sys
+
+    import uvicorn
+
+    import bomagent_migrations
+    from bomagent_allinone.__main__ import main
+
+    seen: list[object] = []
+    monkeypatch.setattr(sys, "argv", list(sys.argv))  # main() rewrites it for the CLI
+    monkeypatch.setattr(bomagent_migrations, "main", lambda: seen.append(list(sys.argv)))
+    monkeypatch.setattr(uvicorn, "run", lambda app, **kw: seen.append((app, kw["factory"])))
+    main(["migrate"])
+    main(["bootstrap"])
+    main([])
+    assert seen == [
+        ["bomagent-migrate", "upgrade"],
+        ["bomagent-migrate", "bootstrap"],
+        ("bomagent_allinone.app:create_app", True),
+    ]
+    with pytest.raises(SystemExit, match="usage"):
+        main(["deploy"])
