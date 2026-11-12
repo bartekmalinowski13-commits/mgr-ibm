@@ -27,6 +27,7 @@ sys.path.insert(0, str(ROOT / "tools" / "fixtures"))
 
 import gen_kicad_fixtures as gen  # noqa: E402
 import make_format_fixtures as fmt  # noqa: E402
+
 from bomagent_cad import FileRef, parse_files  # noqa: E402
 
 OUT = ROOT / "services" / "api" / "src" / "bomagent_api" / "samples" / "data"
