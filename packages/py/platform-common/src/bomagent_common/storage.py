@@ -12,9 +12,12 @@ from __future__ import annotations
 import asyncio
 import re
 import uuid
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
 
 from bomagent_common.tenancy import require_tenant
+
+if TYPE_CHECKING:
+    from bomagent_common.config import ServiceSettings
 
 _SAFE_SEGMENT = re.compile(r"^[A-Za-z0-9._\-]+$")
 
@@ -80,7 +83,12 @@ class InMemoryObjectStore:
 
 
 class S3ObjectStore:
-    """S3 with SSE-KMS (bucket default encryption; enforced in CDK)."""
+    """S3 with SSE-KMS (bucket default encryption; enforced in CDK), or an S3-compatible
+    store (Supabase Storage) at ``endpoint_url`` with ``force_path_style``.
+
+    ``s3_compatible`` sends checksums only where the API requires them: boto3 adds CRC
+    checksums to every upload by default, which not every S3-compatible service accepts.
+    """
 
     def __init__(
         self,
@@ -89,12 +97,23 @@ class S3ObjectStore:
         region: str,
         endpoint_url: str | None = None,
         enforce_tenant: bool = True,
+        force_path_style: bool = False,
+        s3_compatible: bool = False,
     ) -> None:
         import boto3
+        from botocore.config import Config
 
         self._bucket = bucket
         self._enforce = enforce_tenant
-        self._s3 = boto3.client("s3", region_name=region, endpoint_url=endpoint_url)
+        options: dict[str, object] = {"signature_version": "s3v4"}
+        if force_path_style:
+            options["s3"] = {"addressing_style": "path"}
+        if s3_compatible:
+            options["request_checksum_calculation"] = "when_required"
+            options["response_checksum_validation"] = "when_required"
+        self._s3 = boto3.client(
+            "s3", region_name=region, endpoint_url=endpoint_url, config=Config(**options)
+        )
 
     async def put(
         self, key: str, data: bytes, content_type: str = "application/octet-stream"
@@ -133,3 +152,18 @@ class S3ObjectStore:
             ExpiresIn=expires,
         )
         return url
+
+
+def make_object_store(
+    settings: ServiceSettings, bucket: str, *, enforce_tenant: bool = True
+) -> S3ObjectStore:
+    """S3 store from settings: AWS S3 by default, an S3-compatible endpoint (Supabase
+    Storage) when ``s3_endpoint_url`` is set."""
+    return S3ObjectStore(
+        bucket,
+        region=settings.s3_region or settings.aws_region,
+        endpoint_url=settings.s3_endpoint_url or settings.aws_endpoint_url,
+        enforce_tenant=enforce_tenant,
+        force_path_style=settings.s3_force_path_style,
+        s3_compatible=settings.s3_endpoint_url is not None,
+    )

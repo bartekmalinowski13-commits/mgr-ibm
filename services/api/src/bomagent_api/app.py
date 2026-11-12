@@ -30,7 +30,7 @@ from bomagent_common.health import ReadinessCheck
 from bomagent_common.messaging import InMemoryQueue, Queue, make_queue
 from bomagent_common.problems import ProblemError, problem_response
 from bomagent_common.service import create_service_app
-from bomagent_common.storage import InMemoryObjectStore, ObjectStore, S3ObjectStore
+from bomagent_common.storage import InMemoryObjectStore, ObjectStore, make_object_store
 from bomagent_kb import KnowledgeBase
 from bomagent_llm.catalog import load_catalog
 from bomagent_llm.embeddings import EmbeddingClient, GatewayEmbeddings, HashingEmbeddings
@@ -128,12 +128,11 @@ def create_app(
         docs=True,
         lifespan=maintenance.lifespan(settings.maintenance_interval_s, settings.run_timeout_s),
     )
-    s3 = {"region": settings.aws_region, "endpoint_url": settings.aws_endpoint_url}
     app.state.engine = engine
     app.state.platform_engine = platform_engine
     app.state.store = store or (
-        S3ObjectStore(settings.files_bucket, **s3)  # type: ignore[arg-type]
-        if not local or settings.aws_endpoint_url
+        make_object_store(settings, settings.files_bucket)
+        if not local or settings.aws_endpoint_url or settings.s3_endpoint_url
         else InMemoryObjectStore()
     )
     if queues is None:

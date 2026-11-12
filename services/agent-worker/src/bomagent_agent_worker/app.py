@@ -32,7 +32,7 @@ class Settings(ServiceSettings):
 def build_handler(settings: Settings) -> Handler:
     from bomagent_agent_worker.handler import RunWorker
     from bomagent_agents.fake_responder import heuristic_responder
-    from bomagent_common.storage import S3ObjectStore
+    from bomagent_common.storage import make_object_store
     from bomagent_kb import KnowledgeBase
     from bomagent_llm.chat import ChatClient, FakeChat, GatewayChat
     from bomagent_llm.embeddings import EmbeddingClient, GatewayEmbeddings, HashingEmbeddings
@@ -52,11 +52,7 @@ def build_handler(settings: Settings) -> Handler:
         raise RuntimeError("BOMAGENT_LLM_GATEWAY_URL/KEY are required outside local/test")
     worker = RunWorker(
         engine=make_engine(settings.database_url),
-        store=S3ObjectStore(
-            settings.files_bucket,
-            region=settings.aws_region,
-            endpoint_url=settings.aws_endpoint_url,
-        ),
+        store=make_object_store(settings, settings.files_bucket),
         chat=chat,
         kb=KnowledgeBase(embedder),
         allow_unregistered=settings.environment in {"local", "test"},

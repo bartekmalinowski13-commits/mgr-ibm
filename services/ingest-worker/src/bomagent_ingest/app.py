@@ -27,14 +27,12 @@ class Settings(ServiceSettings):
 
 
 def build_handler(settings: Settings) -> Handler:
-    from bomagent_common.storage import S3ObjectStore
+    from bomagent_common.storage import make_object_store
     from bomagent_ingest.handler import IngestWorker
 
     if settings.database_url is None:
         raise RuntimeError("BOMAGENT_DATABASE_URL is required")
-    store = S3ObjectStore(
-        settings.files_bucket, region=settings.aws_region, endpoint_url=settings.aws_endpoint_url
-    )
+    store = make_object_store(settings, settings.files_bucket)
     return IngestWorker(make_engine(settings.database_url), store).handle
 
 

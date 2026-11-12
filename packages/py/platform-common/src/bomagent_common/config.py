@@ -57,6 +57,15 @@ class ServiceSettings(BaseSettings):
     aws_region: str = "eu-central-1"
     aws_endpoint_url: str | None = None
 
+    # S3-compatible object storage other than AWS S3 (Supabase pilot: Supabase Storage,
+    # ``https://<ref>.supabase.co/storage/v1/s3``, path-style, the project's region).
+    # Unset = AWS S3 in ``aws_region`` (or ``aws_endpoint_url``, e.g. moto locally).
+    # Credentials come from the standard AWS chain (``AWS_ACCESS_KEY_ID`` /
+    # ``AWS_SECRET_ACCESS_KEY`` = the Supabase S3 access keys), never from these settings.
+    s3_endpoint_url: str | None = None
+    s3_region: str | None = None
+    s3_force_path_style: bool = False
+
     @model_validator(mode="after")
     def _compose_database_url(self) -> Self:
         if self.database_url is None and self.database_host and self.database_password:

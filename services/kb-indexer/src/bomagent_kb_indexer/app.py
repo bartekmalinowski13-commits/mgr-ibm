@@ -37,7 +37,7 @@ class Settings(ServiceSettings):
 
 def build_handler(settings: Settings) -> Handler:
     """Wire the indexer from settings (gateway embeddings, S3, both DB roles)."""
-    from bomagent_common.storage import S3ObjectStore
+    from bomagent_common.storage import make_object_store
     from bomagent_kb import KnowledgeBase
     from bomagent_kb_indexer.handler import KbIndexer
     from bomagent_llm.embeddings import EmbeddingClient, GatewayEmbeddings, HashingEmbeddings
@@ -54,20 +54,11 @@ def build_handler(settings: Settings) -> Handler:
     indexer = KbIndexer(
         kb=KnowledgeBase(embedder),
         app_engine=make_engine(settings.database_url),
-        tenant_store=S3ObjectStore(
-            settings.files_bucket,
-            region=settings.aws_region,
-            endpoint_url=settings.aws_endpoint_url,
-        ),
+        tenant_store=make_object_store(settings, settings.files_bucket),
         platform_engine=make_engine(settings.platform_database_url)
         if settings.platform_database_url
         else None,
-        global_store=S3ObjectStore(
-            settings.global_bucket,
-            region=settings.aws_region,
-            endpoint_url=settings.aws_endpoint_url,
-            enforce_tenant=False,
-        )
+        global_store=make_object_store(settings, settings.global_bucket, enforce_tenant=False)
         if settings.global_bucket
         else None,
         use_docling=settings.use_docling,
