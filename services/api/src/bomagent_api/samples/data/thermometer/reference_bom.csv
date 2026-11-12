@@ -1,0 +1,11 @@
+Reference,Qty,Value,Footprint,Manufacturer,MPN,MPN Alternates,DNP
+C1,1,100n,Capacitor_SMD:C_0603_1608Metric,Murata,GRM188R71H104KA93D,,
+C2 C3,2,1u,Capacitor_SMD:C_0603_1608Metric,Murata,GRM188R61C105KA93D,,
+D1,1,Red,LED_SMD:LED_0603_1608Metric,Lite-On,LTST-C191KRKT,,
+J1,1,Battery,Connector_JST:JST_PH_S2B-PH-K_1x02_P2.00mm_Horizontal,JST,S2B-PH-K-S(LF)(SN),,
+R1 R2 R3,3,10k,Resistor_SMD:R_0603_1608Metric,Yageo,RC0603FR-0710KL,,
+R4,1,100k,Resistor_SMD:R_0603_1608Metric,Yageo,RC0603FR-07100KL,,
+R5,1,1M,Resistor_SMD:R_0603_1608Metric,Yageo,RC0603FR-071ML,,
+RT1,1,NTC 10k,Resistor_SMD:R_0402_1005Metric,Murata,NCP15XH103F03RC,,
+U1,1,OPA333,Package_TO_SOT_SMD:SOT-23-5,Texas Instruments,OPA333AIDBVR,,
+U2,1,LP5907-3.3,Package_TO_SOT_SMD:SOT-23-5,Texas Instruments,LP5907MFX-3.3/NOPB,,

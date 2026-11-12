@@ -1,0 +1,10 @@
+Reference,Qty,Value,Footprint,Manufacturer,MPN,MPN Alternates,DNP
+C1 C2,2,100n,Capacitor_SMD:C_0603_1608Metric,Murata,GRM188R71H104KA93D,,
+C3,1,10u,Capacitor_SMD:C_0603_1608Metric,Samsung Electro-Mechanics,CL10A106KP8NNNC,,
+C4,1,1u,Capacitor_SMD:C_0603_1608Metric,Murata,GRM188R61C105KA93D,,
+J1,1,I2C + power,Connector_JST:JST_PH_S4B-PH-K_1x04_P2.00mm_Horizontal,JST,S4B-PH-K-S(LF)(SN),,
+R1 R2,2,4k7,Resistor_SMD:R_0603_1608Metric,Yageo,RC0603FR-074K7L,,
+R3,1,4k7,Resistor_SMD:R_0603_1608Metric,Yageo,RC0603FR-074K7L,,DNP
+U1,1,MAX30102,bomagent:MAX30102_OESIP-14,Analog Devices,MAX30102EFD+T,,
+U2,1,LP5907-1.8,Package_TO_SOT_SMD:SOT-23-5,Texas Instruments,LP5907MFX-1.8/NOPB,,
+U3,1,MCP1700-3.3,Package_TO_SOT_SMD:SOT-23,Microchip,MCP1700T-3302E/TT,,

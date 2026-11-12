@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
 import uuid
+from typing import Any
 
 from fastapi import APIRouter, Request
 from sqlalchemy import text
@@ -11,6 +13,7 @@ from sqlalchemy.exc import IntegrityError
 from bomagent_api.auth import CurrentPrincipal, OrgContext, memberships, require_verified_email
 from bomagent_api.authz import require
 from bomagent_api.plans import MAX_OWNED_ORGANIZATIONS, quota_exceeded, usage_report
+from bomagent_api.samples.seeding import seed_samples
 from bomagent_api.schemas import (
     DevToken,
     Me,
@@ -23,9 +26,12 @@ from bomagent_api.schemas import (
 )
 from bomagent_common.audit import AuditEvent, emit_audit
 from bomagent_common.db import platform_transaction, tenant_transaction
+from bomagent_common.logging import get_logger
 from bomagent_common.problems import ProblemError
 from bomagent_common.tenancy import TenantContext
 
+log = get_logger(__name__)
+_BACKGROUND: set[asyncio.Task[Any]] = set()  # keeps shielded seeding tasks alive
 router = APIRouter(
     prefix="/v1",
     tags=["identity"],
@@ -99,6 +105,24 @@ async def create_organization(
         raise ProblemError(
             409, "Conflict", "organisation slug already taken", slug="slug-taken"
         ) from exc
+    if request.app.state.samples_enabled:
+        # best effort: organisation creation never fails because of the samples, and a
+        # client disconnect does not cancel a half-done seeding (POST /v1/samples fills gaps)
+        task = asyncio.create_task(
+            seed_samples(
+                ctx,
+                engine=request.app.state.engine,
+                store=request.app.state.store,
+                queues=request.app.state.queues,
+                trigger="org_created",
+            )
+        )
+        _BACKGROUND.add(task)
+        task.add_done_callback(_BACKGROUND.discard)
+        try:
+            await asyncio.shield(task)
+        except Exception:
+            log.exception("samples_seed_failed", tenant_id=str(org_id))
     return Organization(id=org_id, slug=body.slug, name=body.name, plan="pilot")
 
 

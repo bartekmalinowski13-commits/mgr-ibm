@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from bomagent_api import __version__, maintenance
 from bomagent_api.auth import ALGORITHMS, LocalIdp, TokenVerifier, UserInfo, check_algorithms
-from bomagent_api.routers import api_keys, audit, identity, members, projects, runs
+from bomagent_api.routers import api_keys, audit, identity, members, projects, runs, samples
 from bomagent_api.routers import kb as kb_routes
 from bomagent_api.routers import sso as sso_routes
 from bomagent_api.routers.kb import MAX_DOCUMENT
@@ -116,6 +116,15 @@ class Settings(ServiceSettings):
     run_timeout_s: float = 3600.0
     sse_interval_s: float = 1.0
     sse_timeout_s: float = 900.0
+    #: add the ``[Sample] ...`` projects to every new organisation (and allow the owner to
+    #: re-add them). Unset: on in local/test/dev, off in staging/prod until enabled explicitly.
+    seed_samples: bool | None = None
+
+    @property
+    def samples_enabled(self) -> bool:
+        if self.seed_samples is not None:
+            return self.seed_samples
+        return self.environment in {"local", "test", "dev"}
 
 
 SECURITY_HEADERS = {
@@ -209,6 +218,7 @@ def create_app(
         app.state.txt_resolver = StaticTxtResolver()
     app.state.cognito_domain = settings.cognito_domain
     app.state.cognito_user_pool_id = settings.cognito_user_pool_id
+    app.state.samples_enabled = settings.samples_enabled
     app.state.sse_interval_s = settings.sse_interval_s
     app.state.sse_timeout_s = settings.sse_timeout_s
     if settings.auth_mode == "local":
@@ -228,6 +238,7 @@ def create_app(
         members.router,
         api_keys.router,
         projects.router,
+        samples.router,
         runs.router,
         runs.models_router,
         audit.router,

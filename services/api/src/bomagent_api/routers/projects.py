@@ -7,7 +7,7 @@ import re
 import uuid
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Header, Request, UploadFile
+from fastapi import APIRouter, Header, Request, Response, UploadFile
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncConnection
 
@@ -64,7 +64,9 @@ async def check_project_size(
 
 
 _SAFE_NAME = re.compile(r"[^A-Za-z0-9._\-]")
-PROJECT_COLS = "id, name, description, created_by, created_at"
+PROJECT_COLS = (
+    "id, name, description, created_by, created_at, (sample_key IS NOT NULL) AS is_sample"
+)
 
 
 async def get_project(conn: Any, project_id: uuid.UUID) -> dict[str, Any]:
@@ -149,6 +151,89 @@ async def read_project(request: Request, ctx: OrgContext, project_id: uuid.UUID)
         return Project(**await get_project(conn, project_id))
 
 
+@router.delete("/{project_id}", status_code=204, summary="Delete a sample project")
+async def delete_project(request: Request, ctx: OrgContext, project_id: uuid.UUID) -> Response:
+    """Only the platform's sample projects (``[Sample] ...``) can be deleted - the API has no
+    general project deletion yet. Files, runs and BOM versions go with the project (cascade);
+    the stored objects are removed after the commit."""
+    require(ctx, "project.delete")
+    store = request.app.state.store
+    async with tenant_transaction(request.app.state.engine) as conn:
+        row = (
+            await conn.execute(
+                text("SELECT sample_key, name FROM projects.projects WHERE id = :i FOR UPDATE"),
+                {"i": project_id},
+            )
+        ).first()
+        if row is None:
+            raise ProblemError(404, "Not Found", "project not found", slug="not-found")
+        if row.sample_key is None:
+            raise ProblemError(
+                409,
+                "Conflict",
+                "only sample projects can be deleted",
+                slug="not-deletable",
+            )
+        await refuse_if_run_active(conn, project_id, "deleting it")
+        keys = list(
+            (
+                await conn.execute(
+                    text("SELECT object_key FROM projects.files WHERE project_id = :p"),
+                    {"p": project_id},
+                )
+            ).scalars()
+        )
+        run_ids = list(
+            (
+                await conn.execute(
+                    text("SELECT id FROM runs.runs WHERE project_id = :p"), {"p": project_id}
+                )
+            ).scalars()
+        )
+        bom_versions = (
+            await conn.execute(
+                text(
+                    "SELECT count(*) FROM bom.versions WHERE run_id IN"
+                    " (SELECT id FROM runs.runs WHERE project_id = :p)"
+                ),
+                {"p": project_id},
+            )
+        ).scalar()
+        # queued ingest work of the project goes with it
+        await conn.execute(
+            text(
+                "DELETE FROM app.outbox WHERE sent_at IS NULL"
+                " AND message->'payload'->>'project_id' = :p"
+            ),
+            {"p": str(project_id)},
+        )
+        await conn.execute(text("DELETE FROM projects.projects WHERE id = :i"), {"i": project_id})
+        await emit_audit(
+            conn,
+            AuditEvent(
+                action="project.deleted",
+                object_type="project",
+                object_id=str(project_id),
+                before={
+                    "name": row.name,
+                    "sample": row.sample_key,
+                    "files": len(keys),
+                    "runs": len(run_ids),
+                    "bom_versions": int(bom_versions or 0),
+                },
+            ),
+        )
+    for run_id in run_ids:
+        for artifact in ("bom.json", "trace.json"):
+            keys.append(tenant_key(ctx.tenant_id, "runs", str(run_id), artifact))
+    for key in keys:  # the rows are gone: a failed cleanup must not turn a retry into a 404
+        try:
+            await store.delete(key)
+        except Exception:
+            log.warning("project_object_cleanup_failed", project_id=str(project_id), key=key)
+    return Response(status_code=204)
+
+
 FILE_COLS = "id, name, size_bytes, sha256, status, detected_format, summary, created_at"
 
 
@@ -185,7 +270,7 @@ async def upload_file(
     key = tenant_key(ctx.tenant_id, "projects", str(project_id), str(fid), name)
     try:
         async with tenant_transaction(request.app.state.engine) as conn:
-            await get_project(conn, project_id)
+            refuse_sample_upload(await get_project(conn, project_id))
             # the tenant lock (taken by check_storage) serialises uploads of an organisation,
             # so two uploads of one name never both see "no previous file"
             await plan_of(conn, lock=True)
@@ -264,7 +349,19 @@ async def upload_file(
     return info
 
 
-async def refuse_if_run_active(conn: Any, project_id: uuid.UUID) -> None:
+def refuse_sample_upload(project: dict[str, Any]) -> None:
+    if project["is_sample"]:
+        raise ProblemError(
+            409,
+            "Conflict",
+            "sample projects are read-only; create your own project to upload files",
+            slug="sample-read-only",
+        )
+
+
+async def refuse_if_run_active(
+    conn: Any, project_id: uuid.UUID, action: str = "replacing a file"
+) -> None:
     """A queued or running run holds the object keys of the project's files."""
     active = (
         await conn.execute(
@@ -279,8 +376,7 @@ async def refuse_if_run_active(conn: Any, project_id: uuid.UUID) -> None:
         raise ProblemError(
             409,
             "Conflict",
-            "a run of this project is queued or running; wait until it finishes"
-            " before replacing a file",
+            f"a run of this project is queued or running; wait until it finishes before {action}",
             slug="file-in-use",
         )
 

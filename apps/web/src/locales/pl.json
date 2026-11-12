@@ -43,7 +43,11 @@
         "group": "Zaloguj się kontem zewnętrznym",
         "continueWith": "Kontynuuj z {{provider}}",
         "or": "lub",
-        "providers": { "google": "Google", "azure": "Microsoft", "apple": "Apple" },
+        "providers": {
+          "google": "Google",
+          "azure": "Microsoft",
+          "apple": "Apple"
+        },
         "callbackErrors": {
           "denied": "Logowanie zostało anulowane albo odrzucone przez dostawcę.",
           "expired": "Link wygasł lub został już użyty.",
@@ -449,5 +453,16 @@
     "saved": "Dostawca tożsamości zapisany",
     "failed": "Nie udało się skonfigurować dostawcy – zobacz stan poniżej",
     "removeProvider": "Usuń dostawcę tożsamości"
+  },
+  "samples": {
+    "badge": "Przykład",
+    "title": "Wypróbuj projekty przykładowe",
+    "lead": "Pięć małych projektów urządzeń biomedycznych (KiCad, EDIF, tabela BOM w PDF) z wzorcowymi zestawieniami BOM, gotowych do przejścia całego procesu: wczytanie, uruchomienie A i B, korekty, eksport, porównanie, ocena. Możesz je w każdej chwili usunąć.",
+    "add": "Dodaj projekty przykładowe",
+    "added": "Dodane projekty przykładowe: {{count}}",
+    "projectNote": "To projekt przykładowy (dane projektowe na licencji CC0), dodany, żebyś mógł wypróbować aplikację. Usuń go, gdy nie będzie już potrzebny.",
+    "delete": "Usuń projekt przykładowy",
+    "confirmDelete": "Usunąć ten projekt przykładowy razem z plikami i uruchomieniami? Tej operacji nie można cofnąć.",
+    "deleted": "Usunięto projekt przykładowy"
   }
 }

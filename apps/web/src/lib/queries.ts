@@ -11,6 +11,21 @@ export function useMe() {
   });
 }
 
+/** The signed-in user owns the current organisation (may add the sample projects). */
+export function useIsOwner(): boolean {
+  const { orgId } = useSession();
+  const me = useMe();
+  return !!me.data?.organizations.find((o) => o.org_id === orgId)?.roles.includes("owner");
+}
+
+/** Owners and admins may delete sample projects. */
+export function useIsAdmin(): boolean {
+  const { orgId } = useSession();
+  const me = useMe();
+  const roles = me.data?.organizations.find((o) => o.org_id === orgId)?.roles ?? [];
+  return roles.includes("owner") || roles.includes("admin");
+}
+
 export function useProjects() {
   const { orgId } = useSession();
   return useQuery({

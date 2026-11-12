@@ -1,13 +1,13 @@
 import { Button, StatusBadge } from "@bomagent/ui";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { UploadCloud } from "lucide-react";
 import { type DragEvent, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { api, call, problemMessage, uploadFile } from "../lib/api";
 import { formatBytes } from "../lib/format";
 import { usePageTitle, useShell } from "../lib/layout";
-import { useRuns } from "../lib/queries";
+import { useIsAdmin, useRuns } from "../lib/queries";
 import { useSession } from "../lib/session";
 import { useToast } from "../lib/toast";
 import { projectRoute } from "../router";
@@ -22,6 +22,8 @@ export function ProjectScreen() {
   const { openNewRun } = useShell();
   const toast = useToast();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
+  const isAdmin = useIsAdmin();
   const input = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -40,6 +42,20 @@ export function ProjectScreen() {
   });
   const runs = useRuns(projectId);
   usePageTitle(project.data?.name ?? t("projects.title"));
+
+  const removeSample = async () => {
+    if (!window.confirm(t("samples.confirmDelete"))) return;
+    try {
+      await call(
+        api.DELETE("/v1/projects/{project_id}", { params: { path: { project_id: projectId } } }),
+      );
+      await queryClient.invalidateQueries({ queryKey: ["projects"] });
+      toast(t("samples.deleted"));
+      await navigate({ to: "/projects" });
+    } catch (err) {
+      toast(problemMessage(err), "error");
+    }
+  };
 
   const upload = async (list: FileList | null) => {
     if (!list?.length) return;
@@ -69,6 +85,16 @@ export function ProjectScreen() {
 
   return (
     <div className="flex flex-col gap-8">
+      {project.data?.is_sample ? (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-card border border-line bg-surface p-4">
+          <p className="max-w-[70ch] text-muted">{t("samples.projectNote")}</p>
+          {isAdmin ? (
+            <Button type="button" variant="danger" size="sm" onClick={() => void removeSample()}>
+              {t("samples.delete")}
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
       <section aria-labelledby="files-title" className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 id="files-title" className="font-display text-2xl font-bold">

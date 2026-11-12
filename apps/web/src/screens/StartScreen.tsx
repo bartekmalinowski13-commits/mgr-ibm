@@ -3,8 +3,9 @@ import { Plus, X } from "lucide-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { usePageTitle, useShell } from "../lib/layout";
-import { useProjects, useRuns } from "../lib/queries";
+import { useIsOwner, useProjects, useRuns } from "../lib/queries";
 import { useSession } from "../lib/session";
+import { AddSamplesButton } from "./common";
 import { TEMPLATES, TemplateArt } from "./templates";
 
 export function StartScreen() {
@@ -14,6 +15,8 @@ export function StartScreen() {
   usePageTitle(t("nav.start"));
   const projects = useProjects();
   const runs = useRuns();
+  const isOwner = useIsOwner();
+  const noSamples = !!projects.data && !projects.data.items.some((p) => p.is_sample);
   const [panelOpen, setPanelOpen] = useState(true);
   const items = runs.data?.items ?? [];
   const active = items.filter((r) => r.status === "queued" || r.status === "running");
@@ -136,6 +139,7 @@ export function StartScreen() {
                 ) : null}
               </p>
             )}
+            {s.to === "/projects" && isOwner && noSamples ? <AddSamplesButton /> : null}
           </div>
         ))}
       </section>

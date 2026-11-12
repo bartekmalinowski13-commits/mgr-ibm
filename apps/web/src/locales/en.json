@@ -43,7 +43,11 @@
         "group": "Sign in with another account",
         "continueWith": "Continue with {{provider}}",
         "or": "or",
-        "providers": { "google": "Google", "azure": "Microsoft", "apple": "Apple" },
+        "providers": {
+          "google": "Google",
+          "azure": "Microsoft",
+          "apple": "Apple"
+        },
         "callbackErrors": {
           "denied": "Sign-in was cancelled or declined by the provider.",
           "expired": "The link expired or was already used.",
@@ -441,5 +445,16 @@
     "saved": "Identity provider saved",
     "failed": "The identity provider could not be configured – see the status below",
     "removeProvider": "Remove identity provider"
+  },
+  "samples": {
+    "badge": "Sample",
+    "title": "Try the sample projects",
+    "lead": "Five small biomedical designs (KiCad, EDIF, PDF BOM) with reference BOMs, ready for the whole flow: parse, run A and B, correct, export, compare, evaluate. You can delete them at any time.",
+    "add": "Add sample projects",
+    "added": "Sample projects added: {{count}}",
+    "projectNote": "This is a sample project (CC0 design data) added so you can try the app. Delete it when you no longer need it.",
+    "delete": "Delete sample project",
+    "confirmDelete": "Delete this sample project with its files and runs? This cannot be undone.",
+    "deleted": "Sample project deleted"
   }
 }
