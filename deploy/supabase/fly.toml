@@ -4,7 +4,7 @@
 #   fly deploy . --config deploy/supabase/fly.toml \
 #     --dockerfile deploy/docker/allinone.Dockerfile --ha=false
 # Secrets are set with `fly secrets set` (deploy/supabase/README.md), never in this file.
-app = "REPLACE-ME-bomagent-pilot"
+app = "mgr-ibm-bomagent"
 primary_region = "fra"
 kill_signal = "SIGTERM"
 kill_timeout = "60s" # workers finish the current message (30 s grace) before exit
@@ -24,19 +24,19 @@ kill_timeout = "60s" # workers finish the current message (30 s grace) before ex
   BOMAGENT_DATABASE_NAME = "bomagent" # our own database, never Supabase's "postgres"
   BOMAGENT_DATABASE_PORT = "5432"     # Supavisor session mode (IPv4)
   BOMAGENT_AWS_REGION = "eu-central-1"
-  BOMAGENT_S3_REGION = "eu-central-1" # the Supabase project's region
+  BOMAGENT_S3_REGION = "eu-west-1" # the Supabase project's region (Ireland)
   BOMAGENT_S3_FORCE_PATH_STYLE = "true"
   BOMAGENT_FILES_BUCKET = "bomagent-files"
   # uvicorn trusts X-Forwarded-* only from Fly's proxy, the only route to the port; the
   # leftmost X-Forwarded-For is client-controlled - use Fly-Client-IP for any IP-based rule
   FORWARDED_ALLOW_IPS = "*"
-  # project-specific, not secret - set here before the first deploy:
-  # BOMAGENT_SUPABASE_URL = "https://<ref>.supabase.co"
-  # BOMAGENT_SUPABASE_ANON_KEY = "<anon / publishable key>"
-  # BOMAGENT_S3_ENDPOINT_URL = "https://<ref>.supabase.co/storage/v1/s3"
-  # BOMAGENT_DATABASE_HOST = "aws-0-eu-central-1.pooler.supabase.com"
-  # BOMAGENT_DATABASE_USER = "bomagent_app.<ref>"
-  # BOMAGENT_PLATFORM_DATABASE_USER = "bomagent_platform.<ref>"
+  # project-specific, not secret (the publishable key is public by design)
+  BOMAGENT_SUPABASE_URL = "https://wdjhfugsduoymelipimq.supabase.co"
+  BOMAGENT_SUPABASE_ANON_KEY = "sb_publishable__cbNLHQOkii26ujSI5YHGg_ivkSiG70"
+  BOMAGENT_S3_ENDPOINT_URL = "https://wdjhfugsduoymelipimq.storage.supabase.co/storage/v1/s3"
+  BOMAGENT_DATABASE_HOST = "aws-0-eu-west-1.pooler.supabase.com"
+  BOMAGENT_DATABASE_USER = "bomagent_app.wdjhfugsduoymelipimq"
+  BOMAGENT_PLATFORM_DATABASE_USER = "bomagent_platform.wdjhfugsduoymelipimq"
 
 [http_service]
   internal_port = 8000
