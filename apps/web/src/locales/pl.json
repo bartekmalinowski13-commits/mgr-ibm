@@ -25,7 +25,32 @@
     "callbackError": "Nie udało się dokończyć logowania (link wygasł albo został już użyty).",
     "retry": "Zaloguj się ponownie",
     "continue": "Dalej",
+    "reset": {
+      "title": "Ustaw nowe hasło",
+      "lead": "Wpisz nowe hasło do swojego konta.",
+      "newPassword": "Nowe hasło",
+      "submit": "Zapisz hasło",
+      "done": "Hasło zostało zmienione.",
+      "signIn": "Zaloguj się",
+      "missing": "Ten link do zmiany hasła jest nieprawidłowy albo wygasł. Poproś o nowy na stronie logowania."
+    },
+    "confirmed": {
+      "title": "E-mail potwierdzony",
+      "lead": "Twój adres e-mail jest potwierdzony. Możesz się teraz zalogować."
+    },
     "supabase": {
+      "social": {
+        "group": "Zaloguj się kontem zewnętrznym",
+        "continueWith": "Kontynuuj z {{provider}}",
+        "or": "lub",
+        "providers": { "google": "Google", "azure": "Microsoft", "apple": "Apple" },
+        "callbackErrors": {
+          "denied": "Logowanie zostało anulowane albo odrzucone przez dostawcę.",
+          "expired": "Link wygasł lub został już użyty.",
+          "failed": "Dostawca logowania zgłosił błąd. Spróbuj ponownie.",
+          "invalid": "Odpowiedź logowania jest nieprawidłowa albo wygasła (zacznij od strony logowania w tej samej karcie)."
+        }
+      },
       "title": "Zaloguj się kontem",
       "create": "Utwórz konto",
       "signIn": "Zaloguj się",

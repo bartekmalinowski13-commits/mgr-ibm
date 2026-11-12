@@ -9,7 +9,7 @@ import type { Session } from "./session";
 export type AuthConfig =
   | { mode: "local" }
   | { mode: "oidc"; domain: string; clientId: string; redirectUri: string; logoutUri?: string }
-  | { mode: "supabase"; url: string; anonKey: string };
+  | { mode: "supabase"; url: string; anonKey: string; providers?: string[] };
 
 const VERIFIER = "bomagent.pkce.verifier";
 const STATE = "bomagent.pkce.state";
