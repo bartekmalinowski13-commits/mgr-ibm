@@ -52,8 +52,30 @@ regenerate with `just openapi`; a test fails when it drifts).
   with `last_error` and logged as `outbox_message_dead`), deletion of sent outbox rows
   older than 7 days, stuck-run reaper.
 
+## Sample projects
+
+Every new organisation gets five `[Sample] ...` projects (KiCad 6/8/9, an EDIF netlist, a PDF
+BOM table; CC0 data in `bomagent_api/samples/data`, also `evals/samples/`). Seeding runs under
+the organisation's tenant context after `POST /v1/organizations` (best effort: it never fails
+the creation): project row (`projects.sample_key`, migration 0014), files under the tenant
+prefix, one outbox message per file so the sandboxed ingest-worker parses them like uploads,
+audit events `project.created` and `org.samples_seeded`.
+
+- **Idempotent:** a partial unique index `(tenant_id, sample_key)` lets a sample exist once per
+  organisation; repeated or concurrent calls only add what is missing.
+- **Re-add:** `POST /v1/samples` (owner) adds missing samples to an existing organisation; the
+  web app shows "Add sample projects" on Home and Projects while the organisation has none.
+- **Delete:** `DELETE /v1/projects/{id}` works for sample projects only (409 `not-deletable`
+  otherwise); files, runs, BOM versions and stored objects go with it.
+- **Quota:** sample projects are **not** counted against the plan's project limit (and seeding is
+  never refused); their files (about 100 KB) do count towards the storage limit.
+- **Switch:** `BOMAGENT_SEED_SAMPLES` (`true`/`false`; unset = on in local/test/dev, off in
+  staging/prod). Off also disables `POST /v1/samples` (404). The test suite pins it to `false`
+  (root `conftest.py`) except in `tests/test_samples.py`.
+
 ## Testing
 ```bash
 uv run pytest services/api                 # flow, roles, tenant boundaries, OpenAPI drift
+uv run pytest services/api/tests/test_samples.py   # sample pack + seeding (PostgreSQL for the seeding tests)
 uv run pytest -m contract services/api     # Schemathesis fuzzing against the contract
 ```

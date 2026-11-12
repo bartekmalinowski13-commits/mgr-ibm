@@ -10,6 +10,8 @@ _Updated by Claude Code after every milestone (see `docs/prompts/CLAUDE_CODE_MAS
 
 ### Session 2026-11-12
 
+- **Sample projects:** five CC0 designs (`evals/samples`), auto-added as `[Sample] ...` projects to every new organisation (`BOMAGENT_SEED_SAMPLES`), owner re-add (`POST /v1/samples`), delete of samples, web button + badge (PL/EN), owner guide `docs/owner-guides/PRZYKLADOWE_DANE.md`.
+
 - **AWS, one account, dev only:** `bomagent:singleAccount` (ECR repositories + GitHub push role
   in the account), `bomagent:monthlyBudgetUsd` (AWS Budget with e-mail alerts),
   `DEPLOY_ENVIRONMENTS=dev` stops the pipeline after dev; runbook

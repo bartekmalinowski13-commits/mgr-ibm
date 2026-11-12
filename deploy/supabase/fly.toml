@@ -37,6 +37,8 @@ kill_timeout = "60s" # workers finish the current message (30 s grace) before ex
   # project-specific, not secret (the publishable key is public by design)
   BOMAGENT_SUPABASE_URL = "https://wdjhfugsduoymelipimq.supabase.co"
   BOMAGENT_SUPABASE_ANON_KEY = "sb_publishable__cbNLHQOkii26ujSI5YHGg_ivkSiG70"
+  # sample projects ([Sample] ...) added to every new organisation; owners can re-add them
+  BOMAGENT_SEED_SAMPLES = "true"
   # social sign-in buttons: enable only after the providers are set up in Supabase
   # (docs/platform/runbooks/social-login.md)
   # BOMAGENT_SOCIAL_PROVIDERS = "google,azure"
