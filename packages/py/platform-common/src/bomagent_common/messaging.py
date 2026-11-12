@@ -26,12 +26,14 @@ from opentelemetry.propagate import extract, inject
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 
-from bomagent_common.db import platform_transaction, tenant_transaction
+from bomagent_common.db import make_engine, platform_transaction, tenant_transaction
 from bomagent_common.logging import get_logger
 from bomagent_common.tenancy import TenantContext, current_tenant, tenant_scope
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncEngine
+
+    from bomagent_common.config import ServiceSettings
 
 log = get_logger(__name__)
 tracer = trace.get_tracer(__name__)
@@ -311,6 +313,49 @@ class PostgresQueue:
                 {"q": self.name, "age": older_than_s},
             )
         return int(result.rowcount)
+
+
+#: same visibility timeouts and redrive count as the SQS queues in AWS (infra data stack)
+QUEUE_VISIBILITY_S: dict[str, float] = {"ingest": 600.0, "runs": 3600.0, "kb": 900.0}
+MAX_RECEIVE_COUNT = 5
+
+
+def make_queue(
+    settings: ServiceSettings,
+    name: str,
+    *,
+    sqs_url: str | None,
+    producer_engine: AsyncEngine | None = None,
+    consumer_engine: AsyncEngine | None = None,
+) -> Queue | None:
+    """The queue ``name`` for ``settings.queue_backend``: SQS (``sqs_url``; ``None`` when
+    unset) or ``PostgresQueue`` (producer = app role engine, consumer = platform role)."""
+    if settings.queue_backend == "postgres":
+        return PostgresQueue(
+            name,
+            producer_engine=producer_engine,
+            consumer_engine=consumer_engine,
+            visibility_timeout_s=QUEUE_VISIBILITY_S.get(name, 900.0),
+            max_receive_count=MAX_RECEIVE_COUNT,
+            poll_interval_s=settings.queue_poll_interval_s,
+        )
+    if sqs_url:
+        return SqsQueue(sqs_url, region=settings.aws_region, endpoint_url=settings.aws_endpoint_url)
+    return None
+
+
+def consumer_queue(settings: ServiceSettings, name: str, *, sqs_url: str | None) -> Queue | None:
+    """The queue a worker consumes; ``None`` (health-only mode) when nothing is configured.
+    The postgres backend consumes with the platform role (``platform_database_url``)."""
+    consumer: AsyncEngine | None = None
+    if settings.queue_backend == "postgres":
+        if not settings.platform_database_url:
+            raise RuntimeError(
+                "BOMAGENT_PLATFORM_DATABASE_URL (or BOMAGENT_PLATFORM_DATABASE_PASSWORD) is"
+                " required to consume the postgres queue"
+            )
+        consumer = make_engine(settings.platform_database_url, pool_size=2)
+    return make_queue(settings, name, sqs_url=sqs_url, consumer_engine=consumer)
 
 
 Handler = Callable[[Message], Awaitable[None]]

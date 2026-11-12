@@ -12,4 +12,10 @@ Health: `/healthz`, `/readyz`. Config: `BOMAGENT_DATABASE_URL`,
 `BOMAGENT_GLOBAL_BUCKET`, `BOMAGENT_LLM_GATEWAY_URL/KEY`, `BOMAGENT_EMBEDDING_MODEL`,
 `BOMAGENT_USE_DOCLING`.
 
+**Queue backend:** `BOMAGENT_QUEUE_BACKEND=sqs` (default, AWS: `BOMAGENT_QUEUE_URL`) or
+`postgres` (Supabase pilot: `app.queue_messages`, queue `BOMAGENT_QUEUE_NAME`, default
+`kb`; consumed with the platform role, so `BOMAGENT_PLATFORM_DATABASE_URL` or
+`BOMAGENT_PLATFORM_DATABASE_PASSWORD` is required). Without either the worker runs in
+health-only mode.
+
 Tests: `uv run pytest services/kb-indexer`.

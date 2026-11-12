@@ -38,6 +38,10 @@ regenerate with `just openapi`; a test fails when it drifts).
 - **Concurrency:** idempotency keys are per user and serialised; BOM edits lock the run.
   The stored request hash covers method, path and body: the same key and body on another
   endpoint -> 422 `idempotency-mismatch`.
+- **Queues:** `BOMAGENT_QUEUE_BACKEND=sqs` (default; `BOMAGENT_{INGEST,RUNS,KB}_QUEUE_URL`,
+  in-memory when unset in local/test) or `postgres` (`PostgresQueue` on
+  `app.queue_messages`; the API only inserts, with the app role in the tenant's context).
+  The outbox relay delivers to whichever backend is configured.
 - **Maintenance loop:** outbox relay (a row is retried up to 10 times, then marked dead
   with `last_error` and logged as `outbox_message_dead`), deletion of sent outbox rows
   older than 7 days, stuck-run reaper.

@@ -7,7 +7,7 @@ from typing import Any, Literal
 
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import Field, model_validator
+from pydantic import Field
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from bomagent_api import __version__, maintenance
@@ -24,10 +24,10 @@ from bomagent_api.sso import (
     InMemoryIdentityProviders,
     StaticTxtResolver,
 )
-from bomagent_common.config import ServiceSettings, postgres_url
+from bomagent_common.config import ServiceSettings
 from bomagent_common.db import make_engine, ping
 from bomagent_common.health import ReadinessCheck
-from bomagent_common.messaging import InMemoryQueue, Queue, SqsQueue
+from bomagent_common.messaging import InMemoryQueue, Queue, make_queue
 from bomagent_common.problems import ProblemError, problem_response
 from bomagent_common.service import create_service_app
 from bomagent_common.storage import InMemoryObjectStore, ObjectStore, S3ObjectStore
@@ -53,26 +53,7 @@ def _upload_limit(method: str, path: str) -> int | None:
 
 class Settings(ServiceSettings):
     service_name: str = "bomagent-api"
-    platform_database_url: str | None = None
-    platform_database_password: str | None = Field(default=None, repr=False)
-
-    @model_validator(mode="after")
-    def _compose_platform_url(self) -> Settings:
-        """Platform role (tenant onboarding only) on the same cluster as the app role."""
-        if (
-            self.platform_database_url is None
-            and self.database_host
-            and self.platform_database_password
-        ):
-            self.platform_database_url = postgres_url(
-                "bomagent_platform",
-                self.platform_database_password,
-                self.database_host,
-                self.database_port,
-                self.database_name,
-                ssl_root_cert=self.db_ssl_root_cert,
-            )
-        return self
+    # platform_database_url (tenant onboarding, maintenance) comes from ServiceSettings
 
     auth_mode: Literal["local", "oidc"] = "oidc"
     oidc_issuer: str = ""
@@ -155,14 +136,18 @@ def create_app(
         if not local or settings.aws_endpoint_url
         else InMemoryObjectStore()
     )
-    app.state.queues = queues or {
-        name: (SqsQueue(url, **s3) if url else InMemoryQueue())  # type: ignore[arg-type]
-        for name, url in (
-            ("ingest", settings.ingest_queue_url),
-            ("runs", settings.runs_queue_url),
-            ("kb", settings.kb_queue_url),
-        )
-    }
+    if queues is None:
+        if settings.queue_backend == "postgres" and engine is None:
+            raise RuntimeError("the postgres queue backend needs BOMAGENT_DATABASE_URL")
+        queues = {
+            name: make_queue(settings, name, sqs_url=url, producer_engine=engine) or InMemoryQueue()
+            for name, url in (
+                ("ingest", settings.ingest_queue_url),
+                ("runs", settings.runs_queue_url),
+                ("kb", settings.kb_queue_url),
+            )
+        }
+    app.state.queues = queues
     embedder: EmbeddingClient = (
         GatewayEmbeddings(
             settings.llm_gateway_url, settings.llm_gateway_key, settings.embedding_model

@@ -10,7 +10,7 @@ from bomagent_common.config import ServiceSettings
 from bomagent_common.db import make_engine, ping
 from bomagent_common.health import ReadinessCheck
 from bomagent_common.logging import get_logger
-from bomagent_common.messaging import Handler, Message, SqsQueue, consume_forever
+from bomagent_common.messaging import Handler, Message, Queue, consume_forever, consumer_queue
 from bomagent_common.service import Lifespan, create_service_app
 from bomagent_common.telemetry import shutdown_telemetry
 from bomagent_kb_indexer import __version__
@@ -25,8 +25,8 @@ async def _noop(message: Message) -> None:  # health-only mode (no queue configu
 class Settings(ServiceSettings):
     service_name: str = "bomagent-kb-indexer"
     queue_url: str | None = None  # SQS queue with work for this worker
+    queue_name: str = "kb"  # postgres queue backend: queue name in app.queue_messages
     queue_wait_seconds: int = 10
-    platform_database_url: str | None = None  # global corpus (platform role)
     files_bucket: str = "bomagent-local-files"
     global_bucket: str | None = None
     llm_gateway_url: str | None = None
@@ -75,17 +75,12 @@ def build_handler(settings: Settings) -> Handler:
     return indexer.handle
 
 
-def _make_lifespan(settings: Settings, handler: Handler) -> Lifespan:
+def _make_lifespan(settings: Settings, queue: Queue | None, handler: Handler) -> Lifespan:
     @contextlib.asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         stop = asyncio.Event()
         task: asyncio.Task[None] | None = None
-        if settings.queue_url:
-            queue = SqsQueue(
-                settings.queue_url,
-                region=settings.aws_region,
-                endpoint_url=settings.aws_endpoint_url,
-            )
+        if queue is not None:
             task = asyncio.create_task(
                 consume_forever(queue, handler, stop=stop, wait_seconds=settings.queue_wait_seconds)
             )
@@ -111,13 +106,14 @@ def create_app(settings: Settings | None = None, handler: Handler | None = None)
             return await ping(engine)
 
         readiness["database"] = database
+    queue = consumer_queue(settings, settings.queue_name, sqs_url=settings.queue_url)
     return create_service_app(
         settings,
         version=__version__,
         title="BOM Agent KB indexer",
         readiness=readiness,
         lifespan=_make_lifespan(
-            settings, handler or (build_handler(settings) if settings.queue_url else _noop)
+            settings, queue, handler or (build_handler(settings) if queue else _noop)
         ),
         docs=False,
     )

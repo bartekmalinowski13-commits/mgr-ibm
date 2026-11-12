@@ -13,6 +13,8 @@ from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 Environment = Literal["local", "test", "dev", "staging", "prod"]
+QueueBackend = Literal["sqs", "postgres"]
+PLATFORM_ROLE = "bomagent_platform"
 
 
 class ServiceSettings(BaseSettings):
@@ -37,6 +39,15 @@ class ServiceSettings(BaseSettings):
     # CA bundle (RDS global bundle in the images). When set, connections built from the parts
     # use ``sslmode=verify-full`` against it; unset (local/test) keeps ``sslmode=require``.
     db_ssl_root_cert: str | None = None
+    # Platform role (no BYPASSRLS): tenant onboarding, global KB, consuming the PostgreSQL
+    # queue. Same cluster and database as the app role; composed like ``database_url``.
+    platform_database_url: str | None = Field(default=None, repr=False)
+    platform_database_password: str | None = Field(default=None, repr=False)
+
+    # Message transport: ``sqs`` (AWS, default) or ``postgres`` (``app.queue_messages``,
+    # the Supabase pilot deployment without SQS; consumers need the platform role).
+    queue_backend: QueueBackend = "sqs"
+    queue_poll_interval_s: float = 1.0  # postgres backend: re-query interval while waiting
 
     # OpenTelemetry: OTLP/HTTP endpoint of the collector, e.g. http://otel-lgtm:4318
     otel_exporter_otlp_endpoint: str | None = Field(default=None)
@@ -52,6 +63,19 @@ class ServiceSettings(BaseSettings):
             self.database_url = postgres_url(
                 self.database_user,
                 self.database_password,
+                self.database_host,
+                self.database_port,
+                self.database_name,
+                ssl_root_cert=self.db_ssl_root_cert,
+            )
+        if (
+            self.platform_database_url is None
+            and self.database_host
+            and self.platform_database_password
+        ):
+            self.platform_database_url = postgres_url(
+                PLATFORM_ROLE,
+                self.platform_database_password,
                 self.database_host,
                 self.database_port,
                 self.database_name,
