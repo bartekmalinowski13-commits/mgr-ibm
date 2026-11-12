@@ -66,6 +66,7 @@ Names only - values are project-specific. **Secret** = set with `fly secrets set
 | `BOMAGENT_OIDC_ALGORITHMS` | no | JSON list, default `["ES256","RS256"]`; HS* is refused |
 | `BOMAGENT_OIDC_EMAIL_CLAIM` | no | default `email` |
 | `BOMAGENT_OIDC_EMAIL_VERIFIED_CLAIM` | no | default `user_metadata.email_verified` (see "Auth") |
+| `BOMAGENT_OIDC_USERINFO_URL`, `BOMAGENT_OIDC_USERINFO_APIKEY` | no | default `<supabase-url>/auth/v1/user` and the anon key: confirms the e-mail with Supabase (see "Auth") |
 | `BOMAGENT_OIDC_NAME_CLAIMS` | no | JSON list, default `["user_metadata.full_name","user_metadata.name"]` |
 | `BOMAGENT_S3_ENDPOINT_URL` | no | `https://<project-ref>.supabase.co/storage/v1/s3` |
 | `BOMAGENT_S3_REGION` | no | the project's region (`eu-central-1`) |
@@ -79,7 +80,7 @@ Names only - values are project-specific. **Secret** = set with `fly secrets set
 | `BOMAGENT_STATIC_DIR` | no | set by the image (`/app/web`) |
 | `BOMAGENT_MAINTENANCE_INTERVAL_S`, `BOMAGENT_RUN_TIMEOUT_S` | no | outbox relay / stuck-run reaper (30 s, 3600 s) |
 | `BOMAGENT_OTEL_EXPORTER_OTLP_ENDPOINT` | no | optional, EU collector only |
-| `FORWARDED_ALLOW_IPS` | no | uvicorn: trusted proxies for `X-Forwarded-*` (`*` on Fly, whose proxy is the only route to the port) |
+| `FORWARDED_ALLOW_IPS` | no | uvicorn: trusted proxies for `X-Forwarded-*` (`*` on Fly, whose proxy is the only route to the port). The client IP it yields is the leftmost `X-Forwarded-For` entry, which a client can set: nothing relies on it today; use Fly's `Fly-Client-IP` for any future IP-based rule |
 
 ### Migrations (`migrate`, Fly `release_command`)
 
@@ -117,15 +118,21 @@ Names only - values are project-specific. **Secret** = set with `fly secrets set
 - **Asymmetric JWT signing keys** (ES256 or RS256) must be active: the API verifies
   tokens only against the public JWKS. Tokens signed with the legacy shared JWT secret
   (HS256) are rejected by design.
-- `user_metadata` is writable by the signed-in user through the Supabase client, so
-  `user_metadata.email_verified` alone is weaker than a server-set claim. Prefer a
-  Custom Access Token hook that sets a top-level `email_verified` from
-  `auth.users.email_confirmed_at`, then set `BOMAGENT_OIDC_EMAIL_VERIFIED_CLAIM=email_verified`.
+- `user_metadata` is writable by the signed-in user, so the API does not trust
+  `user_metadata.email_verified` where it matters: organisation creation and invitation
+  acceptance ask Supabase Auth (`GET <supabase-url>/auth/v1/user` with the caller's token and
+  the anon key, `BOMAGENT_OIDC_USERINFO_URL`/`_APIKEY`, derived from `BOMAGENT_SUPABASE_URL`)
+  for `email_confirmed_at` and the same address; an unreachable endpoint fails closed.
+- Sessions: in Authentication -> Sessions keep **refresh token reuse detection** on and set a
+  time-box / inactivity timeout (the SPA keeps the refresh token in `sessionStorage`).
 - Roles and organisations still come from **our** database (memberships), never from the
   token; the anon key grants nothing in our database.
 
 ## Storage and data isolation
 
+- One **private** bucket and **no policies on `storage.objects`** for it (check Storage ->
+  Policies): the application reaches it only with the S3 keys; a policy would let any
+  signed-in Supabase user read files with their own token.
 - One private bucket; objects are stored under `tenants/{tenant_id}/...` and the
   application refuses keys outside the active tenant's prefix. The S3 access keys have
   full access to the project's storage (they bypass Storage policies): treat them like
@@ -162,3 +169,13 @@ PostgreSQL 16 + pgvector):
   region, checksums only when required) for put/get/delete.
 - Fly: the build context and `--dockerfile` with `--config` in a subdirectory, and
   `release_command` with the image's `CMD` replaced.
+
+## Security notes (review of 2026-11-12)
+
+- Endpoints that leave the host must use `https://` outside `local`/`test` (Supabase URL,
+  JWKS, user endpoint, S3 endpoint, LLM gateway): the settings refuse plain HTTP.
+- The parse sandbox limits memory/CPU/time and strips the environment, but on Fly it shares
+  the machine's network (in AWS the parsers run in isolated subnets without a route out). A
+  parser exploited by a hostile file could send data out - accepted for the pilot with test
+  data only (ADR-0017, DECISIONS_LOG); network namespaces for the child are the next step.
+- The queue table refuses a message whose envelope names another tenant than its row.

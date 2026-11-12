@@ -32,6 +32,7 @@ from bomagent_agents.fake_responder import heuristic_responder
 from bomagent_agents.retrieval import Retriever
 from bomagent_api.app import Settings as ApiSettings
 from bomagent_api.app import create_app as create_api
+from bomagent_api.app import require_https
 from bomagent_common.config import QueueBackend
 from bomagent_common.db import make_engine
 from bomagent_common.logging import get_logger
@@ -83,6 +84,13 @@ class Settings(ApiSettings):
             self.oidc_jwks_url = (
                 self.oidc_jwks_url or f"{self.supabase_url}/auth/v1/.well-known/jwks.json"
             )
+            # user_metadata is user-editable: ask Supabase Auth whether the e-mail is
+            # confirmed where it matters (organisation creation, invitations)
+            self.oidc_userinfo_url = self.oidc_userinfo_url or f"{self.supabase_url}/auth/v1/user"
+            self.oidc_userinfo_apikey = self.oidc_userinfo_apikey or self.supabase_anon_key
+        if self.environment not in ("local", "test"):
+            # no private network here: the gateway and Supabase are reached over the internet
+            require_https(self, (*self._HTTPS_ONLY, "supabase_url", "llm_gateway_url"))
         return self
 
 

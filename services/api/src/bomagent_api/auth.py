@@ -222,6 +222,59 @@ async def _verify_user(request: Request, token: str) -> Principal:
     return await asyncio.to_thread(verifier.verify, token)  # JWKS fetch blocks
 
 
+class UserInfo:
+    """The identity provider's user endpoint (Supabase Auth ``GET /auth/v1/user``).
+
+    Used where a verified e-mail matters and the token claim is editable by the user
+    (Supabase ``user_metadata``): the provider itself says whether the address is confirmed.
+    """
+
+    def __init__(self, url: str, apikey: str | None) -> None:
+        self.url, self.apikey = url, apikey
+
+    async def fetch(self, token: str) -> dict[str, Any] | None:
+        import httpx
+
+        headers = {"Authorization": f"Bearer {token}"}
+        if self.apikey:
+            headers["apikey"] = self.apikey
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(self.url, headers=headers)
+        if resp.status_code != 200:
+            return None
+        data = resp.json()
+        return data if isinstance(data, dict) else None
+
+
+async def require_verified_email(request: Request, principal: Principal) -> None:
+    """403 ``email-not-verified`` unless the caller's e-mail is confirmed.
+
+    With a user endpoint configured the token claim is ignored (it may be user-editable):
+    the provider must report the same address with a confirmation time.
+    """
+    problem = ProblemError(
+        403, "Forbidden", "a verified e-mail address is required", slug="email-not-verified"
+    )
+    if not principal.email:
+        raise problem
+    userinfo: UserInfo | None = getattr(request.app.state, "userinfo", None)
+    if userinfo is None:
+        if not principal.email_verified:
+            raise problem
+        return
+    token = _bearer(request.headers.get("authorization"))
+    try:
+        user = await userinfo.fetch(token)
+    except Exception as exc:  # provider unreachable: fail closed
+        raise problem from exc
+    if (
+        not user
+        or not user.get("email_confirmed_at")
+        or str(user.get("email") or "").strip().lower() != principal.email.strip().lower()
+    ):
+        raise problem
+
+
 async def memberships(request: Request, principal: Principal) -> list[dict[str, Any]]:
     if principal.identity_provider and principal.email:
         await join_on_first_sign_in(

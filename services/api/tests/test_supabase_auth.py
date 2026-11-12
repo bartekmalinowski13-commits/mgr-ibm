@@ -197,3 +197,67 @@ async def test_supabase_user_onboards_through_the_api(keys, app_engine, platform
         )
     assert [o["slug"] for o in me["organizations"]] == [slug]
     assert refused.status_code == 403
+
+
+@pytest.mark.integration
+async def test_verified_email_comes_from_supabase_not_from_the_token(
+    keys, app_engine, platform_engine
+):
+    """`user_metadata` is writable by the user: with a userinfo endpoint configured the API
+    asks Supabase Auth whether the address is confirmed (security review M1)."""
+    from bomagent_common.storage import InMemoryObjectStore
+    from bomagent_testing.kb import make_kb
+
+    app = create_app(
+        Settings(
+            environment="test",
+            auth_mode="oidc",
+            oidc_userinfo_url="https://ref.supabase.co/auth/v1/user",
+            oidc_userinfo_apikey="anon-key",
+            **SUPABASE,
+        ),
+        engine=app_engine,
+        platform_engine=platform_engine,
+        store=InMemoryObjectStore(enforce_tenant=False),
+        kb=make_kb(),
+    )
+    app.state.verifier._jwk_client.fetch_data = lambda: keys.jwks
+    confirmed: dict[str, object] = {}
+    calls: list[tuple[str, str]] = []
+
+    async def fake_userinfo(token: str) -> dict[str, object] | None:
+        calls.append((token[:10], app.state.userinfo.apikey))
+        return confirmed
+
+    app.state.userinfo.fetch = fake_userinfo
+    sub = str(uuid.uuid4())
+    slug = f"supv-{sub[:8]}"
+    # the token claims a verified address (the user wrote user_metadata themselves)
+    forged = {"Authorization": f"Bearer {keys.token(sub=sub)}"}
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://api"
+    ) as client:
+        confirmed.update({"email": "someone@else.example", "email_confirmed_at": "2026-11-12"})
+        other = await client.post(
+            "/v1/organizations", headers=forged, json={"name": slug, "slug": slug}
+        )
+        confirmed.update({"email": None, "email_confirmed_at": None})
+        refused = await client.post(
+            "/v1/organizations", headers=forged, json={"name": slug, "slug": slug}
+        )
+        confirmed.update({"email": "ANNA@medtech.example", "email_confirmed_at": "2026-11-12"})
+        ok = await client.post(
+            "/v1/organizations", headers=forged, json={"name": slug, "slug": slug}
+        )
+    assert other.status_code == 403  # confirmed, but a different address
+    assert refused.status_code == 403
+    assert ok.status_code == 201, ok.text
+    assert calls
+    assert calls[0][1] == "anon-key"
+
+
+def test_aws_gateway_inside_the_vpc_may_stay_http_but_identity_endpoints_may_not():
+    # the AWS gateway is reached over the private network (http://litellm:4000)
+    Settings(environment="dev", llm_gateway_url="http://litellm:4000", oidc_issuer=ISSUER)
+    with pytest.raises(ValueError, match="https"):
+        Settings(environment="dev", oidc_issuer=ISSUER, oidc_jwks_url="http://x.eu/jwks")

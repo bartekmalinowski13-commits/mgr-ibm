@@ -25,6 +25,8 @@ of it does not depend on AWS-specific services.
 - **Not available** in this variant: SSO per organisation (Cognito federation), WAF, the AWS
   audit/backup/observability stacks, Bedrock. Supabase's Data API must not expose our schemas:
   the migrations revoke our schemas from Supabase's `anon`/`authenticated`/`service_role` roles.
+- The parse sandbox keeps its memory/CPU/time limits and stripped environment, but shares
+  the container's network (no isolated subnet as in AWS) - one more reason for test data only.
 - Use: pilots, demos and tests with **non-confidential data** until the owner has checked the
   providers' data processing terms (DPA, EU residency, sub-processors).
 

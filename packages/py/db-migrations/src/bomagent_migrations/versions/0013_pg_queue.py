@@ -48,7 +48,9 @@ UPGRADE = [
         visible_at    timestamptz NOT NULL DEFAULT now(),
         receive_count integer NOT NULL DEFAULT 0 CHECK (receive_count >= 0),
         receipt       uuid,
-        dead_at       timestamptz
+        dead_at       timestamptz,
+        -- RLS checks the row's tenant, workers act on the envelope's: they must agree
+        CONSTRAINT queue_messages_envelope_tenant CHECK (message->>'tenant_id' = tenant_id::text)
     )
     """,
     # receive: oldest visible live message of one queue

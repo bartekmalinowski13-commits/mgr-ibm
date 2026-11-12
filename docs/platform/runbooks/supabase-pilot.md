@@ -26,10 +26,13 @@ Placeholders: `<REF>` = Supabase project ref (from its URL), `<APP>` = your Fly 
    confirmation).
 3. **Project Settings -> JWT Keys:** switch to **asymmetric signing keys** (ES256 or RS256)
    and make the new key current. The API refuses tokens signed with the legacy shared secret.
-4. **Storage:** create a **private** bucket `bomagent-files`. Storage -> Settings -> S3
+4. **Storage:** create a **private** bucket `bomagent-files` and add **no policies** for it
+   (Storage -> Policies must stay empty for this bucket). Storage -> Settings -> S3
    connection: enable, create an access key; save the key id and secret.
 5. **Project Settings -> Data API:** disable it if nothing else uses this project.
-6. Note the project URL `https://<REF>.supabase.co` and the **anon / publishable key**
+6. **Authentication -> Sessions:** keep refresh token reuse detection on; set a time-box
+   (e.g. 7 days) and an inactivity timeout (e.g. 24 h).
+7. Note the project URL `https://<REF>.supabase.co` and the **anon / publishable key**
    (public by design; the web app receives it).
 
 ## 2. Prepare the database (once, from your Mac)

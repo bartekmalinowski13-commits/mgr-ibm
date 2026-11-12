@@ -3,15 +3,15 @@
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable, Mapping
-from typing import Any, Literal
+from typing import Any, ClassVar, Literal, Self
 
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from bomagent_api import __version__, maintenance
-from bomagent_api.auth import ALGORITHMS, LocalIdp, TokenVerifier, check_algorithms
+from bomagent_api.auth import ALGORITHMS, LocalIdp, TokenVerifier, UserInfo, check_algorithms
 from bomagent_api.routers import api_keys, audit, identity, members, projects, runs
 from bomagent_api.routers import kb as kb_routes
 from bomagent_api.routers import sso as sso_routes
@@ -51,6 +51,13 @@ def _upload_limit(method: str, path: str) -> int | None:
     return None
 
 
+def require_https(settings: object, fields: tuple[str, ...]) -> None:
+    for name in fields:
+        value = getattr(settings, name, None)
+        if value and not str(value).startswith("https://"):
+            raise ValueError(f"{name} must use https:// outside local/test")
+
+
 class Settings(ServiceSettings):
     service_name: str = "bomagent-api"
     # platform_database_url (tenant onboarding, maintenance) comes from ServiceSettings
@@ -67,11 +74,31 @@ class Settings(ServiceSettings):
     oidc_email_claim: str = "email"
     oidc_email_verified_claim: str = "email_verified"
     oidc_name_claims: list[str] = Field(default_factory=lambda: ["name"])
+    #: when set, a verified e-mail (org creation, invitation acceptance) is confirmed with
+    #: the identity provider's user endpoint instead of a token claim (Supabase:
+    #: ``<url>/auth/v1/user`` + the anon key) - for providers whose claim the user can edit
+    oidc_userinfo_url: str | None = None
+    oidc_userinfo_apikey: str | None = None
 
     @field_validator("oidc_algorithms")
     @classmethod
     def _asymmetric_only(cls, value: list[str]) -> list[str]:
         return check_algorithms(value)
+
+    #: endpoints that leave the host: plain HTTP would let a network attacker swap the
+    #: JWKS (forged tokens) or read data in transit. The AWS LLM gateway is excluded: it
+    #: is reached inside the VPC (``http://litellm:4000``).
+    _HTTPS_ONLY: ClassVar[tuple[str, ...]] = (
+        "oidc_jwks_url",
+        "oidc_userinfo_url",
+        "s3_endpoint_url",
+    )
+
+    @model_validator(mode="after")
+    def _https_outside_local(self) -> Self:
+        if self.environment not in ("local", "test"):
+            require_https(self, self._HTTPS_ONLY)
+        return self
 
     #: SSO federation (Cognito): pool + SPA client to enable providers on, hosted domain
     cognito_user_pool_id: str | None = None
@@ -190,6 +217,11 @@ def create_app(
         app.state.verifier = idp.verifier
     else:
         app.state.verifier = TokenVerifier.from_settings(settings)
+    app.state.userinfo = (
+        UserInfo(settings.oidc_userinfo_url, settings.oidc_userinfo_apikey)
+        if settings.oidc_userinfo_url
+        else None
+    )
 
     for router in (
         identity.router,

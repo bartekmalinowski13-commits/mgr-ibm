@@ -84,3 +84,22 @@ async def test_cleanup_removes_only_old_sent_rows(app_engine, make_tenant):
     assert ids == {recent, pending}
     async with tenant_transaction(app_engine, tenant.tenant_id) as conn:
         await conn.execute(text("DELETE FROM app.outbox"))  # the database is shared by tests
+
+
+async def test_a_row_whose_message_names_another_tenant_is_never_sent(app_engine, make_tenant):
+    tenant, other = await make_tenant(), await make_tenant()
+    with tenant_scope(tenant):
+        forged = Message.create("file.uploaded", other, {"file_id": "f"})
+        async with tenant_transaction(app_engine, tenant.tenant_id) as conn:
+            await conn.execute(
+                text(
+                    "INSERT INTO app.outbox (id, tenant_id, queue, message) VALUES"
+                    " (gen_random_uuid(), app.current_tenant_id(), 'ingest', CAST(:m AS jsonb))"
+                ),
+                {"m": forged.model_dump_json()},
+            )
+    ok = InMemoryQueue()
+    assert await deliver(app_engine, tenant.tenant_id, {"ingest": ok}) == 0
+    assert len(ok) == 0
+    async with tenant_transaction(app_engine, tenant.tenant_id) as conn:
+        await conn.execute(text("DELETE FROM app.outbox"))

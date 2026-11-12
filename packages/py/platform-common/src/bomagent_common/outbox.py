@@ -67,7 +67,7 @@ async def deliver(
         )
         for row in rows.all():
             try:
-                await queues[row.queue].send(Message.model_validate(row.message))
+                await queues[row.queue].send(_envelope(row.message, tenant_id))
             except Exception as exc:
                 error = type(exc).__name__
                 dead = (
@@ -100,6 +100,15 @@ async def deliver(
             )
             sent += 1
     return sent
+
+
+def _envelope(raw: object, tenant_id: uuid.UUID) -> Message:
+    """The stored message, refused when it names another tenant (consumers act on the
+    envelope's tenant, RLS only checked the row's)."""
+    message = Message.model_validate(raw)
+    if message.tenant_id != tenant_id:
+        raise ValueError("outbox message names another tenant")
+    return message
 
 
 async def cleanup_sent(

@@ -27,7 +27,8 @@ kill_timeout = "60s" # workers finish the current message (30 s grace) before ex
   BOMAGENT_S3_REGION = "eu-central-1" # the Supabase project's region
   BOMAGENT_S3_FORCE_PATH_STYLE = "true"
   BOMAGENT_FILES_BUCKET = "bomagent-files"
-  # uvicorn trusts X-Forwarded-* only from Fly's proxy, the only route to the port
+  # uvicorn trusts X-Forwarded-* only from Fly's proxy, the only route to the port; the
+  # leftmost X-Forwarded-For is client-controlled - use Fly-Client-IP for any IP-based rule
   FORWARDED_ALLOW_IPS = "*"
   # project-specific, not secret - set here before the first deploy:
   # BOMAGENT_SUPABASE_URL = "https://<ref>.supabase.co"

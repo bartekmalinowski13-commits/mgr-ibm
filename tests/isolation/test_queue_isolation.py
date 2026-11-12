@@ -38,6 +38,17 @@ async def test_app_role_inserts_only_its_own_tenant(app_engine, make_tenant):
             await conn.execute(text(INSERT), _params(a, queue))
 
 
+async def test_envelope_tenant_must_match_the_row(app_engine, make_tenant):
+    """Workers act on the envelope's tenant: a row of tenant A carrying a message for
+    tenant B is refused by the table itself (security review L1)."""
+    a, b = await make_tenant(), await make_tenant()
+    params = _params(a, f"iso-{uuid.uuid4().hex[:8]}")
+    params["m"] = Message.create("x.y", b).model_dump_json()
+    with pytest.raises(DBAPIError, match="queue_messages_envelope_tenant"):
+        async with tenant_transaction(app_engine, a.tenant_id) as conn:
+            await conn.execute(text(INSERT), params)
+
+
 @pytest.mark.parametrize(
     "stmt",
     [

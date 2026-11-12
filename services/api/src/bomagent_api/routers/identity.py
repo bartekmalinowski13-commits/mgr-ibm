@@ -8,7 +8,7 @@ from fastapi import APIRouter, Request
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 
-from bomagent_api.auth import CurrentPrincipal, OrgContext, memberships
+from bomagent_api.auth import CurrentPrincipal, OrgContext, memberships, require_verified_email
 from bomagent_api.authz import require
 from bomagent_api.plans import MAX_OWNED_ORGANIZATIONS, quota_exceeded, usage_report
 from bomagent_api.schemas import (
@@ -57,10 +57,7 @@ async def create_organization(
     """The caller becomes the owner. Tenant creation runs with the platform role (the
     application role cannot create tenants); the audit event lands in the new tenant in
     the same transaction. A verified e-mail address is required."""
-    if not principal.email_verified or not principal.email:
-        raise ProblemError(
-            403, "Forbidden", "a verified e-mail address is required", slug="email-not-verified"
-        )
+    await require_verified_email(request, principal)
     owned = [m for m in await memberships(request, principal) if "owner" in m["roles"]]
     if len(owned) >= MAX_OWNED_ORGANIZATIONS:
         raise quota_exceeded(f"a user can own at most {MAX_OWNED_ORGANIZATIONS} organisations")

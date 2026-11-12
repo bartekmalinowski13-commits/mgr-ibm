@@ -18,7 +18,7 @@ from fastapi import APIRouter, Request, Response
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncConnection
 
-from bomagent_api.auth import CurrentPrincipal, OrgContext
+from bomagent_api.auth import CurrentPrincipal, OrgContext, require_verified_email
 from bomagent_api.authz import require
 from bomagent_api.pagination import clamp, encode_cursor, page_clause
 from bomagent_api.schemas import (
@@ -321,10 +321,7 @@ async def revoke_invitation(
 async def accept_invitation(
     request: Request, principal: CurrentPrincipal, body: InvitationAccept
 ) -> Membership:
-    if not principal.email_verified or not principal.email:
-        raise ProblemError(
-            403, "Forbidden", "a verified e-mail address is required", slug="email-not-verified"
-        )
+    await require_verified_email(request, principal)
     engine = request.app.state.engine
     not_found = ProblemError(404, "Not Found", "invitation not found", slug="not-found")
     # invitee context: RLS shows only the pending invitation matching e-mail AND token

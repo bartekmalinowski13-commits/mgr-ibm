@@ -65,6 +65,25 @@ def test_explicit_issuer_wins_and_trailing_slash_is_ignored():
     assert s.supabase_url == SUPABASE_URL
 
 
+def test_supabase_also_confirms_e_mails_through_its_user_endpoint():
+    s = Settings(environment="test", supabase_url=SUPABASE_URL, supabase_anon_key="anon")
+    assert s.oidc_userinfo_url == f"{SUPABASE_URL}/auth/v1/user"
+    assert s.oidc_userinfo_apikey == "anon"
+
+
+@pytest.mark.parametrize(
+    "field",
+    ["supabase_url", "llm_gateway_url", "s3_endpoint_url", "oidc_jwks_url", "oidc_userinfo_url"],
+)
+def test_outside_local_and_test_endpoints_must_use_https(field):
+    """No plain-HTTP JWKS (forged keys) and no unencrypted data leaving the host
+    (security review L3)."""
+    base = {"supabase_url": SUPABASE_URL, "supabase_anon_key": "anon"}
+    with pytest.raises(ValidationError, match="https"):
+        Settings(environment="dev", **(base | {field: "http://example.eu/x"}))
+    Settings(environment="test", **(base | {field: "http://localhost:9/x"}))
+
+
 def test_only_the_postgres_queue_is_supported():
     with pytest.raises(ValidationError, match="postgres"):
         Settings(environment="test", queue_backend="sqs")
