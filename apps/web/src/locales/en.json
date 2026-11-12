@@ -25,7 +25,32 @@
     "callbackError": "Sign-in could not be completed (the link expired or was already used).",
     "retry": "Sign in again",
     "continue": "Continue",
+    "reset": {
+      "title": "Set a new password",
+      "lead": "Enter a new password for your account.",
+      "newPassword": "New password",
+      "submit": "Save password",
+      "done": "Your password was changed.",
+      "signIn": "Sign in",
+      "missing": "This password reset link is invalid or has expired. Request a new one on the sign-in page."
+    },
+    "confirmed": {
+      "title": "E-mail confirmed",
+      "lead": "Your e-mail address is confirmed. You can sign in now."
+    },
     "supabase": {
+      "social": {
+        "group": "Sign in with another account",
+        "continueWith": "Continue with {{provider}}",
+        "or": "or",
+        "providers": { "google": "Google", "azure": "Microsoft", "apple": "Apple" },
+        "callbackErrors": {
+          "denied": "Sign-in was cancelled or declined by the provider.",
+          "expired": "The link expired or was already used.",
+          "failed": "The sign-in provider reported an error. Try again.",
+          "invalid": "The sign-in response is invalid or expired (start from the sign-in page in the same tab)."
+        }
+      },
       "title": "Sign in with your account",
       "create": "Create account",
       "signIn": "Sign in",

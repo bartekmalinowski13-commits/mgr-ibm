@@ -60,6 +60,7 @@ Names only - values are project-specific. **Secret** = set with `fly secrets set
 | `BOMAGENT_DEAD_LETTER_RETENTION_S` | no | dead queue rows are deleted after 14 days |
 | `BOMAGENT_SUPABASE_URL` | no | `https://<project-ref>.supabase.co`; issuer and JWKS URL are derived from it |
 | `BOMAGENT_SUPABASE_ANON_KEY` | no | anon / publishable key, served to the SPA in `/config.json` (public by design) |
+| `BOMAGENT_SOCIAL_PROVIDERS` | no | comma-separated social sign-in buttons served in `/config.json`: `google`, `azure` (Microsoft), `apple`; default empty = none. Set only after the provider is configured in Supabase (`docs/platform/runbooks/social-login.md`) |
 | `BOMAGENT_AUTH_MODE` | no | `oidc` (default) |
 | `BOMAGENT_OIDC_ISSUER`, `BOMAGENT_OIDC_JWKS_URL` | no | default `<supabase-url>/auth/v1`, `<supabase-url>/auth/v1/.well-known/jwks.json` |
 | `BOMAGENT_OIDC_AUDIENCE` | no | default `authenticated` |

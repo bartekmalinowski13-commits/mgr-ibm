@@ -5,7 +5,7 @@
  * the bearer token; it is refreshed with the refresh token shortly before expiry.
  * Passwords and tokens are never logged.
  */
-import type { AuthConfig } from "./oidc";
+import { type AuthConfig, pkceChallenge } from "./oidc";
 import type { Session } from "./session";
 
 export type SupabaseConfig = Extract<AuthConfig, { mode: "supabase" }>;
@@ -22,6 +22,7 @@ export type SupabaseErrorKey =
   | "rateLimited"
   | "signupDisabled"
   | "network"
+  | "socialInvalid"
   | "unknown";
 
 export class SupabaseAuthError extends Error {
@@ -53,6 +54,7 @@ export function authRequest(
   path: string,
   body: unknown,
   accessToken?: string,
+  method = "POST",
 ): { url: string; init: RequestInit } {
   const headers: Record<string, string> = {
     apikey: cfg.anonKey,
@@ -61,7 +63,7 @@ export function authRequest(
   if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
   return {
     url: `${cfg.url.replace(/\/+$/, "")}/auth/v1/${path}`,
-    init: { method: "POST", headers, body: JSON.stringify(body ?? {}) },
+    init: { method, headers, body: JSON.stringify(body ?? {}) },
   };
 }
 
@@ -92,8 +94,9 @@ async function post<T>(
   path: string,
   body: unknown,
   accessToken?: string,
+  method = "POST",
 ): Promise<T> {
-  const { url, init } = authRequest(cfg, path, body, accessToken);
+  const { url, init } = authRequest(cfg, path, body, accessToken, method);
   let resp: Response;
   try {
     resp = await fetch(url, init);
@@ -194,6 +197,116 @@ export async function signOutRemote(cfg: SupabaseConfig, accessToken: string): P
   } catch {
     /* already signed out locally */
   }
+}
+
+/** Supabase provider ids; Microsoft is `azure` in Supabase. */
+export const SOCIAL_PROVIDERS = ["google", "azure", "apple"] as const;
+export type SocialProvider = (typeof SOCIAL_PROVIDERS)[number];
+
+const VERIFIER_KEY = "bomagent.social.verifier";
+const PROVIDER_KEY = "bomagent.social.provider";
+
+/** Providers the deployment enabled (`/config.json`): known ids only, deduplicated, in order. */
+export function enabledProviders(configured: readonly string[] | undefined): SocialProvider[] {
+  const out: SocialProvider[] = [];
+  for (const p of configured ?? []) {
+    const known = SOCIAL_PROVIDERS.find((k) => k === p);
+    if (known && !out.includes(known)) out.push(known);
+  }
+  return out;
+}
+
+export function socialAuthorizeUrl(
+  cfg: SupabaseConfig,
+  provider: SocialProvider,
+  origin: string,
+  challenge: string,
+): string {
+  const params = new URLSearchParams({
+    provider,
+    redirect_to: `${origin}/auth/callback`,
+    code_challenge: challenge,
+    code_challenge_method: "s256",
+  });
+  // Entra ID does not return the e-mail address unless asked for
+  if (provider === "azure") params.set("scopes", "email");
+  return `${cfg.url.replace(/\/+$/, "")}/auth/v1/authorize?${params}`;
+}
+
+function randomVerifier(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(48));
+  let s = "";
+  for (const b of bytes) s += String.fromCharCode(b);
+  return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+/** Stores a fresh PKCE verifier for this tab and redirects to the provider via Supabase. */
+export async function startSocialLogin(
+  cfg: SupabaseConfig,
+  provider: SocialProvider,
+): Promise<void> {
+  const verifier = randomVerifier();
+  sessionStorage.setItem(VERIFIER_KEY, verifier);
+  sessionStorage.setItem(PROVIDER_KEY, provider);
+  window.location.assign(
+    socialAuthorizeUrl(cfg, provider, window.location.origin, await pkceChallenge(verifier)),
+  );
+}
+
+/** Exchanges the returned code for a session; fails closed without verifier or code. */
+export async function completeSocialLogin(
+  cfg: SupabaseConfig,
+  code: string | null,
+): Promise<Session> {
+  const verifier = sessionStorage.getItem(VERIFIER_KEY);
+  sessionStorage.removeItem(VERIFIER_KEY);
+  sessionStorage.removeItem(PROVIDER_KEY);
+  if (!code || !verifier) throw new SupabaseAuthError("socialInvalid", 0);
+  return toSession(
+    await post<GoTrueSession>(cfg, "token?grant_type=pkce", {
+      auth_code: code,
+      code_verifier: verifier,
+    }),
+  );
+}
+
+export type AuthErrorReason = "denied" | "expired" | "failed";
+
+/** What a redirect back to the app carries (query string and/or URL fragment). */
+export type AuthReturn =
+  | { kind: "none" }
+  | { kind: "code"; code: string }
+  | { kind: "error"; reason: AuthErrorReason }
+  | { kind: "recovery"; accessToken: string }
+  | { kind: "confirmed" };
+
+export function parseAuthReturn(search: string, hash: string): AuthReturn {
+  const q = new URLSearchParams(search);
+  const h = new URLSearchParams(hash.startsWith("#") ? hash.slice(1) : hash);
+  const error = q.get("error") ?? h.get("error");
+  if (error) {
+    const errorCode = q.get("error_code") ?? h.get("error_code") ?? "";
+    if (errorCode.includes("expired")) return { kind: "error", reason: "expired" };
+    return { kind: "error", reason: error === "access_denied" ? "denied" : "failed" };
+  }
+  const code = q.get("code");
+  if (code) return { kind: "code", code };
+  const token = h.get("access_token");
+  if (token) {
+    return h.get("type") === "recovery"
+      ? { kind: "recovery", accessToken: token }
+      : { kind: "confirmed" };
+  }
+  return { kind: "none" };
+}
+
+/** Sets a new password; the bearer is the recovery token from the e-mail link. */
+export async function updatePassword(
+  cfg: SupabaseConfig,
+  accessToken: string,
+  password: string,
+): Promise<void> {
+  await post(cfg, "user", { password }, accessToken, "PUT");
 }
 
 /** Milliseconds until the session should be refreshed (0 = now). */

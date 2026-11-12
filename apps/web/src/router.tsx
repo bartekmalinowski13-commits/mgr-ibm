@@ -5,16 +5,39 @@ import {
   lazyRouteComponent,
   Navigate,
   Outlet,
+  redirect,
 } from "@tanstack/react-router";
+import { captureFragmentReturn } from "./lib/authReturn";
 import { LoginScreen } from "./screens/LoginScreen";
 import { Shell } from "./screens/Shell";
 
-const root = createRootRoute({ component: Outlet });
+const root = createRootRoute({
+  component: Outlet,
+  // e-mail links (recovery, confirmation) and provider errors land on the Site URL with
+  // the result in the URL fragment: move it out of the address bar and show its screen
+  beforeLoad: () => {
+    const target = captureFragmentReturn();
+    if (target) throw redirect({ to: target, replace: true });
+  },
+});
 const login = createRoute({ getParentRoute: () => root, path: "/login", component: LoginScreen });
 const callback = createRoute({
   getParentRoute: () => root,
   path: "/auth/callback",
   component: lazyRouteComponent(() => import("./screens/AuthCallbackScreen"), "AuthCallbackScreen"),
+});
+const reset = createRoute({
+  getParentRoute: () => root,
+  path: "/auth/reset",
+  component: lazyRouteComponent(() => import("./screens/AuthReturnScreens"), "ResetPasswordScreen"),
+});
+const confirmed = createRoute({
+  getParentRoute: () => root,
+  path: "/auth/confirmed",
+  component: lazyRouteComponent(
+    () => import("./screens/AuthReturnScreens"),
+    "EmailConfirmedScreen",
+  ),
 });
 const onboarding = createRoute({
   getParentRoute: () => root,
@@ -81,6 +104,8 @@ export const router = createRouter({
   routeTree: root.addChildren([
     login,
     callback,
+    reset,
+    confirmed,
     onboarding,
     app.addChildren([
       index,

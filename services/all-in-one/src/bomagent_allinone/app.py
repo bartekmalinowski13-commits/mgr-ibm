@@ -53,6 +53,9 @@ IMMUTABLE = "public, max-age=31536000, immutable"
 RetrieverFactory = Callable[[uuid.UUID, str | None], Retriever]
 
 
+SOCIAL_PROVIDERS = ("google", "azure", "apple")  # Supabase ids; Microsoft is "azure"
+
+
 class Settings(ApiSettings):
     """API settings plus the pilot's: Supabase defaults, SPA, in-process workers."""
 
@@ -68,11 +71,24 @@ class Settings(ApiSettings):
     supabase_anon_key: str | None = None
     #: built SPA (``apps/web/dist``); unset = API only
     static_dir: str | None = None
+    #: comma-separated Supabase social providers shown on the sign-in page (``google``,
+    #: ``azure`` = Microsoft, ``apple``); empty = e-mail + password only
+    social_providers: str = ""
     start_workers: bool = True
     queue_wait_seconds: int = 5
     db_pool_size: int = 5  # app role; the platform role uses 2 (mind the pooler's limits)
     dead_letter_retention_s: float = 14 * 24 * 3600.0
     use_docling: bool = False
+
+    @property
+    def social_provider_ids(self) -> list[str]:
+        """Known provider ids from ``social_providers``: lower-case, deduplicated, in order."""
+        out: list[str] = []
+        for raw in self.social_providers.split(","):
+            provider = raw.strip().lower()
+            if provider in SOCIAL_PROVIDERS and provider not in out:
+                out.append(provider)
+        return out
 
     @model_validator(mode="after")
     def _supabase_defaults(self) -> Self:
@@ -276,15 +292,14 @@ def _install_frontend(app: FastAPI, settings: Settings) -> None:
             return JSONResponse({"auth": {"mode": "local"}})
         if not (settings.supabase_url and settings.supabase_anon_key):
             raise ProblemError(404, "Not Found", "no sign-in configuration")
-        return JSONResponse(
-            {
-                "auth": {
-                    "mode": "supabase",
-                    "url": settings.supabase_url,
-                    "anonKey": settings.supabase_anon_key,
-                }
-            }
-        )
+        auth: dict[str, Any] = {
+            "mode": "supabase",
+            "url": settings.supabase_url,
+            "anonKey": settings.supabase_anon_key,
+        }
+        if settings.social_provider_ids:
+            auth["providers"] = settings.social_provider_ids
+        return JSONResponse({"auth": auth})
 
     if not settings.static_dir:
         return
