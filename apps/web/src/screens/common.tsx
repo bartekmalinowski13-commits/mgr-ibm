@@ -1,9 +1,12 @@
-import { type Status, StatusBadge } from "@bomagent/ui";
+import { Button, type Status, StatusBadge } from "@bomagent/ui";
+import { useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { Schemas } from "../lib/api";
-import { problemMessage } from "../lib/api";
+import { api, call, problemMessage } from "../lib/api";
 import { formatDate } from "../lib/format";
+import { useToast } from "../lib/toast";
 
 const RUN_STATUS: Record<string, Status> = {
   queued: "pending",
@@ -101,5 +104,39 @@ export function Skeleton({ rows = 3 }: { rows?: number }) {
         <div key={i} className="h-12 rounded-card bg-line/50 motion-safe:animate-pulse" />
       ))}
     </div>
+  );
+}
+
+export function SampleBadge() {
+  const { t } = useTranslation();
+  return (
+    <span className="ml-2 rounded-control border border-line px-1.5 py-0.5 align-middle text-xs font-medium text-muted">
+      {t("samples.badge")}
+    </span>
+  );
+}
+
+/** Adds the platform's sample projects to the organisation (owner only, idempotent). */
+export function AddSamplesButton() {
+  const { t } = useTranslation();
+  const toast = useToast();
+  const queryClient = useQueryClient();
+  const [busy, setBusy] = useState(false);
+  const add = async () => {
+    setBusy(true);
+    try {
+      const result = await call(api.POST("/v1/samples"));
+      await queryClient.invalidateQueries({ queryKey: ["projects"] });
+      toast(t("samples.added", { count: result.added.length }));
+    } catch (err) {
+      toast(problemMessage(err), "error");
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Button type="button" variant="secondary" disabled={busy} onClick={() => void add()}>
+      {t("samples.add")}
+    </Button>
   );
 }

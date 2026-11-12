@@ -7,9 +7,9 @@ import { useTranslation } from "react-i18next";
 import { api, call, problemMessage } from "../lib/api";
 import { formatDate } from "../lib/format";
 import { usePageTitle } from "../lib/layout";
-import { useProjects } from "../lib/queries";
+import { useIsOwner, useProjects } from "../lib/queries";
 import { useToast } from "../lib/toast";
-import { LoadError, Skeleton } from "./common";
+import { AddSamplesButton, LoadError, SampleBadge, Skeleton } from "./common";
 
 export function ProjectsScreen() {
   const { t, i18n } = useTranslation();
@@ -20,6 +20,8 @@ export function ProjectsScreen() {
   const toast = useToast();
   const [name, setName] = useState("");
   const [error, setError] = useState<string>();
+  const isOwner = useIsOwner();
+  const noSamples = !!projects.data && !projects.data.items.some((p) => p.is_sample);
 
   const create = async (e: FormEvent) => {
     e.preventDefault();
@@ -62,6 +64,20 @@ export function ProjectsScreen() {
           </p>
         ) : null}
       </form>
+      {isOwner && noSamples ? (
+        <section
+          aria-labelledby="samples-title"
+          className="flex flex-col gap-3 rounded-card border border-line bg-surface p-4 sm:flex-row sm:items-center sm:justify-between"
+        >
+          <div>
+            <h3 id="samples-title" className="font-display text-lg font-bold">
+              {t("samples.title")}
+            </h3>
+            <p className="max-w-[70ch] text-muted">{t("samples.lead")}</p>
+          </div>
+          <AddSamplesButton />
+        </section>
+      ) : null}
       {projects.isPending ? (
         <Skeleton />
       ) : projects.isError ? (
@@ -79,7 +95,10 @@ export function ProjectsScreen() {
                 params={{ projectId: p.id }}
                 className="block rounded-card border border-line bg-surface p-4 hover:border-ink/40 focus-visible:outline-2 focus-visible:outline-focus"
               >
-                <span className="block font-display text-lg font-bold">{p.name}</span>
+                <span className="block font-display text-lg font-bold">
+                  {p.name}
+                  {p.is_sample ? <SampleBadge /> : null}
+                </span>
                 <span className="block text-sm text-muted">
                   {formatDate(p.created_at, i18n.language)}
                 </span>

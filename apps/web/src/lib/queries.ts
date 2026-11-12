@@ -11,6 +11,13 @@ export function useMe() {
   });
 }
 
+/** The signed-in user owns the current organisation (may add the sample projects). */
+export function useIsOwner(): boolean {
+  const { orgId } = useSession();
+  const me = useMe();
+  return !!me.data?.organizations.find((o) => o.org_id === orgId)?.roles.includes("owner");
+}
+
 export function useProjects() {
   const { orgId } = useSession();
   return useQuery({
