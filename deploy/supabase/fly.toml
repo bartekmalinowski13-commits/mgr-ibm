@@ -41,7 +41,7 @@ kill_timeout = "60s" # workers finish the current message (30 s grace) before ex
   BOMAGENT_SEED_SAMPLES = "true"
   # social sign-in buttons: enable only after the providers are set up in Supabase
   # (docs/platform/runbooks/social-login.md)
-  # BOMAGENT_SOCIAL_PROVIDERS = "google,azure"
+  BOMAGENT_SOCIAL_PROVIDERS = "google,azure"
   BOMAGENT_S3_ENDPOINT_URL = "https://wdjhfugsduoymelipimq.storage.supabase.co/storage/v1/s3"
   BOMAGENT_DATABASE_HOST = "aws-0-eu-west-1.pooler.supabase.com"
   BOMAGENT_DATABASE_USER = "bomagent_app.wdjhfugsduoymelipimq"
