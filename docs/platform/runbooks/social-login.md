@@ -135,7 +135,7 @@ Morning clicks: Google Cloud Console -> project mgr-ibm -> Google Auth Platform 
 
 Entra "App registrations -> New registration" refused: the signed-in account is a personal Microsoft account (live.com) with no Entra directory ("creating apps outside a directory is deprecated; get a directory via the M365 developer program or sign up for Azure"). Getting a directory needs an Azure/M365 sign-up (possibly card/phone), which was not attempted. Application ID and Tenant ID: none yet.
 
-Once a directory exists: App registrations -> New registration, name MGR-IBM, accounts "any organizational directory and personal Microsoft accounts", Web redirect `https://wdjhfugsduoymelipimq.supabase.co/auth/v1/callback`; Token configuration -> add optional claims (ID): `email`, `xms_edov`; API permissions: openid, profile, email, User.Read. Then Certificates & secrets -> New client secret -> copy VALUE -> Supabase -> Azure provider -> paste Application ID + secret, Azure Tenant URL `https://login.microsoftonline.com/common/v2.0` -> Save.
+Once a directory exists: App registrations -> New registration, name MGR-IBM, accounts "any organizational directory and personal Microsoft accounts", Web redirect `https://wdjhfugsduoymelipimq.supabase.co/auth/v1/callback`; Token configuration -> add optional claims (ID): `email`, `xms_edov`; API permissions: openid, profile, email, User.Read. Then Certificates & secrets -> New client secret -> copy VALUE -> Supabase -> Azure provider -> paste Application ID + secret, Azure Tenant URL `https://login.microsoftonline.com/common` -> Save.
 
 ### Then
 
