@@ -223,3 +223,13 @@ domain) and the assumptions awaiting acceptance (`docs/DECISIONS_LOG.md`, last c
 - `docs/thesis/PREREJESTRACJA.md` (Polish, draft): hypotheses, unit of analysis, metric families,
   Holm, effect sizes, sensitivity analysis, rules. Owner: review and freeze it before the first
   real-model run.
+
+## 2026-11-16 - TH-03 (tooling)
+
+- `bomagent_eval.agreement`: per-field agreement and Cohen's kappa between two independent
+  verifiers of a reference BOM, with the list of disagreements.
+- `bomagent_eval.dataset`: `SOURCE.md` validation (URL, pinned commit, licence, date, two distinct
+  verifiers for real designs), size strata, control vs real roles (`evals/fixtures/SOURCES.md`).
+- Owner: choose and ingest at least six real open designs and do the two independent
+  verifications; wiring a "never pool control and real" guard into the experiment config
+  is a follow-up once real designs exist.

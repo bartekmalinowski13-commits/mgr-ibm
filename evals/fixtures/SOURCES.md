@@ -12,6 +12,14 @@ Only openly licensed material may be stored here (CLAUDE_CODE_MASTER_PROMPT §3)
 Part numbers in the fixtures are real catalogue parts used as test data (facts, not
 copyrighted content). No manufacturer datasheets are stored in the repository.
 
+## Dataset roles (TH-03)
+`kicad/*` are **control** designs (self-authored): they allow controlled error injection and are
+never pooled with real designs in headline statistics. A **real** design needs `SOURCE.md` with
+`- URL:`, `- Commit:` (pinned hash), `- Licence:`, `- Retrieved:` (YYYY-MM-DD) and
+`- Verifier 1:` / `- Verifier 2:` (two distinct people who built the reference BOM
+independently); check with `bomagent_eval.dataset.validate_dataset`, report their agreement
+with `bomagent_eval.agreement.compare_verifiers` / `agreement_markdown`.
+
 ## To be added for the thesis experiment (M8) - requires human selection
 Open-source biomedical KiCad projects with a licence that permits redistribution
 (e.g. CERN-OHL, CC-BY(-SA), MIT/Apache for hardware files), each with: URL, commit,
