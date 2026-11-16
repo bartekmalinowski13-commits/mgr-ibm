@@ -9,8 +9,9 @@ only) - a child taken over by a hostile file cannot read the worker's secrets fr
 The child also sets ``no_new_privs``, a small descriptor table, no regular-file writes
 (``RLIMIT_FSIZE`` 0) and, where the kernel allows ``unshare``, leaves the network namespace
 (best effort and reported in the log; a parser app without network access is the real jail,
-audit SEC-01). This is a resource and secrets boundary, not a complete jail. ``ProjectSize`` bounds what a
-worker loads for one project before anything is read from storage. A child that is
+audit SEC-01). This is a resource and secrets boundary, not a complete jail.
+``ProjectSize`` bounds what a worker loads for one project before anything is read from
+storage. A child that is
 killed, times out or exceeds a limit is a ``ParseError`` (``parse.resource_limit`` /
 ``parse.timeout``): the worker marks the file failed instead of crashing and redelivering
 the message forever.
