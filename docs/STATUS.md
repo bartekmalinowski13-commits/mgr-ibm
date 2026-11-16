@@ -233,3 +233,8 @@ domain) and the assumptions awaiting acceptance (`docs/DECISIONS_LOG.md`, last c
 - Owner: choose and ingest at least six real open designs and do the two independent
   verifications; wiring a "never pool control and real" guard into the experiment config
   is a follow-up once real designs exist.
+
+## 2026-11-16 - SEC-11
+
+- `Settings.docs_enabled`: Swagger UI and `/openapi.json` are served only in local/test/dev; the
+  contract is still published from the repository (`services/api/openapi.json`).
