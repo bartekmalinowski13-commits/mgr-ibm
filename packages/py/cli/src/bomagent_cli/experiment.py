@@ -35,11 +35,12 @@ from typing import Annotated, Any, Literal
 
 import typer
 import yaml
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from bomagent_cad import parse_files
 from bomagent_cli.experiment_figures import Estimate, bar_panels, dot_interval_chart, slope_chart
 from bomagent_eval.experiment_stats import PairedComparison, bootstrap_ci, compare_paired
+from bomagent_eval.injection import rule_coverage
 from bomagent_eval.metrics import evaluate
 from bomagent_eval.reference import load_reference
 from bomagent_eval.stats import pairwise_agreement
@@ -86,6 +87,19 @@ class InjectionConfig(BaseModel):
     errors: int = Field(default=5, ge=1, le=20)
     #: different mutations per design (0 switches the measurement off)
     trials: int = Field(default=3, ge=0, le=50)
+    #: error kinds to inject (default: the rule-covered mix); add the beyond-rule kinds
+    #: (``bomagent_eval.injection.BEYOND_RULES_KINDS``) to test what rules cannot see
+    kinds: list[str] | None = None
+
+    @field_validator("kinds")
+    @classmethod
+    def _known_kinds(cls, v: list[str] | None) -> list[str] | None:
+        from bomagent_eval.injection import ERROR_KINDS
+
+        unknown = sorted(set(v or []) - set(ERROR_KINDS))
+        if unknown or v == []:
+            raise ValueError(f"unknown or empty injection kinds: {unknown or v}")
+        return v
 
 
 class ExperimentConfig(BaseModel):
@@ -235,7 +249,10 @@ async def _inject_one(
     out = []
     for trial in range(config.injection.trials):
         mutated, errors = inject_errors(
-            reference, n=config.injection.errors, seed=config.seed * 1009 + trial
+            reference,
+            n=config.injection.errors,
+            seed=config.seed * 1009 + trial,
+            kinds=tuple(config.injection.kinds) if config.injection.kinds else None,
         )
         if not errors:
             continue
@@ -254,6 +271,7 @@ async def _inject_one(
                 "detection_rate": report.detection_rate,
                 "false_alarm_rate": report.false_alarm_rate,
                 "by_kind": {k: list(v) for k, v in report.by_kind.items()},
+                "false_alarms_by_rule": report.false_alarms_by_rule,
             }
         )
     return out
@@ -446,6 +464,14 @@ def _injection_cells(result: ExperimentResult) -> dict[tuple[str, str], dict[str
     return cells
 
 
+def _false_alarms_by_rule(result: ExperimentResult) -> dict[tuple[str, str, str], int]:
+    out: dict[tuple[str, str, str], int] = defaultdict(int)
+    for r in result.injection_records:
+        for rule, n in r.get("false_alarms_by_rule", {}).items():
+            out[(r["variant"], r["model"], rule)] += n
+    return dict(out)
+
+
 def _by_kind(result: ExperimentResult) -> dict[tuple[str, str, str], list[int]]:
     totals: dict[tuple[str, str, str], list[int]] = defaultdict(lambda: [0, 0])
     for r in result.injection_records:
@@ -531,9 +557,20 @@ def _write_tables(result: ExperimentResult, config: ExperimentConfig) -> None:
                 )
     with (tables / "detection_by_kind.csv").open("w", encoding="utf-8", newline="") as f:
         w = csv.writer(f)
-        w.writerow(["variant", "model", "kind", "injected", "detected", "rate"])
+        w.writerow(["variant", "model", "kind", "rule_covered", "injected", "detected", "rate"])
+        coverage = rule_coverage()
         for (variant, model, kind), (injected, detected) in sorted(_by_kind(result).items()):
-            w.writerow([variant, model, kind, injected, detected, detected / injected])
+            w.writerow(
+                [
+                    variant,
+                    model,
+                    kind,
+                    coverage.get(kind, False),
+                    injected,
+                    detected,
+                    detected / injected,
+                ]
+            )
 
 
 def _write_figures(result: ExperimentResult, config: ExperimentConfig) -> None:
@@ -709,11 +746,17 @@ def _report(result: ExperimentResult, config: ExperimentConfig) -> str:
             )
         lines += [
             "",
-            "| variant | model | error kind | injected | detected |",
-            "|---|---|---|---|---|",
+            "| variant | model | error kind | rule coverage | injected | detected |",
+            "|---|---|---|---|---|---|",
         ]
+        coverage = rule_coverage()
         for (variant, model, kind), (injected, detected) in sorted(_by_kind(result).items()):
-            lines.append(f"| {variant} | {model} | {kind} | {injected} | {detected} |")
+            covered = "yes" if coverage.get(kind) else "no"
+            lines.append(f"| {variant} | {model} | {kind} | {covered} | {injected} | {detected} |")
+        stray = _false_alarms_by_rule(result)
+        if stray:
+            lines += ["", "False alarms per rule (findings matching no injected error):", ""]
+            lines += [f"- {v} / {m} / `{rule}`: {n}" for (v, m, rule), n in sorted(stray.items())]
         for model, comps in result.injection_comparisons.items():
             lines += ["", f"Paired (designs), {model}:", ""]
             for metric, c in comps.items():

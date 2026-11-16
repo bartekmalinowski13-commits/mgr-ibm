@@ -206,3 +206,10 @@ domain) and the assumptions awaiting acceptance (`docs/DECISIONS_LOG.md`, last c
   default mutation mix is unchanged so existing pilots stay comparable.
 - Follow-up: `injection.kinds` in the experiment config and the coverage/false-alarm tables in the
   experiment report.
+
+## 2026-11-16 - TH-06 (experiment wiring)
+
+- `injection.kinds` in the experiment config (validated against the known kinds); the report shows
+  rule coverage per error kind and false alarms per rule, and `detection_by_kind.csv` has a
+  `rule_covered` column. Example: `injection: {kinds: [wrong_plausible_mpn, wrong_tolerance,
+  voltage_derating, obsolete_part]}` measures what the rule pack cannot see.
