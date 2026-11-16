@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import re
 import uuid
@@ -252,6 +253,26 @@ async def list_files(request: Request, ctx: OrgContext, project_id: uuid.UUID) -
         return [FileInfo(**dict(r._mapping)) for r in rows]
 
 
+UPLOAD_CHUNK = 1024 * 1024
+
+
+async def measure_upload(file: UploadFile, *, limit: int) -> tuple[int, str]:
+    """Size and SHA-256 of the upload, read in chunks (the multipart body is already spooled
+    to disk by Starlette); refuses files over ``limit`` as soon as the limit is crossed. The
+    file is rewound so the object store can stream it."""
+    digest = hashlib.sha256()
+    size = 0
+    while chunk := await file.read(UPLOAD_CHUNK):
+        size += len(chunk)
+        if size > limit:
+            raise ProblemError(
+                413, "Payload Too Large", "file larger than 64 MB", slug="file-too-large"
+            )
+        digest.update(chunk)
+    await file.seek(0)
+    return size, digest.hexdigest()
+
+
 @router.post("/{project_id}/files", status_code=201, summary="Upload a design file")
 async def upload_file(
     request: Request, ctx: OrgContext, project_id: uuid.UUID, file: UploadFile
@@ -259,11 +280,7 @@ async def upload_file(
     """Stores the file under the tenant prefix and queues it for the sandboxed
     ingest-worker (parsing never happens in the API process - ADR-0009)."""
     require(ctx, "file.upload")
-    data = await file.read(MAX_UPLOAD + 1)
-    if len(data) > MAX_UPLOAD:
-        raise ProblemError(
-            413, "Payload Too Large", "file larger than 64 MB", slug="file-too-large"
-        )
+    size, sha256 = await measure_upload(file, limit=MAX_UPLOAD)
     name = _SAFE_NAME.sub("_", (file.filename or "upload").rsplit("/", 1)[-1])[:200] or "upload"
     store = request.app.state.store
     fid = uuid.uuid4()
@@ -285,10 +302,10 @@ async def upload_file(
             ).first()
             if previous is not None:
                 await refuse_if_run_active(conn, project_id)
-            await check_storage(conn, len(data), previous.size_bytes if previous else 0)
-            await check_project_size(conn, project_id, len(data), previous)
+            await check_storage(conn, size, previous.size_bytes if previous else 0)
+            await check_project_size(conn, project_id, size, previous)
             # the client's content type is never stored or served back
-            await store.put(key, data, "application/octet-stream")
+            await store.put_file(key, file.file, "application/octet-stream")
             await conn.execute(
                 text(
                     "INSERT INTO projects.files (id, tenant_id, project_id, name,"
@@ -303,8 +320,8 @@ async def upload_file(
                     "p": project_id,
                     "n": name,
                     "k": key,
-                    "h": hashlib.sha256(data).hexdigest(),
-                    "s": len(data),
+                    "h": sha256,
+                    "s": size,
                     "u": ctx.actor_id,
                 },
             )
@@ -329,10 +346,10 @@ async def upload_file(
                         if previous
                         else None
                     ),
-                    after={"name": name, "sha256": info.sha256, "size": len(data)},
+                    after={"name": name, "sha256": info.sha256, "size": size},
                 ),
             )
-            await record_usage(conn, files_uploaded=1, bytes_uploaded=len(data))
+            await record_usage(conn, files_uploaded=1, bytes_uploaded=size)
             outbox_id = await enqueue(
                 conn,
                 "ingest",
@@ -341,7 +358,10 @@ async def upload_file(
                 ),
             )
     except BaseException:
-        await store.delete(key)  # the row was not committed: drop the new object
+        # the row was not committed: drop the new object (best effort - a failing cleanup
+        # must not mask the original error)
+        with contextlib.suppress(Exception):
+            await store.delete(key)
         raise
     if previous is not None and previous.object_key != key:
         await store.delete(previous.object_key)  # replaced: keep no orphaned copies

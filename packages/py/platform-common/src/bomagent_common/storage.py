@@ -12,7 +12,7 @@ from __future__ import annotations
 import asyncio
 import re
 import uuid
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING, Any, BinaryIO, Protocol
 
 from bomagent_common.tenancy import require_tenant
 
@@ -45,6 +45,10 @@ def _check(key: str, enforce_tenant: bool) -> None:
 
 class ObjectStore(Protocol):
     async def put(self, key: str, data: bytes, content_type: str = ...) -> None: ...
+    async def put_file(self, key: str, body: BinaryIO, content_type: str = ...) -> None:
+        """Stores ``body`` from its start without loading it into memory (multipart for S3)."""
+        ...
+
     async def get(self, key: str) -> bytes: ...
     async def delete(self, key: str) -> None: ...
     async def presign_put(self, key: str, expires: int = ...) -> str: ...
@@ -61,6 +65,13 @@ class InMemoryObjectStore:
     ) -> None:
         _check(key, self._enforce)
         self.objects[key] = data
+
+    async def put_file(
+        self, key: str, body: BinaryIO, content_type: str = "application/octet-stream"
+    ) -> None:
+        _check(key, self._enforce)
+        body.seek(0)
+        self.objects[key] = body.read()
 
     async def get(self, key: str) -> bytes:
         _check(key, self._enforce)
@@ -80,6 +91,20 @@ class InMemoryObjectStore:
     async def presign_get(self, key: str, expires: int = 900) -> str:
         _check(key, self._enforce)
         return f"memory://get/{key}?expires={expires}"
+
+
+def upload_transfer_config() -> Any:
+    """Bounded memory per upload: 2 parts of 8 MiB in flight (boto3's default is up to 10
+    parts and 10 threads, about 80 MiB per 64 MiB upload)."""
+    from boto3.s3.transfer import TransferConfig
+
+    config = TransferConfig(
+        multipart_threshold=8 * 1024 * 1024,
+        multipart_chunksize=8 * 1024 * 1024,
+        max_concurrency=2,
+    )
+    config.max_in_memory_upload_chunks = 2  # s3transfer attribute, not a boto3 kwarg
+    return config
 
 
 class S3ObjectStore:
@@ -121,6 +146,20 @@ class S3ObjectStore:
         _check(key, self._enforce)
         await asyncio.to_thread(
             self._s3.put_object, Bucket=self._bucket, Key=key, Body=data, ContentType=content_type
+        )
+
+    async def put_file(
+        self, key: str, body: BinaryIO, content_type: str = "application/octet-stream"
+    ) -> None:
+        _check(key, self._enforce)
+        body.seek(0)
+        await asyncio.to_thread(
+            self._s3.upload_fileobj,
+            body,
+            self._bucket,
+            key,
+            ExtraArgs={"ContentType": content_type},
+            Config=upload_transfer_config(),
         )
 
     async def get(self, key: str) -> bytes:

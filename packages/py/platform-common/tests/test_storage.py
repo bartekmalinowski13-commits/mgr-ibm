@@ -173,3 +173,56 @@ def test_aws_endpoint_url_still_applies_to_s3_when_no_s3_endpoint_is_set():
 
     store = make_object_store(ServiceSettings(aws_endpoint_url="http://moto:5000"), "b")
     assert store._s3.meta.endpoint_url == "http://moto:5000"
+
+
+async def test_put_file_streams_without_loading_the_body_in_the_caller():
+    import io
+
+    store = InMemoryObjectStore(enforce_tenant=False)
+    body = io.BytesIO(b"x" * 5000)
+    body.seek(100)  # the store always reads from the start
+    await store.put_file("k", body)
+    assert await store.get("k") == b"x" * 5000
+
+
+async def test_s3_put_file_with_moto(monkeypatch):
+    import io
+
+    monkeypatch.setenv("AWS_ACCESS_KEY_ID", "testing")
+    monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "testing")
+    with mock_aws():
+        boto3.client("s3", region_name="eu-central-1").create_bucket(
+            Bucket="bomagent-test", CreateBucketConfiguration={"LocationConstraint": "eu-central-1"}
+        )
+        store = S3ObjectStore("bomagent-test", region="eu-central-1")
+        tid = uuid.uuid4()
+        key = tenant_key(tid, "big.bin")
+        payload = b"abc" * 3_000_000  # above boto3's multipart threshold (8 MiB)
+        with tenant_scope(TenantContext(tenant_id=tid, actor_id="u")):
+            await store.put_file(key, io.BytesIO(payload))
+            assert await store.get(key) == payload
+            with pytest.raises(InvalidObjectKeyError):
+                await store.put_file(tenant_key(uuid.uuid4(), "x"), io.BytesIO(b"x"))
+
+
+async def test_s3_put_file_bounds_memory_with_a_transfer_config(monkeypatch):
+    import io
+
+    monkeypatch.setenv("AWS_ACCESS_KEY_ID", "testing")
+    monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "testing")
+    with mock_aws():
+        store = S3ObjectStore("bomagent-test", region="eu-central-1")
+        seen: dict[str, object] = {}
+
+        def fake_upload(body, bucket, key, **kwargs):
+            seen.update(kwargs)
+
+        store._s3.upload_fileobj = fake_upload  # type: ignore[method-assign]
+        tid = uuid.uuid4()
+        with tenant_scope(TenantContext(tenant_id=tid, actor_id="u")):
+            await store.put_file(tenant_key(tid, "f"), io.BytesIO(b"x"), "text/plain")
+    cfg = seen["Config"]
+    assert cfg.max_concurrency <= 2
+    assert cfg.max_in_memory_upload_chunks <= 2
+    assert cfg.multipart_chunksize == 8 * 1024 * 1024
+    assert seen["ExtraArgs"] == {"ContentType": "text/plain"}

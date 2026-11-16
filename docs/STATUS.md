@@ -20,6 +20,11 @@ _Updated by Claude Code after every milestone (see `docs/prompts/CLAUDE_CODE_MAS
   shows a retry message on 429 at sign-in. In-memory, per replica. AWS needs the CloudFront header
   forwarded (owner/CDK PR).
 
+- **SEC-13 (part) streamed uploads:** the API no longer reads a 64 MiB file into memory: the multipart
+  body (already spooled to disk) is hashed in 1 MiB chunks, refused as soon as it crosses the limit,
+  and streamed to the object store (`ObjectStore.put_file`; S3 multipart bounded to 2 parts of 8 MiB
+  in flight, about 16 MiB per upload instead of the whole file).
+
 ## 2026-11-12 - deployment paths ready (AWS single-account dev, Supabase pilot); nothing deployed yet
 
 > **Owner: start with `docs/OWNER_CHECKLIST.md`** - what is ready and your steps in order.
