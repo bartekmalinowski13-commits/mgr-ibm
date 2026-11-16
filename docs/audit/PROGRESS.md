@@ -45,14 +45,14 @@ Scheduled task `audit-implementation-continue` (hourly, id `trig_0174gXcCFuTekwm
 | SEC-15 onboarding SECURITY DEFINER function | todo | | | migration/RLS: PR stays open for owner |
 | SEC-06 MFA (aal2 / amr checks) | todo | | | enabling MFA in Supabase console = owner; auth/authz change: PR stays open |
 | SEC-14 export / delete / retention / sub-processors | todo | | | migration likely: PR stays open; DPAs = owner |
-| UX-02 e-mail invitations | todo | | | SMTP provider account = owner |
+| UX-02 e-mail invitations | merged (backend, #48); web landing + resend todo | claude/audit-ux-02 | #48 | mailer protocol (log default, SMTP via env, TLS always), invitation e-mail PL+EN, audited; owner: mail provider, SPF/DKIM, env vars. Note: `LogMailer.sent` is unbounded when SMTP is off |
 | UX-03 lifecycle actions (delete, cancel, history, XLSX) | todo | | | |
-| SEC-09 malware scan | todo | | | GuardDuty / ClamAV sidecar deploy = owner |
+| SEC-09 malware scan | merged (code, #46); running clamd = owner | claude/audit-sec-09 | #46 | scanner protocol, EICAR default, optional clamd (fail closed), audit + metrics; GuardDuty S3 / quarantine not done |
 | OPS-04 migration policy, rollback runbook, smoke | todo | | | |
-| OPS-05 backups / DR runbook + restore drill script | todo | | | paid Supabase plan = owner |
-| OPS-06 runbooks | todo | | | |
+| OPS-05 backups / DR runbook + restore drill script | merged (script + runbook, #45); drills = owner | claude/audit-ops-05-06 | #45 | `tools/restore_drill.py` (scratch DB only), backup-restore-dr runbook with proposed RPO/RTO; owner: PITR plan, backup bucket, first real drill. Script never run on a real Postgres |
+| OPS-06 runbooks | merged (#45) | claude/audit-ops-05-06 | #45 | incident, breach (72 h), offboarding, on-call, capacity runbooks; owner: contact details. `docs/platform/SECURITY.md` still links `docs/runbooks/` (needs a docs(spec) fix) |
 | SEC-10 supply chain (digests, Trivy image, license gate, SAST) | todo | | | cosign in deploy.sh touches `deploy/*` |
-| QA-02 cassette recorder, nightly real-model eval workflow | todo | | | secrets in GitHub environment = owner |
+| QA-02 cassette recorder, nightly real-model eval workflow | merged (code, #44); real recordings + nightly secrets = owner | claude/audit-qa-02-03 | #44 | `RecordingChat`, `bomagent record`, `run --min-f1/--max-hallucination-rate`, secret-gated nightly workflow |
 | ARCH-06 KB snapshot per run | todo | | | |
 
 ## Phase 3 - scale and enterprise
@@ -61,11 +61,11 @@ Scheduled task `audit-implementation-continue` (hourly, id `trig_0174gXcCFuTekwm
 |---|---|---|---|---|
 | ARCH-03 LISTEN/NOTIFY, indexes, outbox relay query | todo | | | |
 | ARCH-04 service layer | todo | | | |
-| ARCH-05 resume from checkpoints | todo | | | |
+| ARCH-05 resume from checkpoints | merged (#52, no migration); heartbeat/reaper = owner | claude/audit-arch-05 | #52 | resume from checkpoint for A and B, recorded in run record/trace/audit; `heartbeat_at` column and per-plan timeout need a migration |
 | SEC-05 SSO hardening | todo | | | touches sso.py: PR stays open for owner |
 | AWS dev/staging/prod via the pipeline | needs owner | | | deployment is a human step |
-| QA-04 E2E breadth, QA-05 DAST | todo | | | |
-| OPS-09 k6 scenarios, capacity note | todo | | | |
+| QA-04 E2E breadth, QA-05 DAST | merged (mobile spec, #50) | claude/audit-ops-08-09-qa-04-05 | #50 | phone-viewport E2E; QA-05 ZAP baseline workflow (manual/scheduled) merged; not run locally |
+| OPS-09 k6 scenarios, capacity note | merged (k6 + placeholder note, #50) | claude/audit-ops-08-09-qa-04-05 | #50 | `tests/load/bomagent.js`, capacity-k6 runbook; numbers are placeholders until measured |
 | SCIM / silo roadmap | skipped | | | roadmap item, no code in this pass |
 
 ## Phase 4 - remaining audit items (not in section 9)
@@ -74,25 +74,25 @@ Scheduled task `audit-implementation-continue` (hourly, id `trig_0174gXcCFuTekwm
 |---|---|---|---|---|
 | SEC-07 Supabase custom access token hook | todo | | | hook activation in Supabase = owner |
 | SEC-11 docs/openapi off outside dev | merged (#38) | claude/audit-sec-11 | #38 | `Settings.docs_enabled` (local/test/dev only); contract stays in `services/api/openapi.json`; a docs-site page (Redocly/Scalar) is a follow-up |
-| SEC-12 injection corpus, canary, free-text sanitising | todo | | | |
-| SEC-16/17 low items (CODEOWNERS, SECURITY.md, idempotency TTL, parser error leak test) | in PR (SEC-17 code + files); SEC-16, auth.py comment, branch protection = owner | claude/audit-sec-17 | | this PR: `SECURITY.md`, `.github/CODEOWNERS`, 24 h idempotency-key sweep in the maintenance loop (DB test, CI only), parser error-text leak test; left: SEC-16 note in `CLAUDE.md` (human-owned file), comment guard in `auth.py` (reserved file), branch protection with `tenant isolation (blocking)`, enabling GitHub private vulnerability reporting |
+| SEC-12 injection corpus, canary, free-text sanitising | in PR #41 (corpus, detector fix, free-text cleaner) | claude/audit-sec-12 | #41 | left: wire `clean_free_text` into storage, injection success rate metric in experiment, canary in prompt, LLM classifier |
+| SEC-16/17 low items (CODEOWNERS, SECURITY.md, idempotency TTL, parser error leak test) | merged (SEC-17, #39); SEC-16, auth.py comment, branch protection = owner | claude/audit-sec-17 | #39 | SECURITY.md, CODEOWNERS, idempotency TTL sweep, parser error text test |
 | ARCH-01 deployment tiers ADR | merged as draft ADR-0018 (Proposed) | claude/audit-doc-02 | #25 | acceptance = owner |
-| ARCH-07 embeddings status in readyz | todo | | | |
-| ARCH-08 wire eu_guard check_environment at gateway start | todo | | | |
-| ARCH-09 / DOC-01 as-built section, status files cleanup | todo | | | |
-| ARCH-10 symlink removal, CHANGELOG, tags | todo | | | |
-| OPS-03 bomagent-ops CLI | todo | | | |
-| OPS-07 CI cost / path filters | todo | | | |
-| OPS-08 migration lint + downgrade test | todo | | | |
+| ARCH-07 embeddings status in readyz | merged (#40) | claude/audit-arch-07 | #40 | API and KB indexer refuse hashing embeddings outside local/test unless `BOMAGENT_ALLOW_FAKE_LLM` |
+| ARCH-08 wire eu_guard check_environment at gateway start | in PR #37, needs owner (deploy/*) | claude/audit-arch-08 | #37 | gateway entrypoint runs the EU environment check; image start not run here |
+| ARCH-09 / DOC-01 as-built section, status files cleanup | merged (#47) | claude/audit-arch-09-10 | #47 | `docs/platform/AS_BUILT.md` checked against code; HANDOFF archive + "15 ADRs" fix in STATUS.md still todo |
+| ARCH-10 symlink removal, CHANGELOG, tags | partial (#47: CHANGELOG) | claude/audit-arch-09-10 | #47 | CHANGELOG done; `evals/samples` symlink kept (nightly workflow and test depend on it); tags = owner |
+| OPS-03 bomagent-ops CLI | merged (skeleton, #42) | claude/audit-doc-04-ops-03-07 | #42 | `bomagent-ops env|queries` read-only; requeue/purge need RLS + audit |
+| OPS-07 CI cost / path filters | merged (docs-only fast path, #42) | claude/audit-doc-04-ops-03-07 | #42 | job-level skip of heavy jobs on docs-only PRs; confirm on the next docs-only PR; caching/nightly matrix todo |
+| OPS-08 migration lint + downgrade test | merged (migration lint, #50); round-trip test in draft PR #55, needs owner | claude/audit-ops-08-downgrade | #50, #55 | round-trip test found a real defect: downgrade of `tenancy.sso_domains` fails (policy dependency) - migration fix = owner |
 | DATA-01 / DATA-02 indexes, TTL sweeps, re-index doc | todo | | | indexes need a migration: PR stays open |
-| QA-03 property tests | todo | | | |
-| UX-04 BOM table sort/filter/virtualise | todo | | | |
-| UX-05 localised error messages | todo | | | |
-| UX-06 focus management | todo | | | |
-| UX-07 quota chips, checklist | todo | | | |
-| UX-08 a11y regression gate | todo | | | |
+| QA-03 property tests | merged (#44) | claude/audit-qa-02-03 | #44 | Hypothesis tests for values, designators, grouping, CSV round trips; mutmut not added |
+| UX-04 BOM table sort/filter/virtualise | merged (#51); column resize todo | claude/audit-ux-04-07 | #51 | sort/filter/virtualise/sticky/visibility/Copy CSV |
+| UX-05 localised error messages | merged (#43) | claude/audit-ux-05-06-08 | #43 | 34 slugs localised PL+EN; dynamic numbers (quota) now generic |
+| UX-06 focus management | merged (#43) | claude/audit-ux-05-06-08 | #43 | ItemPanel focus in/out, Tab trap, aria-live save |
+| UX-07 quota chips, checklist | merged (#51, admin-only chips) | claude/audit-ux-04-07 | #51 | chips for all roles need a backend permission change (authz.py = owner) |
+| UX-08 a11y regression gate | merged (#43, vitest gate) | claude/audit-ux-05-06-08 | #43 | contrast/reduced-motion/lang; Playwright axe not added |
 | DOC-03 LICENSE / legal drafts | needs owner | | | licence choice and legal review = owner |
-| DOC-04 just doctor, CONTRIBUTING | todo | | | |
+| DOC-04 just doctor, CONTRIBUTING | merged (#42) | claude/audit-doc-04-ops-03-07 | #42 | `just doctor`, CONTRIBUTING.md; static OpenAPI page todo |
 | TH-07 Agent SDK arm decision | needs owner | | | scope decision = owner |
-| TH-08 appendices generation | todo | | | |
-| TH-09 experiment status page | todo | | | |
+| TH-08 appendices generation | merged (code, #49) | claude/audit-th-08-09 | #49 | `bomagent experiment appendices` (A, B, C, trace table); not embedded in the docx build |
+| TH-09 experiment status page | merged (#49) | claude/audit-th-08-09 | #49 | `bomagent experiment status` static page; capacitor "1M" normalisation bug fixed in the same PR |

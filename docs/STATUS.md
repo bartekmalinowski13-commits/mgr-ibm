@@ -248,3 +248,15 @@ domain) and the assumptions awaiting acceptance (`docs/DECISIONS_LOG.md`, last c
 - Regression test: parser error texts contain no paths, tracebacks or library internals.
 - Owner: enable GitHub private vulnerability reporting, and branch protection with the
   `tenant isolation (blocking)` check.
+
+## 2026-11-16 - batch of audit tasks merged (#38-#52)
+
+- Merged: SEC-11 (#38), SEC-17 (#39), ARCH-07 (#40), DOC-04/OPS-03/OPS-07 (#42), UX-05/06/08 (#43),
+  QA-02/03 (#44), OPS-05/06 (#45), SEC-09 (#46), ARCH-09/10 + DOC-01 as-built (#47), UX-02 backend
+  (#48), TH-08/09 + capacitor "1M" fix (#49), OPS-08 lint + OPS-09 + QA-04/05 (#50), UX-04/07 (#51),
+  ARCH-05 (#52).
+- Open for the owner: #28 (Fly process groups, dashboards, alerts), #37 (gateway EU check at start,
+  `deploy/*`), #55 (draft: downgrade round-trip test that exposes a broken `downgrade()` of the SSO
+  revision). #41 (SEC-12) waits for CI.
+- Found by the new tests: `normalize_value("1M", "capacitor")` produced "1 MF" (fixed);
+  rolling back past the SSO revision fails on `tenancy.sso_domains` (needs a migration fix).
