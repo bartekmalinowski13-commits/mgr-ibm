@@ -11,14 +11,16 @@ obrębie strzeżonego kontraktu**: oba warianty dostają to samo wejście i prze
 
 | Element | A (LLM) | B (hybryda) | Wspólny? | Gdzie w kodzie |
 |---|---|---|---|---|
-| Parsowanie plików (KiCad, EDIF, ...) | tak | tak | **tak** | `bomagent_cad` |
-| Rodzaj elementu, obudowa z footprintu | tak | tak | **tak** | `kind_of`, `package_from_footprint` |
-| Walidacja schematu wyjścia, współczynnik poprawek (`lines_to_items` odrzuca wadliwe linie) | tak | tak | **tak** | `bomagent_agents.contracts` |
-| **Reguła „MPN tylko z dowodów"** (`guard_mpns`) | tak | tak | **tak** | `runtime_base.AgentContext.guard_mpns` |
-| Metryki i zbiory odniesienia | tak | tak | **tak** | `bomagent_eval` |
-| Grupowanie komponentów w linie BOM | LLM (`extract_group`, `compose`) | deterministyczne (`bom-core`) | nie | `variant_a.py` / `variant_b.py` |
-| Wybór MPN spośród kandydatów z KB | LLM | LLM po deterministycznym zawężeniu kandydatów | nie | `mpn_select` |
-| Walidacja BOM | LLM (`validate`) | pakiet reguł `core@1.0.0` + naprawa LLM (`repair`) | nie | `rules`, `repair` |
+| Parsowanie plików (KiCad, EDIF, ...) | tak (agent czyta listę komponentów z parsera) | tak | **tak** | `bomagent_cad` |
+| Rodzaj elementu, obudowa z footprintu | `kind_of`, `package_from_footprint` przy konwersji JSON agenta na pozycje | te same funkcje w grupowaniu i naprawie | **tak** | `bomagent_bom.refdes`, `.packages` |
+| Wyjście agentów jako ustrukturyzowane obiekty z walidacją schematu | tak; wadliwe linie są odrzucane i raportowane, nie naprawiane | tak (`MpnChoice`, `RepairOut`) | **tak** | `bomagent_agents.schemas` |
+| **Wybór MPN spośród dowodów z KB** (ten sam prompt `mpn_select`, to samo wyszukiwanie) | dla **wszystkich** pozycji poza DNP | tylko dla pozycji bez MPN, nie-DNP i nie z pominiętych rodzajów | **kod wspólny** (`choose_mpn`), zakres różny | `variant_b.choose_mpn` |
+| **Reguła „MPN tylko z dowodów"** (`guard_mpns`) | tak (po `extract_group`, `compose`) | tak (po wyborze, w wyjściu, po naprawie) | **tak** | `runtime_base.AgentContext.guard_mpns` |
+| Budżet, obsługa awarii, metryki, zbiory odniesienia | tak | tak | **tak** | `contracts`, `bomagent_eval` |
+| Grupowanie komponentów w linie BOM | agent LLM (`extract_group`) | deterministyczne (`group_components`) | nie | `variant_a.py` / `bom-core` |
+| Złożenie końcowego BOM | agent LLM (`compose`) | kod (`renumber`, `finish`) | nie | `variant_a.compose` |
+| Walidacja BOM | agent LLM (`validate`) | pakiet reguł `core@1.0.0` | nie | `llm_validate` / `bomagent_rules` |
+| Naprawa błędów | brak osobnego kroku (korekty w `compose`) | agent `repair` na błędach reguł, <= N iteracji | nie | `variant_b.repair` |
 
 Uzasadnienie wspólnej części: rozbieżność wyników ma wynikać z **podziału decyzji**, nie z tego,
 że jeden wariant ma zabezpieczenie, którego drugi nie ma. Reguła MPN-tylko-z-dowodów jest
