@@ -193,7 +193,9 @@ async def test_fake_provider_models_are_selectable_only_without_a_gateway(
         store=InMemoryObjectStore(),
     )
     assert app.state.allow_local_models is (not gateway)
-    assert app.state.readyz_info == {"llm": "gateway" if gateway else "fake"}
+    kind = "gateway" if gateway else "fake"
+    assert app.state.readyz_info == {"llm": kind, "embeddings": kind}
+    assert app.state.demo is (not gateway)
 
 
 # ---------------------------------------------------------------- HTTP surface
@@ -225,7 +227,10 @@ async def test_config_json_for_supabase_auth(app_engine, platform_engine):
         resp = await client.get("/config.json")
     assert resp.status_code == 200
     assert resp.json() == {
-        "auth": {"mode": "supabase", "url": SUPABASE_URL, "anonKey": "public-anon-key"}
+        "auth": {"mode": "supabase", "url": SUPABASE_URL, "anonKey": "public-anon-key"},
+        "mode": "demo",
+        "llm": "fake",
+        "embeddings": "fake",
     }
     assert resp.headers["cache-control"] == "no-store"
 
@@ -264,7 +269,12 @@ async def test_config_json_in_local_mode_and_without_supabase(app_engine, platfo
         store=InMemoryObjectStore(),
     )
     async with running(app) as client:
-        assert (await client.get("/config.json")).json() == {"auth": {"mode": "local"}}
+        assert (await client.get("/config.json")).json() == {
+            "auth": {"mode": "local"},
+            "mode": "demo",
+            "llm": "fake",
+            "embeddings": "fake",
+        }
     app = create_app(
         _settings(auth_mode="oidc", start_workers=False),
         engine=app_engine,

@@ -456,5 +456,10 @@
     "delete": "Delete sample project",
     "confirmDelete": "Delete this sample project with its files and runs? This cannot be undone.",
     "deleted": "Sample project deleted"
+  },
+  "demo": {
+    "title": "Demo mode.",
+    "body": "The model is deterministic and does not read your design like a real one: BOMs are illustrative, not for procurement or design decisions.",
+    "reference": "Demo mode: comparison figures describe the deterministic demo model."
   }
 }

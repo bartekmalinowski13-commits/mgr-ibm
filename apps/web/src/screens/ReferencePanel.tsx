@@ -3,6 +3,7 @@ import { FileCheck2 } from "lucide-react";
 import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { evaluateRun, problemMessage, type Schemas } from "../lib/api";
+import { useRuntime } from "../lib/queries";
 
 const HEADLINE = [
   "line_f1",
@@ -16,6 +17,7 @@ const FIELDS = ["value", "footprint", "manufacturer", "mpn"] as const;
 /** Thesis metrics against a reference BOM the user provides (nothing is stored). */
 export function ReferencePanel({ runId }: { runId: string }) {
   const { t, i18n } = useTranslation();
+  const demo = useRuntime().data?.mode === "demo";
   const input = useRef<HTMLInputElement>(null);
   const [result, setResult] = useState<Schemas["Evaluation"]>();
   const [error, setError] = useState<string>();
@@ -52,6 +54,7 @@ export function ReferencePanel({ runId }: { runId: string }) {
             {t("reference.title")}
           </h2>
           <p className="max-w-[70ch] text-sm text-muted">{t("reference.lead")}</p>
+          {demo ? <p className="max-w-[70ch] text-sm text-warn">{t("demo.reference")}</p> : null}
         </div>
         <Button
           variant="secondary"

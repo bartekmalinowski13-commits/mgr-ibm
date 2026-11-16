@@ -14,7 +14,7 @@ Scheduled task `audit-implementation-continue` (hourly, id `trig_0174gXcCFuTekwm
 
 | Task | Status | Branch | PR | Notes |
 |---|---|---|---|---|
-| UX-01 demo banner + watermark | todo | | | |
+| UX-01 demo banner + watermark | in progress | claude/audit-ux-01 | | |
 | SEC-03 per-IP limits, SSO discovery as POST | todo | | | Fly/Supabase console limits = owner |
 | SEC-13 presigned uploads, parse semaphore | todo | | | |
 | SEC-01 parser isolation (no-new-privs, rlimits, netns) | todo | | | separate Fly app/AWS IAM parts = owner/deploy |

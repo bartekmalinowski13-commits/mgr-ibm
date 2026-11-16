@@ -4,6 +4,13 @@
 
 _Updated by Claude Code after every milestone (see `docs/prompts/CLAUDE_CODE_MASTER_PROMPT.md` §5)._
 
+## 2026-11-16 - audit implementation (docs/audit/PROGRESS.md)
+
+- **UX-01 demo mode visible:** `/config.json` carries `mode` (`demo`|`live`), `llm`, `embeddings`;
+  `/readyz` also reports `embeddings`; the SPA shows a persistent PL/EN banner on demo deployments
+  (fake model) and a note on the reference comparison; CSV export gets a `Demo` column and
+  `GET /v1/runs/{id}/bom` returns `demo: true`.
+
 ## 2026-11-12 - deployment paths ready (AWS single-account dev, Supabase pilot); nothing deployed yet
 
 > **Owner: start with `docs/OWNER_CHECKLIST.md`** - what is ready and your steps in order.

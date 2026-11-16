@@ -98,6 +98,17 @@ def test_csv_export_neutralises_formulas():
     assert rows[1][3].startswith("'=")
 
 
+def test_csv_export_demo_adds_a_watermark_column_only_when_asked():
+    bom = BomVersion(design_name="t", items=[BomItem(line=1, refdes=["R1"], quantity=1)])
+    plain = list(csv.reader(io.StringIO(to_csv(bom))))
+    demo = list(csv.reader(io.StringIO(to_csv(bom, demo=True))))
+    assert "Demo" not in plain[0]
+    assert demo[0][-1] == "Demo"
+    assert demo[1][-1] == "illustrative: deterministic demo model"
+    assert demo[0][:-1] == plain[0]
+    assert demo[1][:-1] == plain[1]
+
+
 def test_json_export_roundtrip():
     bom = BomVersion(design_name="t", items=[BomItem(line=1, refdes=["U1"], quantity=1)])
     again = BomVersion.model_validate_json(to_json(bom))

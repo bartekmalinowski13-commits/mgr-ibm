@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { authorizeUrl, decodeIdToken, pkceChallenge } from "./oidc";
+import { authorizeUrl, decodeIdToken, parseRuntime, pkceChallenge } from "./oidc";
 
 describe("PKCE", () => {
   it("derives the S256 challenge: base64url(SHA-256(verifier)) without padding", async () => {
@@ -59,5 +59,17 @@ describe("PKCE", () => {
       .replace(/\//g, "_")
       .replace(/=+$/, "");
     expect(decodeIdToken(`h.${payload}.s`)).toEqual({ sub: "u-1", email: "ola@x.eu", name: "Ola" });
+  });
+});
+
+describe("runtime info from /config.json", () => {
+  it("reports demo only when the deployment says so", () => {
+    expect(parseRuntime({ mode: "demo", llm: "fake", embeddings: "fake" })).toEqual({
+      mode: "demo",
+      llm: "fake",
+      embeddings: "fake",
+    });
+    expect(parseRuntime({ mode: "live" }).mode).toBe("live");
+    expect(parseRuntime(undefined).mode).toBe("live"); // local dev: no config.json
   });
 });

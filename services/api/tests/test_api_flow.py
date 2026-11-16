@@ -147,6 +147,17 @@ async def test_full_flow_and_tenant_boundaries(env):
     csv = await c.get(f"/v1/runs/{run_id}/bom.csv", headers=alice)
     assert csv.status_code == 200
     assert "ERJ-3EKF1003V" in csv.text
+    assert "Demo" not in csv.text.splitlines()[0]
+    assert bom["demo"] is False
+
+    # demo deployments (fake model) mark every export as illustrative
+    env.app.state.demo = True
+    demo_bom = (await c.get(f"/v1/runs/{run_id}/bom", headers=alice)).json()
+    demo_csv = await c.get(f"/v1/runs/{run_id}/bom.csv", headers=alice)
+    env.app.state.demo = False
+    assert demo_bom["demo"] is True
+    assert demo_csv.text.splitlines()[0].endswith(",Demo")
+    assert "illustrative" in demo_csv.text.splitlines()[1]
 
     audit = (await c.get("/v1/audit-events", headers=alice)).json()
     actions = [e["action"] for e in audit["items"]]

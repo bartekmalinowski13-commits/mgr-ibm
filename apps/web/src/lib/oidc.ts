@@ -14,15 +14,35 @@ export type AuthConfig =
 const VERIFIER = "bomagent.pkce.verifier";
 const STATE = "bomagent.pkce.state";
 
-let cached: Promise<AuthConfig> | undefined;
+/** What answers the runs: `demo` = the deterministic fake model (BOMs are illustrative). */
+export type RuntimeInfo = { mode: "demo" | "live"; llm?: string; embeddings?: string };
+
+type DeploymentConfig = { auth?: AuthConfig } & Partial<RuntimeInfo>;
+
+export function parseRuntime(cfg: DeploymentConfig | undefined): RuntimeInfo {
+  return {
+    mode: cfg?.mode === "demo" ? "demo" : "live",
+    llm: cfg?.llm,
+    embeddings: cfg?.embeddings,
+  };
+}
+
+let cached: Promise<DeploymentConfig | undefined> | undefined;
 
 /** `/config.json` is written next to the SPA at deployment (no build-time secrets). */
-export function authConfig(): Promise<AuthConfig> {
+function deploymentConfig(): Promise<DeploymentConfig | undefined> {
   cached ??= fetch("/config.json")
-    .then(async (r) => (r.ok ? ((await r.json()) as { auth?: AuthConfig }).auth : undefined))
-    .then((auth) => auth ?? { mode: "local" as const })
-    .catch(() => ({ mode: "local" as const }));
+    .then(async (r) => (r.ok ? ((await r.json()) as DeploymentConfig) : undefined))
+    .catch(() => undefined);
   return cached;
+}
+
+export function authConfig(): Promise<AuthConfig> {
+  return deploymentConfig().then((cfg) => cfg?.auth ?? { mode: "local" as const });
+}
+
+export function runtimeInfo(): Promise<RuntimeInfo> {
+  return deploymentConfig().then(parseRuntime);
 }
 
 function base64Url(bytes: Uint8Array): string {

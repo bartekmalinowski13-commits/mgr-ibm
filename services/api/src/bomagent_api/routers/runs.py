@@ -298,12 +298,17 @@ async def latest_bom(conn: Any, run_id: uuid.UUID) -> tuple[uuid.UUID, int, BomV
     return row.id, row.version, BomVersion.model_validate(row.content)
 
 
+def _is_demo(request: Request) -> bool:
+    """True when the deployment answers with the fake model (``app.state.demo``)."""
+    return bool(getattr(request.app.state, "demo", False))
+
+
 @router.get("/{run_id}/bom", summary="Latest BOM version of a run")
 async def read_bom(request: Request, ctx: OrgContext, run_id: uuid.UUID) -> BomEnvelope:
     require(ctx, "bom.read")
     async with tenant_transaction(request.app.state.engine) as conn:
         _, version, bom = await latest_bom(conn, run_id)
-    return BomEnvelope(run_id=run_id, version=version, bom=bom)
+    return BomEnvelope(run_id=run_id, version=version, bom=bom, demo=_is_demo(request))
 
 
 @router.get("/{run_id}/trace", summary="Steps of a finished run (agent graph nodes)")
@@ -401,7 +406,7 @@ async def export_bom(request: Request, ctx: OrgContext, run_id: uuid.UUID) -> Pl
             ),
         )
     return PlainTextResponse(
-        to_csv(bom),
+        to_csv(bom, demo=_is_demo(request)),
         media_type="text/csv",
         headers={"Content-Disposition": f'attachment; filename="bom-{run_id}-v{version}.csv"'},
     )
@@ -468,4 +473,4 @@ async def patch_item(
                 note=body.reason,
                 attributes={"value": new_item.value, "footprint": new_item.footprint},
             )
-    return BomEnvelope(run_id=run_id, version=version + 1, bom=new_bom)
+    return BomEnvelope(run_id=run_id, version=version + 1, bom=new_bom, demo=_is_demo(request))

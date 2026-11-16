@@ -230,7 +230,13 @@ def create_app(
     )
     app.state.workers = workers
     fake = isinstance(default_chat, FakeChat)
-    app.state.readyz_info = {"llm": "fake" if fake else "gateway"}  # shown by /readyz
+    fake_embeddings = isinstance(embedder, HashingEmbeddings)
+    app.state.readyz_info = {  # shown by /readyz
+        "llm": "fake" if fake else "gateway",
+        "embeddings": "fake" if fake_embeddings else "gateway",
+    }
+    # demo mode (UX-01): BOMs come from the deterministic fake model; the UI says so
+    app.state.demo = fake
     if fake:
         # every run is answered by the fake provider anyway, so its catalogue entries
         # (``fake-closed``, the default model; residency ``local``) must be selectable
@@ -319,8 +325,12 @@ def _wrap_lifespan(app: FastAPI, workers: _Workers) -> None:
 def _install_frontend(app: FastAPI, settings: Settings) -> None:
     @app.get("/config.json", include_in_schema=False)
     async def config_json() -> Response:
+        runtime = {
+            "mode": "demo" if app.state.demo else "live",
+            **app.state.readyz_info,
+        }
         if settings.auth_mode == "local":
-            return JSONResponse({"auth": {"mode": "local"}})
+            return JSONResponse({"auth": {"mode": "local"}, **runtime})
         if not (settings.supabase_url and settings.supabase_anon_key):
             raise ProblemError(404, "Not Found", "no sign-in configuration")
         auth: dict[str, Any] = {
@@ -330,7 +340,7 @@ def _install_frontend(app: FastAPI, settings: Settings) -> None:
         }
         if settings.social_provider_ids:
             auth["providers"] = settings.social_provider_ids
-        return JSONResponse({"auth": auth})
+        return JSONResponse({"auth": auth, **runtime})
 
     if not settings.static_dir:
         return

@@ -23,6 +23,7 @@ import { formatEur } from "../lib/provenance";
 import { useMe, useProjects, useUsage } from "../lib/queries";
 import { useSession } from "../lib/session";
 import { signOutRemote } from "../lib/supabase";
+import { DemoBanner } from "./DemoBanner";
 import { NewRunDialog } from "./NewRunDialog";
 
 export function Shell() {
@@ -199,6 +200,7 @@ export function Shell() {
           </div>
         ) : null}
         <div className="min-w-0">
+          <DemoBanner />
           <header className="flex items-center gap-3 border-b border-line bg-paper/90 px-4 py-3 backdrop-blur sm:px-8">
             <button
               type="button"

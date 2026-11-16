@@ -789,6 +789,11 @@ export interface components {
         BomEnvelope: {
             bom: components["schemas"]["BomVersion"];
             /**
+             * Demo
+             * @default false
+             */
+            demo: boolean;
+            /**
              * Run Id
              * Format: uuid
              */
