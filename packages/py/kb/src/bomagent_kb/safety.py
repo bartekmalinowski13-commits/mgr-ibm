@@ -29,4 +29,18 @@ def sanitize(text: str) -> str:
 
 
 def looks_like_injection(text: str) -> bool:
-    return bool(_INJECTION.search(text))
+    # irregular spacing and line breaks must not hide a phrase ("ignore  previous\ninstructions")
+    return bool(_INJECTION.search(" ".join(text.split())))
+
+
+MAX_FREE_TEXT = 2000
+
+
+def clean_free_text(text: str, *, limit: int = MAX_FREE_TEXT) -> str:
+    """Normalise and size-cap free text produced by an LLM before it is stored or shown
+    (``rationale``, finding messages): Unicode NFC, no hidden control characters, collapsed
+    whitespace, at most ``limit`` characters (ending in an ellipsis when cut)."""
+    cleaned = " ".join(sanitize(text).split())
+    if len(cleaned) <= limit:
+        return cleaned
+    return cleaned[: max(limit - 1, 0)].rstrip() + "\u2026"
