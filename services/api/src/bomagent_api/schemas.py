@@ -118,6 +118,7 @@ class BomEnvelope(_M):
     run_id: uuid.UUID
     version: int
     bom: BomVersion
+    demo: bool = False  # produced by the deterministic demo model: BOMs are illustrative
 
 
 class BomItemPatch(_M):

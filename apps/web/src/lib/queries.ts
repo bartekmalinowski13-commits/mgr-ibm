@@ -1,6 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
 import { api, call } from "./api";
+import { runtimeInfo } from "./oidc";
 import { useSession } from "./session";
+
+/** Demo deployment (fake model): the UI must say that BOMs are illustrative. */
+export function useRuntime() {
+  return useQuery({ queryKey: ["runtime"], queryFn: runtimeInfo, staleTime: Infinity });
+}
 
 export function useMe() {
   const { session } = useSession();

@@ -464,5 +464,10 @@
     "delete": "Usuń projekt przykładowy",
     "confirmDelete": "Usunąć ten projekt przykładowy razem z plikami i uruchomieniami? Tej operacji nie można cofnąć.",
     "deleted": "Usunięto projekt przykładowy"
+  },
+  "demo": {
+    "title": "Tryb demo.",
+    "body": "Model jest deterministyczny i nie analizuje projektu jak prawdziwy: BOM-y mają charakter poglądowy, nie nadają się do zakupów ani decyzji projektowych.",
+    "reference": "Tryb demo: wyniki porównania dotyczą deterministycznego modelu demo."
   }
 }

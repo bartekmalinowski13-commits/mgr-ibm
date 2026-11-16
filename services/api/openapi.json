@@ -348,6 +348,11 @@
           "bom": {
             "$ref": "#/components/schemas/BomVersion"
           },
+          "demo": {
+            "default": false,
+            "title": "Demo",
+            "type": "boolean"
+          },
           "run_id": {
             "format": "uuid",
             "title": "Run Id",

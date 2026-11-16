@@ -8,11 +8,21 @@ import {
   redirect,
 } from "@tanstack/react-router";
 import { captureFragmentReturn } from "./lib/authReturn";
+import { DemoBanner } from "./screens/DemoBanner";
 import { LoginScreen } from "./screens/LoginScreen";
 import { Shell } from "./screens/Shell";
 
+function RootLayout() {
+  return (
+    <>
+      <DemoBanner />
+      <Outlet />
+    </>
+  );
+}
+
 const root = createRootRoute({
-  component: Outlet,
+  component: RootLayout,
   // e-mail links (recovery, confirmation) and provider errors land on the Site URL with
   // the result in the URL fragment: move it out of the address bar and show its screen
   beforeLoad: () => {
