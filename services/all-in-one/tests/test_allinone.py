@@ -436,3 +436,66 @@ def test_entrypoint_dispatches_commands(monkeypatch):
     ]
     with pytest.raises(SystemExit, match="usage"):
         main(["deploy"])
+
+
+# ---------------------------------------------------------------- process roles (ARCH-02)
+
+
+def test_role_decides_what_a_process_runs():
+    assert Settings(environment="test").role == "all"  # default: the pilot as it is today
+    all_ = Settings(environment="test", role="all")
+    web = Settings(environment="test", role="web")
+    worker = Settings(environment="test", role="worker")
+    assert (all_.runs_workers, all_.serves_web) == (True, True)
+    assert (web.runs_workers, web.serves_web) == (False, True)
+    assert (worker.runs_workers, worker.serves_web) == (True, False)
+    # start_workers=False (tests, local tools) still wins over the role
+    assert not Settings(environment="test", role="worker", start_workers=False).runs_workers
+
+
+def test_the_outbox_relay_and_reaper_belong_to_the_web_process():
+    from bomagent_allinone.app import effective_settings
+
+    worker = Settings(environment="test", role="worker", maintenance_interval_s=30)
+    assert effective_settings(worker).maintenance_interval_s == 0
+    for role in ("all", "web"):
+        s = Settings(environment="test", role=role, maintenance_interval_s=30)
+        assert effective_settings(s).maintenance_interval_s == 30
+    assert worker.maintenance_interval_s == 30  # the original is untouched
+
+
+def test_an_unknown_role_is_refused():
+    with pytest.raises(ValueError, match="role"):
+        Settings(environment="test", role="everything")
+
+
+@pytest.mark.integration
+async def test_web_role_serves_the_api_and_runs_no_consumers(app_engine, platform_engine):
+    app = create_app(
+        _settings(role="web", queue_wait_seconds=1),
+        engine=app_engine,
+        platform_engine=platform_engine,
+        store=InMemoryObjectStore(),
+    )
+    async with running(app) as client:
+        assert app.state.workers.tasks == []
+        ready = (await client.get("/readyz")).json()
+        assert "workers" not in ready["checks"]  # nothing to wait for in a web process
+        assert (await client.get("/config.json")).status_code == 200
+
+
+@pytest.mark.integration
+async def test_worker_role_runs_consumers_serves_no_frontend_and_no_maintenance(
+    app_engine, platform_engine
+):
+    app = create_app(
+        _settings(role="worker", queue_wait_seconds=1, maintenance_interval_s=30),
+        engine=app_engine,
+        platform_engine=platform_engine,
+        store=InMemoryObjectStore(),
+    )
+    async with running(app) as client:
+        assert len(app.state.workers.tasks) == 4  # three consumers and the dead-letter purge
+        assert (await client.get("/config.json")).status_code == 404  # no SPA, no sign-in config
+        ready = await client.get("/readyz")
+        assert ready.json()["checks"]["workers"] is True

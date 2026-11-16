@@ -55,6 +55,11 @@ _Updated by Claude Code after every milestone (see `docs/prompts/CLAUDE_CODE_MAS
   a vault file (the master key is shown once); runbook `docs/platform/runbooks/key-rotation.md` has the
   key inventory and rotation steps. Tests drive the script with stub `fly`/`curl`.
 
+- **ARCH-02 (code) process roles:** `BOMAGENT_ROLE` = `all` (default, unchanged) / `web` (API + SPA, no
+  consumers) / `worker` (the three queue consumers and the dead-letter purge; no SPA or sign-in config, no
+  outbox relay or reaper). Lets Fly run web and workers as separate process groups; the Fly config
+  change is a `deploy/*` PR for the owner.
+
 ## 2026-11-12 - deployment paths ready (AWS single-account dev, Supabase pilot); nothing deployed yet
 
 > **Owner: start with `docs/OWNER_CHECKLIST.md`** - what is ready and your steps in order.
