@@ -166,7 +166,11 @@ async def test_sweep_exports_one_anchor_per_tenant_and_day_and_verify_uses_it(
         )
         from bomagent_common.audit import AuditEvent, emit_audit
 
-        await emit_audit(conn, AuditEvent(action="project.created", object_type="p", object_id="1"))
+        await emit_audit(
+            conn,
+            AuditEvent(action="project.created", object_type="p", object_id="1"),
+            tenant,
+        )
         head = await chain_head(conn, tenant.tenant_id)
     assert head is not None
 
