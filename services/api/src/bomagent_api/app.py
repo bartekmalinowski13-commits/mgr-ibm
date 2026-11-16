@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from bomagent_api import __version__, maintenance
 from bomagent_api.auth import ALGORITHMS, LocalIdp, TokenVerifier, UserInfo, check_algorithms
+from bomagent_api.ip_limits import install_ip_limits
 from bomagent_api.routers import api_keys, audit, identity, members, projects, runs, samples
 from bomagent_api.routers import kb as kb_routes
 from bomagent_api.routers import sso as sso_routes
@@ -63,6 +64,11 @@ class Settings(ServiceSettings):
     # platform_database_url (tenant onboarding, maintenance) comes from ServiceSettings
 
     auth_mode: Literal["local", "oidc"] = "oidc"
+    #: per-IP limits before the organisation context (SEC-03); default: on outside local/test
+    ip_rate_limit: bool | None = None
+    #: edge header that carries the client address (``Fly-Client-IP``,
+    #: ``CloudFront-Viewer-Address``); never X-Forwarded-For. Unset = socket peer.
+    client_ip_header: str | None = None
     oidc_issuer: str = ""
     oidc_audience: str = "bomagent-api"
     oidc_jwks_url: str | None = None
@@ -125,6 +131,12 @@ class Settings(ServiceSettings):
         if self.seed_samples is not None:
             return self.seed_samples
         return self.environment in {"local", "test", "dev"}
+
+    @property
+    def ip_limits_on(self) -> bool:
+        if self.ip_rate_limit is not None:
+            return self.ip_rate_limit
+        return self.environment not in {"local", "test"}
 
 
 SECURITY_HEADERS = {
@@ -248,7 +260,7 @@ def create_app(
     ):
         app.include_router(router)
 
-    _install_guards(app)
+    _install_guards(app, settings)
 
     if settings.cors_origins:
         app.add_middleware(
@@ -260,8 +272,9 @@ def create_app(
     return app
 
 
-def _install_guards(app: FastAPI) -> None:
-    """URL/upload guards and security headers on every response."""
+def _install_guards(app: FastAPI, settings: Settings) -> None:
+    """URL/upload guards, per-IP limits and security headers on every response."""
+    install_ip_limits(app, enabled=settings.ip_limits_on, header=settings.client_ip_header)
 
     @app.middleware("http")
     async def upload_size_guard(
