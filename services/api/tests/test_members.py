@@ -373,16 +373,8 @@ async def test_invitation_is_emailed_with_single_use_link_and_audited(
     assert resp.status_code == 201, resp.text
     assert [m.to for m in mailer.sent] == ["new@x.eu"]
     assert f"https://app.example.eu/invite/{resp.json()['token']}" in mailer.sent[0].text
-    async with tenant_transaction(app_engine, uuid.UUID(owner["X-Org-Id"])) as conn:
-        actions = (
-            (
-                await conn.execute(
-                    text("SELECT action FROM app.audit_log WHERE action LIKE 'member.invit%'")
-                )
-            )
-            .scalars()
-            .all()
-        )
+    events = (await env.c.get("/v1/audit-events?limit=100", headers=owner)).json()["items"]
+    actions = [e["action"] for e in events]
     assert "member.invitation_emailed" in actions
 
 
