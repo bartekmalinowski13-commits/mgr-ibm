@@ -183,3 +183,32 @@ async def test_sweep_exports_one_anchor_per_tenant_and_day_and_verify_uses_it(
         assert (await verify_chain(conn, tenant.tenant_id, anchors)).ok
         forged = [ChainAnchor(head.seq, "0" * 64)]
         assert (await verify_chain(conn, tenant.tenant_id, forged)).first_broken_seq == head.seq
+
+
+async def test_sweep_expires_idempotency_keys_after_a_day(app_engine, platform_engine, make_tenant):
+    """SEC-17: stored idempotency responses live 24 h, not for ever (own tenant only)."""
+    tenant, other = await make_tenant(), await make_tenant()
+
+    async def put(tenant_id: uuid.UUID, key: str, age: str) -> None:
+        async with tenant_transaction(app_engine, tenant_id) as conn:
+            await conn.execute(
+                text(
+                    "INSERT INTO app.idempotency_keys (tenant_id, key, request_hash,"
+                    " status_code, response, created_at) VALUES (:t, :k, 'h', 201,"
+                    " CAST('{}' AS jsonb), now() - CAST(:a AS interval))"
+                ),
+                {"t": tenant_id, "k": key, "a": age},
+            )
+
+    async def keys(tenant_id: uuid.UUID) -> set[str]:
+        async with tenant_transaction(app_engine, tenant_id) as conn:
+            rows = await conn.execute(text("SELECT key FROM app.idempotency_keys"))
+            return set(rows.scalars().all())
+
+    await put(tenant.tenant_id, "old-key-12345", "2 days")
+    await put(tenant.tenant_id, "fresh-key-12345", "1 hour")
+    await put(other.tenant_id, "other-old-12345", "5 days")
+    result = await sweep(app_engine, platform_engine, {}, run_timeout_s=3600)
+    assert result["expired_keys"] >= 2
+    assert await keys(tenant.tenant_id) == {"fresh-key-12345"}
+    assert await keys(other.tenant_id) == set()

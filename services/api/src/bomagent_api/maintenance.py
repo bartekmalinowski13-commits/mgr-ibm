@@ -30,6 +30,7 @@ from bomagent_common.tenancy import TenantContext
 log = get_logger(__name__)
 OUTBOX_GRACE_S = 30.0  # requests deliver their own messages first
 ANCHOR_TIMEOUT_S = 15.0
+IDEMPOTENCY_TTL_S = 24 * 3600.0  # a retry after a day is a new request (SEC-17)
 _anchored: dict[uuid.UUID, date] = {}  # tenant -> day its anchor was written (this process)
 
 
@@ -70,6 +71,22 @@ async def reap_stuck_runs(engine: AsyncEngine, tenant_id: uuid.UUID, timeout_s: 
     return len(reaped)
 
 
+async def expire_idempotency_keys(
+    engine: AsyncEngine, tenant_id: uuid.UUID, ttl_s: float = IDEMPOTENCY_TTL_S
+) -> int:
+    """Stored responses of ``Idempotency-Key`` requests are only useful for retries; they would
+    otherwise grow for ever. Runs through the tenant context, so RLS limits it to the tenant."""
+    async with tenant_transaction(engine, tenant_id) as conn:
+        result = await conn.execute(
+            text(
+                "DELETE FROM app.idempotency_keys"
+                " WHERE created_at < now() - make_interval(secs => :t)"
+            ),
+            {"t": ttl_s},
+        )
+    return int(result.rowcount or 0)
+
+
 async def sweep(
     engine: AsyncEngine,
     platform_engine: AsyncEngine,
@@ -81,7 +98,7 @@ async def sweep(
 ) -> dict[str, int]:
     async with platform_transaction(platform_engine) as conn:
         tenants = (await conn.execute(text("SELECT id FROM tenancy.tenants"))).scalars().all()
-    totals = {"sent": 0, "reaped": 0, "purged": 0}
+    totals = {"sent": 0, "reaped": 0, "purged": 0, "expired_keys": 0}
     now = datetime.now(UTC)
     today = now.date()
     anchoring = anchor_sink is not None
@@ -100,6 +117,7 @@ async def sweep(
         totals["sent"] += await deliver(engine, tenant_id, queues, older_than_s=outbox_grace_s)
         totals["purged"] += await cleanup_sent(engine, tenant_id)
         totals["reaped"] += await reap_stuck_runs(engine, tenant_id, run_timeout_s)
+        totals["expired_keys"] += await expire_idempotency_keys(engine, tenant_id)
     if any(totals.values()):
         log.info("maintenance_sweep", **totals)
     return totals

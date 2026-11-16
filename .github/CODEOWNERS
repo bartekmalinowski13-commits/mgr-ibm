@@ -1,0 +1,13 @@
+# Every change needs a review from the owner; the paths below are listed explicitly because they
+# carry the platform's security guarantees (tenant isolation, auth, secrets, deployment).
+* @bartekmalinowski13-commits
+
+/packages/py/db-migrations/ @bartekmalinowski13-commits
+/services/api/src/bomagent_api/auth.py @bartekmalinowski13-commits
+/services/api/src/bomagent_api/authz.py @bartekmalinowski13-commits
+/services/api/src/bomagent_api/sso.py @bartekmalinowski13-commits
+/deploy/ @bartekmalinowski13-commits
+/infra/ @bartekmalinowski13-commits
+/.github/ @bartekmalinowski13-commits
+/docs/platform/ @bartekmalinowski13-commits
+/docs/adr/ @bartekmalinowski13-commits
