@@ -139,6 +139,12 @@ class Settings(ServiceSettings):
     seed_samples: bool | None = None
 
     @property
+    def docs_enabled(self) -> bool:
+        """Swagger UI and ``/openapi.json`` only where the API is explored (SEC-11); the contract
+        is published from the repository (``services/api/openapi.json``)."""
+        return self.environment in {"local", "test", "dev"}
+
+    @property
     def samples_enabled(self) -> bool:
         if self.seed_samples is not None:
             return self.seed_samples
@@ -217,7 +223,7 @@ def create_app(
         version=__version__,
         title="BOM Agent API",
         readiness=checks,
-        docs=True,
+        docs=settings.docs_enabled,
         lifespan=maintenance.lifespan(
             settings.maintenance_interval_s, settings.run_timeout_s, anchor_sink_for(settings)
         ),
