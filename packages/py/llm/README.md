@@ -14,7 +14,10 @@ gateway (ADR-0006).
 - `chat.GatewayChat` - `/v1/chat/completions` with `response_format=json_schema`,
   GenAI OTel spans, `Usage` with cost from the catalogue; `structured()` validates against a
   Pydantic schema (one retry); `FakeChat` replays cassettes (`record_cassette`) or a
-  scripted responder - CI never calls a real model.
+  scripted responder - CI never calls a real model. `RecordingChat` wraps a real client and
+  stores responses + usage under `tests/cassettes/<model>/` (`bomagent record`, owner-run);
+  replay with `bomagent run --cassettes`. The nightly real-model job is
+  `.github/workflows/nightly-evals.yml` (no-op without the gateway secrets).
 
 - `eu_guard` - EU-only enforcement: `check_catalog` (enabled entries) and
   `check_gateway_config` (rendered LiteLLM config: Bedrock `eu.` profiles and EU regions,

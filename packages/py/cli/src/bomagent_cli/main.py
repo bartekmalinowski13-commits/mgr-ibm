@@ -173,23 +173,20 @@ def build_chat(model_id: str, cassettes: Path | None) -> Any:
     return GatewayChat(url, key)
 
 
-@app.command()
-def run(
-    paths: Annotated[list[Path], typer.Argument(exists=True, help="design files or folder")],
-    variant: Annotated[str, typer.Option(help="A (LLM only) or B (hybrid)")] = "B",
-    runtime: Annotated[
-        str | None, typer.Option(help="langgraph_a|langgraph_b|claude_agent_sdk_a")
-    ] = None,
-    model: Annotated[str, typer.Option(help="model id from the catalogue")] = "fake-closed",
-    kb_dir: Annotated[Path, typer.Option(help="datasheets for retrieval")] = Path(
-        "evals/fixtures/datasheets"
-    ),
-    requirements: Annotated[Path | None, typer.Option(help="Requirements JSON")] = None,
-    reference: Annotated[Path | None, typer.Option(help="reference BOM CSV to score")] = None,
-    cassettes: Annotated[Path | None, typer.Option(help="recorded responses")] = None,
-    out: Annotated[Path | None, typer.Option(help="write BomVersion JSON here")] = None,
+def _execute(
+    paths: list[Path],
+    *,
+    variant: str,
+    runtime: str | None,
+    model: str,
+    kb_dir: Path,
+    requirements: Path | None,
+    reference: Path | None,
+    chat: Any,
+    out: Path | None,
+    min_f1: float | None = None,
+    max_hallucination_rate: float | None = None,
 ) -> None:
-    """Run variant A or B on a design (fake provider by default; no keys needed)."""
     import asyncio
 
     from bomagent_agents.contracts import RunConfig, RunInput
@@ -198,11 +195,12 @@ def run(
 
     if variant not in {"A", "B"}:
         raise _fail("--variant must be A or B")
+    if (min_f1 is not None or max_hallucination_rate is not None) and reference is None:
+        raise _fail("regression thresholds need --reference")
     try:
         design = parse_files(collect_files(paths))
     except ParseError as exc:
         raise _fail(f"{exc} [{exc.code}]") from exc
-    chat = build_chat(model, cassettes)
 
     async def go() -> Any:
         retriever = await InMemoryRetriever.from_directory(kb_dir)
@@ -236,6 +234,92 @@ def run(
             model=model,
         )
         sys.stdout.write(report_markdown(report))
+        summary = report.summary()
+        failures = []
+        if min_f1 is not None and summary["line_f1"] < min_f1:
+            failures.append(f"line_f1 {summary['line_f1']:.3f} < {min_f1:.3f}")
+        rate = summary["attempted_mpn_hallucination_rate"]
+        if max_hallucination_rate is not None and rate > max_hallucination_rate:
+            failures.append(
+                f"attempted_mpn_hallucination_rate {rate:.3f} > {max_hallucination_rate:.3f}"
+            )
+        if failures:
+            typer.echo("REGRESSION: " + "; ".join(failures), err=True)
+            raise typer.Exit(code=1)
+
+
+@app.command()
+def run(
+    paths: Annotated[list[Path], typer.Argument(exists=True, help="design files or folder")],
+    variant: Annotated[str, typer.Option(help="A (LLM only) or B (hybrid)")] = "B",
+    runtime: Annotated[
+        str | None, typer.Option(help="langgraph_a|langgraph_b|claude_agent_sdk_a")
+    ] = None,
+    model: Annotated[str, typer.Option(help="model id from the catalogue")] = "fake-closed",
+    kb_dir: Annotated[Path, typer.Option(help="datasheets for retrieval")] = Path(
+        "evals/fixtures/datasheets"
+    ),
+    requirements: Annotated[Path | None, typer.Option(help="Requirements JSON")] = None,
+    reference: Annotated[Path | None, typer.Option(help="reference BOM CSV to score")] = None,
+    cassettes: Annotated[Path | None, typer.Option(help="recorded responses")] = None,
+    out: Annotated[Path | None, typer.Option(help="write BomVersion JSON here")] = None,
+    min_f1: Annotated[
+        float | None, typer.Option(help="exit 1 when line F1 is below this (needs --reference)")
+    ] = None,
+    max_hallucination_rate: Annotated[
+        float | None,
+        typer.Option(help="exit 1 when the attempted MPN hallucination rate exceeds this"),
+    ] = None,
+) -> None:
+    """Run variant A or B on a design (fake provider by default; no keys needed)."""
+    _execute(
+        paths,
+        variant=variant,
+        runtime=runtime,
+        model=model,
+        kb_dir=kb_dir,
+        requirements=requirements,
+        reference=reference,
+        chat=build_chat(model, cassettes),
+        out=out,
+        min_f1=min_f1,
+        max_hallucination_rate=max_hallucination_rate,
+    )
+
+
+@app.command()
+def record(
+    paths: Annotated[list[Path], typer.Argument(exists=True, help="design files or folder")],
+    variant: Annotated[str, typer.Option(help="A (LLM only) or B (hybrid)")] = "B",
+    runtime: Annotated[str | None, typer.Option(help="runtime override")] = None,
+    model: Annotated[str, typer.Option(help="model id from the catalogue")] = "fake-closed",
+    kb_dir: Annotated[Path, typer.Option(help="datasheets for retrieval")] = Path(
+        "evals/fixtures/datasheets"
+    ),
+    requirements: Annotated[Path | None, typer.Option(help="Requirements JSON")] = None,
+    cassettes: Annotated[
+        Path, typer.Option(help="cassette root; files go to <root>/<model>/")
+    ] = Path("tests/cassettes"),
+) -> None:
+    """Run like ``run`` and store every model response + usage as a cassette for replay.
+
+    Real models need the gateway env vars (owner-run only; never in PR CI). Replay with
+    ``bomagent run --cassettes <root>``."""
+    from bomagent_llm.chat import RecordingChat
+
+    recorder = RecordingChat(build_chat(model, None), cassettes)
+    _execute(
+        paths,
+        variant=variant,
+        runtime=runtime,
+        model=model,
+        kb_dir=kb_dir,
+        requirements=requirements,
+        reference=None,
+        chat=recorder,
+        out=None,
+    )
+    typer.echo(f"recorded {len(recorder.recorded)} cassette(s) under {cassettes / model}", err=True)
 
 
 def _register_subcommands() -> None:
