@@ -175,3 +175,9 @@ domain) and the assumptions awaiting acceptance (`docs/DECISIONS_LOG.md`, last c
 - Done: thesis template (DOCX), thesis structure, A/B variant diagram, UI flow prototype (HTML),
   production architecture, 15 ADRs, UX guidelines, roadmap M0-M8, Claude Code prompt.
 - No application code yet - start from M0.
+
+## 2026-11-16 - TH-01 merged (#29)
+
+- `attempted_mpn_hallucination_rate` (+ decision counts) in the eval summary, experiment key
+  metrics and quality figure; lying-model end-to-end tests for A and B; methodology note in
+  `docs/thesis/METODYKA.md`. A-unguarded ablation still to do.
