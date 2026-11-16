@@ -12,7 +12,7 @@ from __future__ import annotations
 import asyncio
 import re
 import uuid
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING, BinaryIO, Protocol
 
 from bomagent_common.tenancy import require_tenant
 
@@ -45,6 +45,10 @@ def _check(key: str, enforce_tenant: bool) -> None:
 
 class ObjectStore(Protocol):
     async def put(self, key: str, data: bytes, content_type: str = ...) -> None: ...
+    async def put_file(self, key: str, body: BinaryIO, content_type: str = ...) -> None:
+        """Stores ``body`` from its start without loading it into memory (multipart for S3)."""
+        ...
+
     async def get(self, key: str) -> bytes: ...
     async def delete(self, key: str) -> None: ...
     async def presign_put(self, key: str, expires: int = ...) -> str: ...
@@ -61,6 +65,13 @@ class InMemoryObjectStore:
     ) -> None:
         _check(key, self._enforce)
         self.objects[key] = data
+
+    async def put_file(
+        self, key: str, body: BinaryIO, content_type: str = "application/octet-stream"
+    ) -> None:
+        _check(key, self._enforce)
+        body.seek(0)
+        self.objects[key] = body.read()
 
     async def get(self, key: str) -> bytes:
         _check(key, self._enforce)
@@ -121,6 +132,19 @@ class S3ObjectStore:
         _check(key, self._enforce)
         await asyncio.to_thread(
             self._s3.put_object, Bucket=self._bucket, Key=key, Body=data, ContentType=content_type
+        )
+
+    async def put_file(
+        self, key: str, body: BinaryIO, content_type: str = "application/octet-stream"
+    ) -> None:
+        _check(key, self._enforce)
+        body.seek(0)
+        await asyncio.to_thread(
+            self._s3.upload_fileobj,
+            body,
+            self._bucket,
+            key,
+            ExtraArgs={"ContentType": content_type},
         )
 
     async def get(self, key: str) -> bytes:
