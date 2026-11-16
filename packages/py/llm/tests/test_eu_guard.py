@@ -172,3 +172,37 @@ def test_azure_region_in_the_config_must_be_eu():
 def test_render_fails_closed_on_a_violation():
     with pytest.raises(EuResidencyError, match="us-east-1"):
         render(_catalog(_spec(region="us-east-1")), region="eu-central-1")
+
+
+def test_environment_check_covers_regions_and_endpoints():
+    from bomagent_llm.eu_guard import check_environment
+
+    assert check_environment({}) == []
+    assert (
+        check_environment({"AWS_REGION": "eu-central-1", "AWS_DEFAULT_REGION": "eu-west-3"}) == []
+    )
+    assert check_environment({"AZURE_API_BASE": "https://x.openai.azure.com"}) == []
+    assert check_environment({"MISTRAL_API_BASE": "https://api.eu.mistral.ai/v1"}) == []
+    bad = check_environment(
+        {
+            "AWS_REGION": "us-east-1",
+            "AWS_DEFAULT_REGION": "eu-central-2",  # Zurich: not an EU member state
+            "AZURE_API_BASE": "https://example.com",
+            "MISTRAL_API_BASE": "https://api.mistral.ai/v1",
+            "AWS_ENDPOINT_URL_BEDROCK_RUNTIME": "https://bedrock-runtime.us-west-2.amazonaws.com",
+        }
+    )
+    assert len(bad) == 5
+    assert any("AWS_REGION" in p for p in bad)
+    assert any("MISTRAL_API_BASE" in p for p in bad)
+
+
+def test_environment_cli_fails_closed(monkeypatch, capsys):
+    from bomagent_llm.eu_guard import main
+
+    for var in ("AWS_REGION", "AWS_DEFAULT_REGION", "AZURE_API_BASE", "MISTRAL_API_BASE"):
+        monkeypatch.delenv(var, raising=False)
+    assert main([]) == 0
+    monkeypatch.setenv("AWS_REGION", "ap-southeast-1")
+    assert main([]) == 1
+    assert "AWS_REGION" in capsys.readouterr().err

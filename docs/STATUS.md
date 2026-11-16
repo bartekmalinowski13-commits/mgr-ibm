@@ -287,3 +287,8 @@ domain) and the assumptions awaiting acceptance (`docs/DECISIONS_LOG.md`, last c
 
 - Merged: `runs.trace` size cap (#75, app level, `BOMAGENT_RUN_TRACE_MAX_BYTES`, default 256 KiB, 0 = off; full trace stays in object storage).
 - Open for the owner: #76 ARCH-04 remainder (only the CodeQL false positive on `auth.py:296` blocks it).
+## 2026-11-16 - ARCH-08
+
+- `eu_guard.check_environment` checks AWS region variables and the Azure/Mistral/Bedrock endpoint
+  overrides; `python -m bomagent_llm.eu_guard` exits non-zero on a non-EU value; the gateway image
+  entrypoint runs it before LiteLLM (PR left open: changes `deploy/*`; image start not tested here).

@@ -126,6 +126,20 @@ Scheduled task `audit-implementation-continue` (hourly, id `trig_0174gXcCFuTekwm
 | UX-06 focus management | merged (#43) | claude/audit-ux-05-06-08 | #43 | ItemPanel focus in/out, Tab trap, aria-live save |
 | UX-07 quota chips, checklist | merged (#51, admin-only chips) | claude/audit-ux-04-07 | #51 | chips for all roles need a backend permission change (authz.py = owner) |
 | UX-08 a11y regression gate | merged (#43, vitest gate) | claude/audit-ux-05-06-08 | #43 | contrast/reduced-motion/lang; Playwright axe not added |
+| ARCH-07 embeddings status in readyz | todo | | | |
+| ARCH-08 wire eu_guard check_environment at gateway start | in PR, needs owner (touches `deploy/*`) | claude/audit-arch-08 | | `check_environment` now covers AWS regions, Azure/Mistral/Bedrock endpoints; gateway image entrypoint runs it before LiteLLM. Image start was not run here (no Docker in the sandbox): check that the base image has `litellm` on PATH and `python` with pydantic/PyYAML, and that bypassing its own entrypoint is fine; signed runtime config in object storage = later |
+| ARCH-09 / DOC-01 as-built section, status files cleanup | todo | | | |
+| ARCH-10 symlink removal, CHANGELOG, tags | todo | | | |
+| OPS-03 bomagent-ops CLI | todo | | | |
+| OPS-07 CI cost / path filters | todo | | | |
+| OPS-08 migration lint + downgrade test | todo | | | |
+| DATA-01 / DATA-02 indexes, TTL sweeps, re-index doc | todo | | | indexes need a migration: PR stays open |
+| QA-03 property tests | todo | | | |
+| UX-04 BOM table sort/filter/virtualise | todo | | | |
+| UX-05 localised error messages | todo | | | |
+| UX-06 focus management | todo | | | |
+| UX-07 quota chips, checklist | todo | | | |
+| UX-08 a11y regression gate | todo | | | |
 | DOC-03 LICENSE / legal drafts | needs owner | | | licence choice and legal review = owner |
 | DOC-04 just doctor, CONTRIBUTING | merged (#42) | claude/audit-doc-04-ops-03-07 | #42 | `just doctor`, CONTRIBUTING.md; static OpenAPI page todo |
 | TH-07 Agent SDK arm decision | needs owner | | | scope decision = owner |

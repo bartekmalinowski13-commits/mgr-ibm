@@ -144,15 +144,44 @@ def check_gateway_config(config: Mapping[str, Any]) -> list[str]:
     return problems
 
 
+_REGION_VARS = ("AWS_REGION", "AWS_DEFAULT_REGION", "AWS_REGION_NAME")
+
+
 def check_environment(env: Mapping[str, str]) -> list[str]:
-    """Gateway start-up check of the endpoint variables the config refers to."""
-    base = env.get("AZURE_API_BASE")
-    if base:
-        return _base_problems("AZURE_API_BASE", "azure_openai", base)
-    return []
+    """Gateway start-up check of the variables the rendered config and the SDKs read.
+
+    Everything is optional, but a value that is present must point into the EU: the config
+    only holds ``os.environ/...`` references (ADR-0006), so this is where they are verified."""
+    problems: list[str] = []
+    for name in _REGION_VARS:
+        region = env.get(name)
+        if region and region not in EU_AWS_REGIONS:
+            problems.append(f"{name}: {region} is not an allowed EU AWS region")
+    if base := env.get("AZURE_API_BASE"):
+        problems += _base_problems("AZURE_API_BASE", "azure_openai", base)
+    if base := env.get("MISTRAL_API_BASE"):
+        problems += _base_problems("MISTRAL_API_BASE", "mistral", base)
+    if base := env.get("AWS_ENDPOINT_URL_BEDROCK_RUNTIME"):
+        problems += _base_problems("AWS_ENDPOINT_URL_BEDROCK_RUNTIME", "bedrock", base)
+    return problems
 
 
 def assert_eu_only(problems: Iterable[str]) -> None:
     found = list(problems)
     if found:
         raise EuResidencyError("; ".join(found))
+
+
+def main(argv: list[str] | None = None) -> int:
+    """``python -m bomagent_llm.eu_guard``: refuse to start the gateway on a non-EU environment."""
+    import os
+    import sys
+
+    problems = check_environment(os.environ)
+    for problem in problems:
+        print(f"EU residency check failed: {problem}", file=sys.stderr)  # noqa: T201
+    return 1 if problems else 0
+
+
+if __name__ == "__main__":  # pragma: no cover
+    raise SystemExit(main())
