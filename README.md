@@ -15,15 +15,17 @@ The repository is both a **research testbed** and a **production SaaS platform**
 | write the thesis | [`thesis/Praca_magisterska_Bartosz_Malinowski_szablon.docx`](thesis/), [`docs/thesis/STRUKTURA_PRACY.md`](docs/thesis/STRUKTURA_PRACY.md) |
 | see variants A and B | [`docs/thesis/ARCHITEKTURA_WARIANTOW.md`](docs/thesis/ARCHITEKTURA_WARIANTOW.md) |
 | design the UI | [`docs/design/UX_GUIDELINES.md`](docs/design/UX_GUIDELINES.md) |
+| read the independent audit (findings, tasks, scores) | [`docs/audit/FABLE_AUDIT_EN.md`](docs/audit/FABLE_AUDIT_EN.md), [`docs/audit/FABLE_AUDIT_PL.md`](docs/audit/FABLE_AUDIT_PL.md) |
 
 ## Repository map
 ```
 CLAUDE.md                 rules for Claude Code (read in every session)
 docs/platform/            architecture, security, tests, formats
-docs/adr/                 architecture decisions (15)
+docs/adr/                 architecture decisions (17)
 docs/design/              UX guidelines, inspirations (Mobbin), prototype v0
 docs/prompts/             starting prompt for Claude Code
 docs/thesis/              materials for the master's thesis
+docs/audit/               independent audit (Fable Audit, EN + PL)
 docs/img/                 diagrams
 thesis/                   thesis template (DOCX)
 tools/                    generators of the diagram and the DOCX template
