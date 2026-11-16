@@ -3,7 +3,7 @@
 Traces and metrics go to an OTLP/HTTP collector (locally ``grafana/otel-lgtm``, in AWS the
 ADOT collector, on the pilot Grafana Cloud EU). ``tenant.id`` is set on spans by
 :func:`bomagent_common.tenancy.tenant_scope`. Metric names live in
-:mod:`bomagent_common.metrics`; an in-memory reader is always attached (tests, diagnostics).
+:mod:`bomagent_common.metrics`; an in-memory reader is attached in local/test only.
 GenAI calls use the semantic conventions ``gen_ai.*`` (see ``bomagent_llm``).
 """
 
@@ -38,23 +38,29 @@ _provider: TracerProvider | None = None
 _metric_reader: InMemoryMetricReader | None = None
 #: seconds between metric exports to the collector
 METRIC_EXPORT_INTERVAL_MS = 30_000
+#: an unreachable collector must not hold up shutdown (container stop grace periods)
+EXPORT_TIMEOUT_S = 5
+FLUSH_TIMEOUT_MS = 5_000
 
 
 def metric_reader() -> InMemoryMetricReader:
-    """The always-attached in-memory reader (cumulative values); needs ``configure_telemetry``."""
-    assert _metric_reader is not None, "configure_telemetry() was not called"
+    """The in-memory reader (cumulative values; local/test environments only)."""
+    assert _metric_reader is not None, "no in-memory reader: configure_telemetry(local/test)"
     return _metric_reader
 
 
 def build_metric_readers(settings: ServiceSettings) -> list[MetricReader]:
-    readers: list[MetricReader] = [InMemoryMetricReader()]
+    # the in-memory reader serves tests and diagnostics only; production keeps no extra copy
+    readers: list[MetricReader] = (
+        [InMemoryMetricReader()] if settings.environment in {"local", "test"} else []
+    )
     if settings.otel_exporter_otlp_endpoint:
         from opentelemetry.exporter.otlp.proto.http.metric_exporter import OTLPMetricExporter
 
         endpoint = settings.otel_exporter_otlp_endpoint.rstrip("/") + "/v1/metrics"
         readers.append(
             PeriodicExportingMetricReader(
-                OTLPMetricExporter(endpoint=endpoint),
+                OTLPMetricExporter(endpoint=endpoint, timeout=EXPORT_TIMEOUT_S),
                 export_interval_millis=METRIC_EXPORT_INTERVAL_MS,
             )
         )
@@ -91,7 +97,7 @@ def configure_telemetry(
         provider.add_span_processor(SimpleSpanProcessor(extra_exporter))
     trace.set_tracer_provider(provider)
     readers = build_metric_readers(settings)
-    _metric_reader = next(r for r in readers if isinstance(r, InMemoryMetricReader))
+    _metric_reader = next((r for r in readers if isinstance(r, InMemoryMetricReader)), None)
     otel_metrics.set_meter_provider(MeterProvider(resource=resource, metric_readers=readers))
     _provider = provider
     return provider
@@ -117,10 +123,10 @@ def instrument_httpx() -> None:
 
 def shutdown_telemetry() -> None:
     if _provider is not None:
-        _provider.force_flush()
+        _provider.force_flush(timeout_millis=FLUSH_TIMEOUT_MS)
     meter_provider = otel_metrics.get_meter_provider()
     if isinstance(meter_provider, MeterProvider):
-        meter_provider.force_flush()
+        meter_provider.force_flush(timeout_millis=FLUSH_TIMEOUT_MS)
 
 
 def get_tracer(name: str) -> trace.Tracer:

@@ -113,11 +113,19 @@ def test_zero_or_negative_values_are_ignored_and_labels_are_bounded():
 def test_otlp_metric_exporter_is_wired_when_an_endpoint_is_configured():
     from bomagent_common import telemetry
 
-    readers = telemetry.build_metric_readers(
-        ServiceSettings(
-            service_name="t", environment="test", otel_exporter_otlp_endpoint="http://c:4318"
+    def kinds(env: str, endpoint: str | None) -> set[str]:
+        readers = telemetry.build_metric_readers(
+            ServiceSettings(service_name="t", environment=env, otel_exporter_otlp_endpoint=endpoint)
         )
-    )
-    kinds = {type(r).__name__ for r in readers}
-    assert "PeriodicExportingMetricReader" in kinds
-    assert "InMemoryMetricReader" in kinds
+        names = {type(r).__name__ for r in readers}
+        for reader in readers:
+            reader.shutdown()  # the periodic reader starts a thread on construction
+        return names
+
+    assert kinds("test", "http://c:4318") == {
+        "InMemoryMetricReader",
+        "PeriodicExportingMetricReader",
+    }
+    assert kinds("prod", "http://c:4318") == {"PeriodicExportingMetricReader"}  # no extra copy
+    assert kinds("prod", None) == set()
+    assert kinds("test", None) == {"InMemoryMetricReader"}

@@ -89,8 +89,27 @@ async def test_stuck_runs_are_reaped(app_engine, platform_engine, make_tenant):
                 ),
                 {"r": rid, "t": tenant.tenant_id, "p": pid, "age": age},
             )
+    from bomagent_common.config import ServiceSettings
+    from bomagent_common.telemetry import configure_telemetry, metric_reader
+
+    configure_telemetry(ServiceSettings(service_name="test", environment="test"))
+
+    def failed_b() -> float:
+        data = metric_reader().get_metrics_data()
+        return sum(
+            float(dp.value)
+            for rm in (data.resource_metrics if data else [])
+            for sm in rm.scope_metrics
+            for m in sm.metrics
+            if m.name == "bomagent_runs_total"
+            for dp in m.data.data_points
+            if dict(dp.attributes) == {"status": "failed", "variant": "B"}
+        )
+
+    before = failed_b()
     result = await sweep(app_engine, platform_engine, {}, run_timeout_s=3600)
     assert result["reaped"] >= 1
+    assert failed_b() - before >= 1  # a reaped run is a failed run in the metrics too
     async with tenant_transaction(app_engine, tenant.tenant_id) as conn:
         states = {
             r.id: r.status for r in await conn.execute(text("SELECT id, status FROM runs.runs"))
