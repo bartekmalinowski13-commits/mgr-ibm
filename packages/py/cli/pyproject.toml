@@ -19,6 +19,7 @@ dependencies = [
 
 [project.scripts]
 bomagent = "bomagent_cli.main:app"
+bomagent-ops = "bomagent_cli.ops:app"
 
 [build-system]
 requires = ["hatchling>=1.26"]

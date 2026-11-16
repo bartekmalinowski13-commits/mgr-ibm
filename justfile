@@ -8,6 +8,10 @@ py_modules := "-p bomagent_common -p bomagent_migrations -p bomagent_testing -p 
 default:
     @just --list
 
+# check the local toolchain (uv, python, node, pnpm, just, git, docker) and say what is missing
+doctor:
+    python3 tools/doctor.py
+
 # install all dependencies (Python + TypeScript) and git hooks
 bootstrap:
     uv sync --all-packages
