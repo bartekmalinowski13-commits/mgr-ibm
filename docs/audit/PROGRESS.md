@@ -73,9 +73,9 @@ Scheduled task `audit-implementation-continue` (hourly, id `trig_0174gXcCFuTekwm
 | Task | Status | Branch | PR | Notes |
 |---|---|---|---|---|
 | SEC-07 Supabase custom access token hook | todo | | | hook activation in Supabase = owner |
-| SEC-11 docs/openapi off outside dev | in PR | claude/audit-sec-11 | | `Settings.docs_enabled` (local/test/dev only); the contract stays published as `services/api/openapi.json`; a docs-site page (Redocly/Scalar) is a follow-up |
+| SEC-11 docs/openapi off outside dev | merged (#38) | claude/audit-sec-11 | #38 | `Settings.docs_enabled` (local/test/dev only); contract stays in `services/api/openapi.json`; a docs-site page (Redocly/Scalar) is a follow-up |
 | SEC-12 injection corpus, canary, free-text sanitising | todo | | | |
-| SEC-16/17 low items (CODEOWNERS, SECURITY.md, idempotency TTL, parser error leak test) | todo | | | branch protection = owner |
+| SEC-16/17 low items (CODEOWNERS, SECURITY.md, idempotency TTL, parser error leak test) | in PR (SEC-17 code + files); SEC-16, auth.py comment, branch protection = owner | claude/audit-sec-17 | | this PR: `SECURITY.md`, `.github/CODEOWNERS`, 24 h idempotency-key sweep in the maintenance loop (DB test, CI only), parser error-text leak test; left: SEC-16 note in `CLAUDE.md` (human-owned file), comment guard in `auth.py` (reserved file), branch protection with `tenant isolation (blocking)`, enabling GitHub private vulnerability reporting |
 | ARCH-01 deployment tiers ADR | merged as draft ADR-0018 (Proposed) | claude/audit-doc-02 | #25 | acceptance = owner |
 | ARCH-07 embeddings status in readyz | todo | | | |
 | ARCH-08 wire eu_guard check_environment at gateway start | todo | | | |

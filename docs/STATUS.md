@@ -238,3 +238,13 @@ domain) and the assumptions awaiting acceptance (`docs/DECISIONS_LOG.md`, last c
 
 - `Settings.docs_enabled`: Swagger UI and `/openapi.json` are served only in local/test/dev; the
   contract is still published from the repository (`services/api/openapi.json`).
+
+## 2026-11-16 - SEC-17
+
+- `SECURITY.md` (private vulnerability reporting, scope, response times) and `.github/CODEOWNERS`
+  (owner reviews everything, security-critical paths listed explicitly).
+- Maintenance sweep deletes idempotency keys older than 24 h per tenant (`expired_keys` in the
+  sweep totals).
+- Regression test: parser error texts contain no paths, tracebacks or library internals.
+- Owner: enable GitHub private vulnerability reporting, and branch protection with the
+  `tenant isolation (blocking)` check.
