@@ -34,7 +34,7 @@ Scheduled task `audit-implementation-continue` (hourly, id `trig_0174gXcCFuTekwm
 | TH-01 attempted-hallucination metric, METODYKA note, A-unguarded ablation | merged (metric + note, #29); ablation todo | claude/audit-th-01 | #29 | metric `attempted_mpn_hallucination_rate` in eval summary, experiment tables/figure, `docs/thesis/METODYKA.md`; A-unguarded ablation = follow-up |
 | TH-03 dataset ingestion with double verification | needs owner | | | data collection, licences, verification = owner; code side: SOURCE/verification templates, agreement metric |
 | TH-06 extra error classes in validation experiment | merged (#33 injector, this PR config + report) | claude/audit-th-06b | #33 | `injection.kinds` in the experiment config, `rule coverage` column and false alarms per rule in the report, `rule_covered` in `detection_by_kind.csv` |
-| TH-04 pre-registration, Holm, cluster bootstrap, effect sizes | todo | | | |
+| TH-04 pre-registration, Holm, cluster bootstrap, effect sizes | in PR (code + `PREREJESTRACJA.md` draft); freezing/approval = owner | claude/audit-th-04 | | `holm_adjust`, `cluster_bootstrap_ci`, `effect_size` (d_z) in `experiment_stats`; primary family (line F1, attempted hallucination, cost) in the report and `paired.csv`; the note must be frozen (tag `prereg-v1`) by the author before the first real-model run |
 | Run the matrix, chapter 7 figures | needs owner | | | needs real models + dataset |
 
 ## Phase 2 - first paying pilot customer

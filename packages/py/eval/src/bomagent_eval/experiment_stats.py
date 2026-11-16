@@ -51,6 +51,62 @@ class PairedComparison(BaseModel):
     wins_a: int
     wins_b: int
     ties: int
+    #: standardised paired effect size d_z = mean(diff) / sd(diff); NaN if n < 2 or sd = 0
+    effect_size: float = math.nan
+    #: Holm-adjusted p within the pre-registered primary family (NaN outside the family)
+    p_holm: float = math.nan
+    #: sensitivity analysis: 95 % cluster-bootstrap interval of the difference (designs are
+    #: clusters, repetitions are resampled within them); NaN when not computed
+    cluster_ci_low: float = math.nan
+    cluster_ci_high: float = math.nan
+
+
+def holm_adjust(p_values: dict[str, float]) -> dict[str, float]:
+    """Holm-Bonferroni adjusted p-values (step-down, monotone, capped at 1).
+
+    NaN p-values are left as NaN and do not count towards the size of the family."""
+    valid = sorted(((p, k) for k, p in p_values.items() if not math.isnan(p)))
+    m = len(valid)
+    out: dict[str, float] = dict.fromkeys(p_values, math.nan)
+    running = 0.0
+    for i, (p, k) in enumerate(valid):
+        running = max(running, min(1.0, (m - i) * p))
+        out[k] = running
+    return out
+
+
+def _effect_size(diffs: Sequence[float]) -> float:
+    if len(diffs) < 2:
+        return math.nan
+    sd = statistics.stdev(diffs)
+    return statistics.fmean(diffs) / sd if sd > 1e-12 else math.nan
+
+
+def cluster_bootstrap_ci(
+    clusters: Sequence[Sequence[float]],
+    *,
+    level: float = 0.95,
+    resamples: int = 4000,
+    seed: int = 0,
+) -> tuple[float, float]:
+    """Two-stage percentile bootstrap: resample clusters (designs) with replacement, then the
+    observations (repetitions) inside each chosen cluster; the statistic is the mean of the
+    cluster means, so every design weighs the same as in the primary analysis. NaN values are
+    ignored and empty clusters dropped. A sensitivity analysis next to the paired permutation
+    test, not a replacement."""
+    data = [[v for v in c if not math.isnan(v)] for c in clusters]
+    data = [c for c in data if c]
+    if not data:
+        return (math.nan, math.nan)
+    rng = random.Random(seed)  # noqa: S311 - statistical resampling, seeded for reproducibility
+    stats = sorted(
+        statistics.fmean(
+            statistics.fmean(rng.choices(c, k=len(c))) for c in rng.choices(data, k=len(data))
+        )
+        for _ in range(resamples)
+    )
+    alpha = (1 - level) / 2
+    return (stats[int(alpha * (resamples - 1))], stats[int((1 - alpha) * (resamples - 1))])
 
 
 def _p_value(diffs: list[float], *, resamples: int, rng: random.Random) -> float:
@@ -115,4 +171,5 @@ def compare_paired(
         wins_a=sum(1 for d in diffs if d < 0),
         wins_b=sum(1 for d in diffs if d > 0),
         ties=sum(1 for d in diffs if d == 0),
+        effect_size=_effect_size(diffs),
     )
