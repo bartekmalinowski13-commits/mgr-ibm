@@ -144,6 +144,25 @@ async def test_full_flow_and_tenant_boundaries(env):
         )
         assert "ERJ-3EKF1003V" in await env.kb.known_mpns(conn)
 
+    # every audit event written during a request carries the caller's address (SEC-04)
+    async with env.engine.begin() as conn:
+        await conn.execute(
+            text("SELECT set_config('app.tenant_id', :t, true)"), {"t": alice["X-Org-Id"]}
+        )
+        ips = (
+            (
+                await conn.execute(
+                    text(
+                        "SELECT DISTINCT host(source_ip) FROM audit.events WHERE action IN"
+                        " ('org.created', 'project.created', 'file.uploaded', 'run.created')"
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+    assert ips == ["127.0.0.1"]  # the ASGI test client's peer
+
     csv = await c.get(f"/v1/runs/{run_id}/bom.csv", headers=alice)
     assert csv.status_code == 200
     assert "ERJ-3EKF1003V" in csv.text

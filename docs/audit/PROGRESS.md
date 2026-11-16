@@ -20,8 +20,8 @@ Scheduled task `audit-implementation-continue` (hourly, id `trig_0174gXcCFuTekwm
 | SEC-01 parser isolation (no-new-privs, rlimits, netns) | merged (code part) | claude/audit-sec-01 | #21 | this PR: child sets no_new_privs, NOFILE 32, FSIZE 0, empty netns when allowed (reported in logs); separate Fly app / no-egress parser group = ARCH-02 deploy PR (owner); AWS ingest IAM/ABAC = CDK (owner) |
 | ARCH-02 process groups | todo | | | `deploy/*` change: leave PR open for owner |
 | OPS-01 OTel endpoint wiring, alert rules, uptime/error-tracking config | todo | | | Grafana/Sentry accounts = owner |
-| OPS-02 OTel metrics + dashboards JSON | in progress | claude/audit-ops-02 | | this PR: metrics module + instrumentation (runs, LLM usage/cost, parse, outbox/queue dead-letters) + OTLP metrics export; dashboards JSON under `deploy/observability/` = separate PR (deploy/*, owner); queue depth/age gauges later (OPS-03) |
-| SEC-04 source IP in audit, anchor export job | todo | | | Object-store target/off-platform copy = owner |
+| OPS-02 OTel metrics + dashboards JSON | merged (code); dashboards/alerts todo (deploy/*, owner PR) | claude/audit-ops-02 | #22 | this PR: metrics module + instrumentation (runs, LLM usage/cost, parse, outbox/queue dead-letters) + OTLP metrics export; dashboards JSON under `deploy/observability/` = separate PR (deploy/*, owner); queue depth/age gauges later (OPS-03) |
+| SEC-04 source IP in audit, anchor export job | in progress | claude/audit-sec-04 | | this PR: source IP in every API-written audit event (request-scoped, validated, from the trusted edge header); user agent needs a column = migration (owner PR); anchor export job + partitioning = next PRs; Object-store target / off-platform copy = owner |
 | DOC-02 decision-log acceptance helper, ADR-0017/0018 drafts | needs owner | | | Acceptance of DECISIONS_LOG rows and ADRs = owner; code side: ADR-0018 draft, nightly staleness check |
 | SEC-08 virtual keys, rotation runbook | todo | | | rotate real keys = owner |
 

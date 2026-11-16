@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from bomagent_api import __version__, maintenance
 from bomagent_api.auth import ALGORITHMS, LocalIdp, TokenVerifier, UserInfo, check_algorithms
-from bomagent_api.ip_limits import install_ip_limits
+from bomagent_api.ip_limits import install_ip_limits, install_origin
 from bomagent_api.routers import api_keys, audit, identity, members, projects, runs, samples
 from bomagent_api.routers import kb as kb_routes
 from bomagent_api.routers import sso as sso_routes
@@ -280,6 +280,7 @@ def create_app(
 
 def _install_guards(app: FastAPI, settings: Settings) -> None:
     """URL/upload guards, per-IP limits and security headers on every response."""
+    install_origin(app, header=settings.client_ip_header)
     install_ip_limits(app, enabled=settings.ip_limits_on, header=settings.client_ip_header)
     if not settings.ip_limits_on and settings.environment not in {"local", "test"}:
         log.warning("ip_limits_off", reason="set BOMAGENT_CLIENT_IP_HEADER to the edge header")

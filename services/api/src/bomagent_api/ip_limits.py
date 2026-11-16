@@ -27,6 +27,7 @@ from fastapi import FastAPI, Request, Response
 
 from bomagent_common.logging import get_logger
 from bomagent_common.problems import ProblemError, problem_response
+from bomagent_common.request_origin import parse_ip, source_ip_scope
 
 log = get_logger(__name__)
 
@@ -142,22 +143,42 @@ def _bucket_key(text: str) -> str | None:
     return str(addr)
 
 
-def client_ip(request: Request, header: str | None) -> str:
-    """Address of the caller: the configured edge header, else the socket peer.
+def raw_client_ip(request: Request, header: str | None) -> str | None:
+    """The caller's full address: the configured edge header, else the socket peer.
 
     A header value that is not a single IP address is ignored, so a garbage or oversized value
-    can neither mint fresh bucket keys nor grow memory."""
+    can neither mint fresh bucket keys nor grow memory. ``None`` when nothing valid is known."""
     if header:
         value = request.headers.get(header, "").strip()
         if value.startswith("["):  # [2001:db8::1]:48220
             value = value[1:].split("]", 1)[0]
         elif value.count(":") == 1:  # 198.51.100.7:48220
             value = value.split(":", 1)[0]
-        key = _bucket_key(value) if value and len(value) <= 64 else None
-        if key:
-            return key
-    peer = request.client.host if request.client else ""
-    return (_bucket_key(peer) or peer[:64]) if peer else "unknown"
+        address = parse_ip(value)
+        if address:
+            return address
+    return parse_ip(request.client.host) if request.client else None
+
+
+def client_ip(request: Request, header: str | None) -> str:
+    """Bucket key of the caller: its address, IPv6 reduced to the /64 (one subscriber owns the
+    whole prefix), or the socket peer text when that is not an IP (never unbounded)."""
+    address = raw_client_ip(request, header)
+    if address is None:
+        peer = request.client.host if request.client else ""
+        return peer[:64] if peer else "unknown"
+    return _bucket_key(address) or address
+
+
+def install_origin(app: FastAPI, *, header: str | None) -> None:
+    """Make the caller's address visible to audit emission for the duration of a request."""
+
+    @app.middleware("http")
+    async def origin_guard(
+        request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
+        with source_ip_scope(raw_client_ip(request, header)):
+            return await call_next(request)
 
 
 def _too_many(request: Request, retry_after_s: int) -> Response:
