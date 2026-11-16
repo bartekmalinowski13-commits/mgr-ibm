@@ -262,7 +262,13 @@
     },
     "dnp": "Nie montować",
     "empty": "To zestawienie nie ma pozycji.",
-    "noMatches": "Żadna pozycja nie ma uwag."
+    "noMatches": "Żadna linia nie pasuje do filtrów.",
+    "search": "Szukaj w liniach",
+    "columnsMenu": "Kolumny",
+    "copyCsv": "Kopiuj CSV",
+    "count": "{{shown}} z {{total}} linii",
+    "csvCopied": "Skopiowano CSV ({{count}} linii)",
+    "csvFailed": "Nie udało się skopiować do schowka"
   },
   "panel": {
     "title": "Pozycja {{line}}",
@@ -503,5 +509,39 @@
     "title": "Tryb demo.",
     "body": "Model jest deterministyczny i nie analizuje projektu jak prawdziwy: BOM-y mają charakter poglądowy, nie nadają się do zakupów ani decyzji projektowych.",
     "reference": "Tryb demo: wyniki porównania dotyczą deterministycznego modelu demo."
+  },
+  "quota": {
+    "runs": "Przebiegi {{used}}/{{limit}}",
+    "cost_eur": "LLM {{used}}/{{limit}}",
+    "label": "Zużycie planu w tym miesiącu",
+    "warn": "{{what}}: wykorzystano 80 % miesięcznego limitu.",
+    "full": "{{what}}: miesięczny limit został wyczerpany.",
+    "names": {
+      "runs": "Przebiegi",
+      "cost_eur": "Budżet LLM"
+    }
+  },
+  "checklist": {
+    "title": "Twój pierwszy BOM w 3 krokach",
+    "progress": "Ukończono {{done}} z 3",
+    "dismiss": "Ukryj listę kroków",
+    "steps": {
+      "project": {
+        "title": "Utwórz projekt",
+        "hint": "Projekt grupuje pliki projektowe jednego urządzenia.",
+        "action": "Nowy projekt"
+      },
+      "run": {
+        "title": "Wgraj pliki i uruchom przebieg",
+        "hint": "KiCad, IPC-2581 lub PDF – agenci zbudują BOM.",
+        "action": "Nowy przebieg"
+      },
+      "review": {
+        "title": "Sprawdź BOM",
+        "hint": "Przejrzyj uwagi i popraw linie wymagające człowieka.",
+        "action": "Otwórz przebiegi"
+      }
+    },
+    "done": "Ukończone"
   }
 }

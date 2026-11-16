@@ -6,6 +6,7 @@ import { usePageTitle, useShell } from "../lib/layout";
 import { useIsOwner, useProjects, useRuns } from "../lib/queries";
 import { useSession } from "../lib/session";
 import { AddSamplesButton } from "./common";
+import { FirstBomChecklist } from "./FirstBomChecklist";
 import { TEMPLATES, TemplateArt } from "./templates";
 
 export function StartScreen() {
@@ -51,6 +52,18 @@ export function StartScreen() {
       <h2 className="font-display text-[44px] font-extrabold leading-[1.02] tracking-tight sm:text-[64px]">
         {t("start.greeting", { name: session?.name || session?.email })}
       </h2>
+
+      {projects.data && runs.data ? (
+        <FirstBomChecklist
+          counts={{
+            projects: projects.data.items.filter((p) => !p.is_sample).length,
+            runs: items.length,
+            completed: done.length,
+          }}
+          onNewProject={() => undefined}
+          onNewRun={() => openNewRun()}
+        />
+      ) : null}
 
       {panelOpen ? (
         <section
