@@ -98,9 +98,12 @@ without a gateway unless `BOMAGENT_ALLOW_FAKE_LLM=true`.
       -H "Content-Type: application/json" \
       -d '{"key_alias":"bomagent-pilot","models":["<gateway_model of each enabled entry>"],"max_budget":20,"duration":"90d"}'
     ```
-    Copy the returned `key` (`sk-...`) - it is shown once. Stop-gap if you skipped step 5:
-    use the master key as the app key **temporarily** and note it in your risk list (it can
-    administer the gateway).
+    Copy the returned `key` (`sk-...`) - it is shown once. **Easier and safer:**
+    `tools/pilot-llm-key.sh` does steps 10 and the `BOMAGENT_LLM_GATEWAY_KEY` part of 11 for you
+    (the keys never touch a file, a command line or the screen); rotation and key inventory are
+    in [`key-rotation.md`](key-rotation.md). Stop-gap if you skipped step 5: use the master key as
+    the app key **temporarily** (a smoke test at most), then rotate it
+    (`key-rotation.md`, section 2) - it can administer the gateway.
 
 ## E. Switch the pilot over
 
