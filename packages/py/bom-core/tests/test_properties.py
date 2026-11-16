@@ -9,7 +9,7 @@ from __future__ import annotations
 import contextlib
 import random
 
-from hypothesis import HealthCheck, assume, given, settings
+from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
 from bomagent_bom.grouping import group_components
@@ -57,10 +57,6 @@ def test_parse_value_only_raises_value_parse_error(text, kind):
 @given(text=st.one_of(VALUE_TEXT, RKM), kind=KINDS)
 def test_normalize_is_idempotent(text, kind):
     once = normalize_value(text, kind)
-    # Known gap found by this property: "1M" as a capacitor normalises to "1 MF", which
-    # the parser then refuses as ambiguous (mega-farad/henry do not exist in BOMs).
-    # Tracked in the QA-03 PR; excluded here rather than silently changing values.py.
-    assume(once is None or not once.endswith(("MF", "MH", "GF", "GH")))
     if once is not None:
         assert normalize_value(once, kind) == once
 

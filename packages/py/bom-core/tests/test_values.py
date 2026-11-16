@@ -149,3 +149,15 @@ def test_rkm_equals_decimal_notation(i, f, mark):
     rkm = f"{i}{mark}{f}"
     dec = f"{i}.{f}{'' if mark == 'R' else mark}"
     assert values_equivalent(rkm, dec, "resistor")
+
+
+@pytest.mark.parametrize(
+    ("text", "kind"),
+    [("1M", "capacitor"), ("1M0", "capacitor"), ("1MEG", "capacitor"), ("2M2", "inductor")],
+)
+def test_bare_mega_on_capacitor_or_inductor_is_rejected_not_megafarad(text, kind):
+    # a bare "M" on a capacitor/inductor is ambiguous (legacy microfarad?) and mega-farad
+    # does not exist in BOMs: reject instead of silently producing "1 MF"
+    with pytest.raises(ValueParseError):
+        parse_value(text, kind)
+    assert normalize_value(text, kind) is None
