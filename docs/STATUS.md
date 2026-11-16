@@ -49,6 +49,12 @@ _Updated by Claude Code after every milestone (see `docs/prompts/CLAUDE_CODE_MAS
   (visibility only); draft **ADR-0018** (deployment tiers: Standard = Fly + Supabase, Enterprise = AWS)
   for the owner to accept together with ADR-0017.
 
+- **SEC-08 pilot keys:** `tools/pilot-llm-key.sh` creates or rotates the app's LiteLLM virtual key (budget,
+  expiry, only the models the gateway serves) and hands it to Fly through stdin - the master key is read
+  silently and given to curl on stdin, nothing is printed or written; `pilot-llm-setup.sh` no longer writes
+  a vault file (the master key is shown once); runbook `docs/platform/runbooks/key-rotation.md` has the
+  key inventory and rotation steps. Tests drive the script with stub `fly`/`curl`.
+
 ## 2026-11-12 - deployment paths ready (AWS single-account dev, Supabase pilot); nothing deployed yet
 
 > **Owner: start with `docs/OWNER_CHECKLIST.md`** - what is ready and your steps in order.
