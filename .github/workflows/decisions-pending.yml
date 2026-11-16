@@ -1,0 +1,20 @@
+# Visibility, not a gate: lists DECISIONS_LOG rows that wait for the owner for more than 60 days
+# (audit DOC-02). A red run here never blocks a pull request.
+name: decisions-pending
+
+on:
+  schedule:
+    - cron: "17 5 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pending:
+    name: assumptions waiting for acceptance
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - run: python3 tools/decisions_pending.py --max-age-days 60

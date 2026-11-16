@@ -21,7 +21,7 @@ The repository is both a **research testbed** and a **production SaaS platform**
 ```
 CLAUDE.md                 rules for Claude Code (read in every session)
 docs/platform/            architecture, security, tests, formats
-docs/adr/                 architecture decisions (17)
+docs/adr/                 architecture decisions (18)
 docs/design/              UX guidelines, inspirations (Mobbin), prototype v0
 docs/prompts/             starting prompt for Claude Code
 docs/thesis/              materials for the master's thesis
