@@ -14,6 +14,8 @@ truncated, and no free text is ever a label.
 | ``bomagent_llm_cost_eur_total`` | counter | model, tenant |
 | ``bomagent_parse_total`` | counter | outcome, code |
 | ``bomagent_parse_duration_s`` | histogram | - |
+| ``bomagent_malware_scan_total`` | counter | outcome (clean, infected, error) |
+| ``bomagent_malware_scan_duration_s`` | histogram | - |
 | ``bomagent_outbox_sent_total`` / ``bomagent_outbox_dead_total`` | counter | - |
 | ``bomagent_queue_dead_total`` | counter | queue |
 """
@@ -48,6 +50,12 @@ def _instruments() -> dict[str, Any]:
         "parse": meter.create_counter("bomagent_parse_total", description="Design file parses"),
         "parse_duration": meter.create_histogram(
             "bomagent_parse_duration_s", unit="s", description="Wall time of a file parse"
+        ),
+        "malware_scan": meter.create_counter(
+            "bomagent_malware_scan_total", description="Uploaded file malware scans"
+        ),
+        "malware_scan_duration": meter.create_histogram(
+            "bomagent_malware_scan_duration_s", unit="s", description="Wall time of a malware scan"
         ),
         "outbox_sent": meter.create_counter(
             "bomagent_outbox_sent_total", description="Outbox messages delivered"
@@ -94,6 +102,13 @@ def record_parse(outcome: str, code: str | None, *, duration_s: float) -> None:
     i["parse"].add(1, {"outcome": _label(outcome), "code": _label(code)})
     if duration_s >= 0:
         i["parse_duration"].record(duration_s)
+
+
+def record_malware_scan(outcome: str, *, duration_s: float) -> None:
+    i = _instruments()
+    i["malware_scan"].add(1, {"outcome": _label(outcome)})
+    if duration_s >= 0:
+        i["malware_scan_duration"].record(duration_s)
 
 
 def record_outbox_sent(count: int = 1) -> None:
