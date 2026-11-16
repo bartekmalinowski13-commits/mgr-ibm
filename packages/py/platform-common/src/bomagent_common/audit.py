@@ -19,6 +19,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncConnection
 
+from bomagent_common.request_origin import current_source_ip, parse_ip
 from bomagent_common.tenancy import TenantContext, require_tenant
 
 
@@ -79,7 +80,8 @@ async def emit_audit(
                 "action": event.action,
                 "object_type": event.object_type,
                 "object_id": event.object_id,
-                "source_ip": event.source_ip,
+                # the request's address unless the caller set one; only valid addresses reach inet
+                "source_ip": parse_ip(event.source_ip) or current_source_ip(),
                 "request_id": ctx.request_id,
                 "trace_id": format(span_ctx.trace_id, "032x") if span_ctx.is_valid else None,
                 "before": json.dumps(event.before) if event.before is not None else None,

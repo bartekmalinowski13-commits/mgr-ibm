@@ -288,3 +288,39 @@ async def test_invalid_tokens_cost_the_caller_but_valid_traffic_is_free():
                 "/v1/secret", headers={"Fly-Client-IP": "203.0.113.10", "Authorization": "x"}
             )
         ).status_code == 401
+
+
+# ---------------------------------------------------------------- source address for audit (SEC-04)
+
+
+def test_raw_client_ip_returns_the_full_validated_address_not_the_bucket_key():
+    from bomagent_api.ip_limits import raw_client_ip
+
+    v6 = _request({"Fly-Client-IP": "2001:db8:1:2:aaaa::1"})
+    assert raw_client_ip(v6, "Fly-Client-IP") == "2001:db8:1:2:aaaa::1"  # audit keeps all of it
+    assert raw_client_ip(_request({"Fly-Client-IP": "garbage"}), "Fly-Client-IP") == "10.1.2.3"
+    assert raw_client_ip(_request({}, peer=None), None) is None
+    # zone ids and other non-inet values never reach the audit insert
+    assert raw_client_ip(_request({"Fly-Client-IP": "fe80::1%eth0"}), "Fly-Client-IP") == "10.1.2.3"
+    assert raw_client_ip(_request({"X-Forwarded-For": "6.6.6.6"}), None) == "10.1.2.3"
+
+
+async def test_origin_middleware_exposes_the_address_to_handlers():
+    from bomagent_api.ip_limits import install_origin
+    from bomagent_common.request_origin import current_source_ip
+
+    app = FastAPI()
+    install_origin(app, header="Fly-Client-IP")
+
+    @app.get("/who")
+    async def who() -> dict[str, str | None]:
+        return {"ip": current_source_ip()}
+
+    async with _client(app) as c:
+        assert (await c.get("/who", headers={"Fly-Client-IP": "203.0.113.9"})).json() == {
+            "ip": "203.0.113.9"
+        }
+        # a spoofable header the deployment does not trust is ignored
+        spoof = await c.get("/who", headers={"X-Forwarded-For": "6.6.6.6"})
+        assert spoof.json()["ip"] == "127.0.0.1"  # the ASGI peer, never the XFF value
+    assert current_source_ip() is None  # nothing leaks out of the request

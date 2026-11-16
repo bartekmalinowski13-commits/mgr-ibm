@@ -1,0 +1,83 @@
+"""The caller's address reaches audit events without every handler passing it (SEC-04)."""
+
+from __future__ import annotations
+
+import pytest
+
+from bomagent_common.request_origin import (
+    current_source_ip,
+    parse_ip,
+    source_ip_scope,
+)
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        ("203.0.113.9", "203.0.113.9"),
+        (" 203.0.113.9 ", "203.0.113.9"),
+        ("2001:db8::1", "2001:db8::1"),
+        ("unknown", None),
+        ("", None),
+        (None, None),
+        ("1.2.3.4, 5.6.7.8", None),  # a list is not an address
+        ("999.1.1.1", None),
+        ("fe80::1%eth0", None),  # zone ids would fail the inet cast of the audit insert
+        ("fe80::1%1", None),
+        ("::1%", None),
+        ("203.0.113.9/24", None),
+        ("x" * 500, None),
+    ],
+)
+def test_parse_ip_accepts_only_a_single_valid_address(raw, expected):
+    assert parse_ip(raw) == expected
+
+
+def test_parse_ip_keeps_ipv4_mapped_addresses_as_the_same_address():
+    # the text form differs between Python versions (3.12: ::ffff:cb00:7109, 3.13: dotted):
+    # both are valid for inet and denote the same address
+    import ipaddress
+
+    parsed = parse_ip("::ffff:203.0.113.9")
+    assert parsed is not None
+    assert ipaddress.ip_address(parsed) == ipaddress.ip_address("::ffff:203.0.113.9")
+
+
+def test_scope_sets_and_restores_the_address():
+    assert current_source_ip() is None
+    with source_ip_scope("203.0.113.9"):
+        assert current_source_ip() == "203.0.113.9"
+        with source_ip_scope("198.51.100.1"):
+            assert current_source_ip() == "198.51.100.1"
+        assert current_source_ip() == "203.0.113.9"
+    assert current_source_ip() is None
+
+
+def test_scope_ignores_invalid_values():
+    with source_ip_scope("not-an-ip"):
+        assert current_source_ip() is None
+
+
+async def test_scope_is_isolated_between_concurrent_tasks():
+    import asyncio
+
+    seen: dict[str, str | None] = {}
+
+    async def request(name: str, ip: str, delay: float) -> None:
+        with source_ip_scope(ip):
+            await asyncio.sleep(delay)
+            seen[name] = current_source_ip()
+
+    await asyncio.gather(request("a", "203.0.113.1", 0.02), request("b", "203.0.113.2", 0.0))
+    assert seen == {"a": "203.0.113.1", "b": "203.0.113.2"}
+
+
+def test_audit_prefers_an_explicit_valid_address_and_never_passes_a_bad_one():
+    from bomagent_common.audit import AuditEvent
+    from bomagent_common.request_origin import current_source_ip, parse_ip
+
+    event = AuditEvent(action="x.y", object_type="t", object_id="1", source_ip="fe80::1%eth0")
+    with source_ip_scope("203.0.113.9"):
+        # what emit_audit binds: explicit and valid, else the request's address, else NULL
+        assert (parse_ip(event.source_ip) or current_source_ip()) == "203.0.113.9"
+    assert (parse_ip(event.source_ip) or current_source_ip()) is None

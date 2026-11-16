@@ -34,6 +34,11 @@ _Updated by Claude Code after every milestone (see `docs/prompts/CLAUDE_CODE_MAS
   export next to the traces (`BOMAGENT_OTEL_EXPORTER_OTLP_ENDPOINT`), an in-memory reader always
   attached. Dashboards and alert rules: see `deploy/observability/` (owner PR).
 
+- **SEC-04 (part 1) source IP in the audit log:** the API middleware (`install_origin`) puts the caller's
+  address (trusted edge header, else socket peer; one valid IP only) in a request-scoped context and
+  `emit_audit` stores it in `audit.events.source_ip`. Worker-written events have no address.
+  Still open: user agent (needs a column), anchor export, partitioning.
+
 ## 2026-11-12 - deployment paths ready (AWS single-account dev, Supabase pilot); nothing deployed yet
 
 > **Owner: start with `docs/OWNER_CHECKLIST.md`** - what is ready and your steps in order.
