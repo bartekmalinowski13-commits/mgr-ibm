@@ -25,6 +25,7 @@ from bomagent_api.sso import (
     InMemoryIdentityProviders,
     StaticTxtResolver,
 )
+from bomagent_common.audit_anchor import AnchorSink, FileAnchorSink, S3AnchorSink
 from bomagent_common.config import ServiceSettings
 from bomagent_common.db import make_engine, ping
 from bomagent_common.health import ReadinessCheck
@@ -72,6 +73,11 @@ class Settings(ServiceSettings):
     #: when ``client_ip_header`` is set; without it the socket peer is a shared proxy address and
     #: every user would share one bucket, so the limits stay off.
     ip_rate_limit: bool | None = None
+    #: daily audit-chain anchors (ADR-0011): a directory (write-once volume / off-platform copy)
+    #: or an S3 bucket with Object Lock; both unset = no export
+    audit_anchor_dir: str | None = None
+    audit_anchor_bucket: str | None = None
+    audit_anchor_endpoint_url: str | None = None  # S3-compatible stores (Supabase Storage)
     #: edge header that carries the client address (``Fly-Client-IP``,
     #: ``CloudFront-Viewer-Address``); never X-Forwarded-For. Unset = socket peer.
     client_ip_header: str | None = None
@@ -145,6 +151,19 @@ class Settings(ServiceSettings):
         return self.environment not in {"local", "test"} and bool(self.client_ip_header)
 
 
+def anchor_sink_for(settings: Settings) -> AnchorSink | None:
+    if settings.audit_anchor_bucket:
+        return S3AnchorSink(
+            settings.audit_anchor_bucket,
+            region=settings.aws_region,
+            endpoint_url=settings.audit_anchor_endpoint_url,
+            s3_compatible=bool(settings.audit_anchor_endpoint_url),
+        )
+    if settings.audit_anchor_dir:
+        return FileAnchorSink(settings.audit_anchor_dir)
+    return None
+
+
 SECURITY_HEADERS = {
     "X-Content-Type-Options": "nosniff",
     "X-Frame-Options": "DENY",
@@ -195,7 +214,9 @@ def create_app(
         title="BOM Agent API",
         readiness=checks,
         docs=True,
-        lifespan=maintenance.lifespan(settings.maintenance_interval_s, settings.run_timeout_s),
+        lifespan=maintenance.lifespan(
+            settings.maintenance_interval_s, settings.run_timeout_s, anchor_sink_for(settings)
+        ),
     )
     app.state.engine = engine
     app.state.platform_engine = platform_engine

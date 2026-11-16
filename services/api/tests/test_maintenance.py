@@ -144,3 +144,38 @@ async def test_stale_queued_runs_are_reaped(app_engine, platform_engine, make_te
             await conn.execute(text("SELECT status FROM runs.runs WHERE id = :i"), {"i": rid})
         ).scalar()
     assert status == "failed"
+
+
+async def test_sweep_exports_one_anchor_per_tenant_and_day_and_verify_uses_it(
+    app_engine, platform_engine, make_tenant, tmp_path
+):
+    """The head of the audit chain is exported once a day to write-once storage; a stored
+    anchor that no longer matches the chain marks it broken (rewritten history)."""
+    from bomagent_common.audit import ChainAnchor, chain_head, verify_chain
+    from bomagent_common.audit_anchor import FileAnchorSink, load_anchors
+
+    tenant = await make_tenant()
+    sink = FileAnchorSink(tmp_path)
+    async with tenant_transaction(app_engine, tenant.tenant_id) as conn:
+        await conn.execute(
+            text(
+                "INSERT INTO projects.projects (id, tenant_id, name, created_by)"
+                " VALUES (:i, :t, 'p', 'u')"
+            ),
+            {"i": uuid.uuid4(), "t": tenant.tenant_id},
+        )
+        from bomagent_common.audit import AuditEvent, emit_audit
+
+        await emit_audit(conn, AuditEvent(action="project.created", object_type="p", object_id="1"))
+        head = await chain_head(conn, tenant.tenant_id)
+    assert head is not None
+
+    for _ in range(2):  # a second sweep the same day must not write again
+        await sweep(app_engine, platform_engine, {}, run_timeout_s=3600, anchor_sink=sink)
+    anchors = await load_anchors(sink, tenant.tenant_id)
+    assert anchors == [head]
+    assert len(await sink.list(f"audit-anchors/{tenant.tenant_id}/")) == 1
+    async with tenant_transaction(app_engine, tenant.tenant_id) as conn:
+        assert (await verify_chain(conn, tenant.tenant_id, anchors)).ok
+        forged = [ChainAnchor(head.seq, "0" * 64)]
+        assert (await verify_chain(conn, tenant.tenant_id, forged)).first_broken_seq == head.seq

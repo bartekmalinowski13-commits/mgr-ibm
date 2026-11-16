@@ -65,7 +65,7 @@ async def env(app_engine, platform_engine):
     return Env(app_engine, platform_engine)
 
 
-async def test_full_flow_and_tenant_boundaries(env):
+async def test_full_flow_and_tenant_boundaries(env, tmp_path):
     s = uuid.uuid4().hex[:6]
     alice = await env.org(await env.login(f"alice-{s}"), f"acme-{s}")
     bob = await env.org(await env.login(f"bob-{s}"), f"globex-{s}")
@@ -191,6 +191,24 @@ async def test_full_flow_and_tenant_boundaries(env):
     ):
         assert expected in actions
     assert (await c.get("/v1/audit-events/verify", headers=alice)).json()["ok"] is True
+
+    # ---- anchors: an exported head verifies; a stored anchor that no longer matches does not
+    import datetime as dt
+
+    from bomagent_common.audit_anchor import FileAnchorSink, anchor_key, export_anchor
+
+    tenant_id = uuid.UUID(alice["X-Org-Id"])
+    sink = FileAnchorSink(tmp_path)
+    assert await export_anchor(env.engine, sink, tenant_id)
+    env.app.state.anchor_sink = sink
+    assert (await c.get("/v1/audit-events/verify", headers=alice)).json()["ok"] is True
+    tomorrow = dt.datetime.now(dt.UTC) + dt.timedelta(days=1)
+    forged = {"tenant": str(tenant_id), "seq": 1, "hash": "0" * 64, "at": "x"}
+    await sink.write_once(anchor_key(tenant_id, tomorrow), json.dumps(forged).encode())
+    broken = (await c.get("/v1/audit-events/verify", headers=alice)).json()
+    assert broken["ok"] is False
+    assert broken["first_broken_seq"] == 1
+    env.app.state.anchor_sink = None
 
     # ---- tenant boundaries
     spoof = await c.get(f"/v1/projects/{pid}", headers=bob | {"X-Org-Id": alice["X-Org-Id"]})

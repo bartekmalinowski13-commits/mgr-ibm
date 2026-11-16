@@ -12,6 +12,7 @@ from bomagent_api.authz import require
 from bomagent_api.pagination import clamp
 from bomagent_api.schemas import AuditEventOut, ChainStatus, Page, problem_responses
 from bomagent_common.audit import verify_chain
+from bomagent_common.audit_anchor import load_anchors
 from bomagent_common.db import tenant_transaction
 
 router = APIRouter(
@@ -57,8 +58,10 @@ async def list_events(
 @router.get("/verify", summary="Verify the organisation's audit hash chain")
 async def verify(request: Request, ctx: OrgContext) -> ChainStatus:
     require(ctx, "audit.read")
+    sink = getattr(request.app.state, "anchor_sink", None)
+    anchors = await load_anchors(sink, ctx.tenant_id) if sink is not None else None
     async with tenant_transaction(request.app.state.engine) as conn:
-        result = await verify_chain(conn, ctx.tenant_id)
+        result = await verify_chain(conn, ctx.tenant_id, anchors)
     return ChainStatus(
         ok=result.ok, checked=result.checked, first_broken_seq=result.first_broken_seq
     )
