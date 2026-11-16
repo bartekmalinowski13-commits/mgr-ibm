@@ -29,8 +29,8 @@ Scheduled task `audit-implementation-continue` (hourly, id `trig_0174gXcCFuTekwm
 
 | Task | Status | Branch | PR | Notes |
 |---|---|---|---|---|
-| TH-05 catalogue prices with date/source, manifest model ids, temperature/seed notes | in PR (code); prices/access needs owner | claude/audit-th-05 | | real prices/model access from provider consoles = owner |
-| TH-02 Postgres retriever in the experiment, manifest fields | todo | | | DB-backed tests run in CI only |
+| TH-05 catalogue prices with date/source, manifest model ids, temperature/seed notes | merged (code, #31); prices/access needs owner | claude/audit-th-05 | #31 | real prices/model access from provider consoles = owner |
+| TH-02 Postgres retriever in the experiment, manifest fields | in PR (manifest part); `--retriever postgres` todo | claude/audit-th-02 | | this PR: manifest `retrieval` block (retriever, embedding, reranker, `kb_snapshot_id` content hash) + limitation note in METODYKA; postgres retriever needs a DB (CI-only tests) |
 | TH-01 attempted-hallucination metric, METODYKA note, A-unguarded ablation | merged (metric + note, #29); ablation todo | claude/audit-th-01 | #29 | metric `attempted_mpn_hallucination_rate` in eval summary, experiment tables/figure, `docs/thesis/METODYKA.md`; A-unguarded ablation = follow-up |
 | TH-03 dataset ingestion with double verification | needs owner | | | data collection, licences, verification = owner; code side: SOURCE/verification templates, agreement metric |
 | TH-06 extra error classes in validation experiment | todo | | | |

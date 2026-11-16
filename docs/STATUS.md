@@ -189,3 +189,11 @@ domain) and the assumptions awaiting acceptance (`docs/DECISIONS_LOG.md`, last c
   `model_ids` (gateway model per catalogue id) and `sampling` (temperature, seed, note that hosted
   models are not deterministic even at temperature 0).
 - Owner: real prices from provider price lists, model access and flipping `enabled`/`verified`.
+
+## 2026-11-16 - TH-02 (manifest part)
+
+- Experiment `manifest.json` has a `retrieval` block: retriever type, embedding, reranker,
+  `kb_dir`, `kb_snapshot_id` (sha256 of the datasheet files) and file count. Limitation of the
+  hashing retriever written up in `docs/thesis/METODYKA.md`.
+- Still to do: `experiment run --retriever postgres --embedding-model <id>` (scratch tenant via
+  `KnowledgeBase`; DB-backed tests run in CI only).
