@@ -1,0 +1,55 @@
+# Post-deploy smoke (OPS-04). Manual only: runs tests/smoke against a deployed URL.
+# Needs the GitHub environment "smoke" with this secret (name only; the value is set by the
+# repository owner, belongs to a dedicated smoke tenant, never a customer tenant):
+#   SMOKE_TENANT_API_KEY - API key of the smoke tenant
+# Without it the job does nothing, says so and succeeds.
+# Scope today: the suite only checks the API /healthz and /readyz (the key is exported as
+# SMOKE_API_KEY for authenticated checks added later). The compose-only checks (worker,
+# indexer, gateway, ingest) are not run against a remote pilot.
+name: smoke
+
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: "Base URL of the deployed API, e.g. https://<app>.fly.dev"
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: smoke
+  cancel-in-progress: false
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: smoke
+    env:
+      SMOKE_TENANT_API_KEY: ${{ secrets.SMOKE_TENANT_API_KEY }}
+      SMOKE_URL: ${{ inputs.url }}
+    steps:
+      - name: Check secrets
+        id: gate
+        run: |
+          if [ -z "$SMOKE_TENANT_API_KEY" ]; then
+            echo "SMOKE_TENANT_API_KEY is not set in environment 'smoke': nothing to do."
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          else
+            case "$SMOKE_URL" in
+              https://*) echo "run=true" >> "$GITHUB_OUTPUT" ;;
+              *) echo "url must start with https://"; exit 1 ;;
+            esac
+          fi
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: steps.gate.outputs.run == 'true'
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        if: steps.gate.outputs.run == 'true'
+      - name: Smoke tests (API health and readiness)
+        if: steps.gate.outputs.run == 'true'
+        env:
+          SMOKE_API_URL: ${{ inputs.url }}
+          SMOKE_API_KEY: ${{ secrets.SMOKE_TENANT_API_KEY }}
+        run: uv run --frozen pytest -m smoke tests/smoke -k "test_service_health_and_readiness and api" -v
