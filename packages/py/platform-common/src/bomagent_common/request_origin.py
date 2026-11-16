@@ -20,8 +20,11 @@ def parse_ip(value: str | None) -> str | None:
     """The normalised address if ``value`` is exactly one IP address, else ``None``."""
     if not value or len(value) > 64:
         return None
+    value = value.strip()
+    if "%" in value:  # IPv6 zone id (fe80::1%eth0): valid for Python, rejected by PostgreSQL inet
+        return None
     try:
-        return str(ipaddress.ip_address(value.strip()))
+        return str(ipaddress.ip_address(value))
     except ValueError:
         return None
 

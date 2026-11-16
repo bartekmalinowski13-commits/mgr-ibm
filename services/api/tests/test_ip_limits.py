@@ -300,6 +300,8 @@ def test_raw_client_ip_returns_the_full_validated_address_not_the_bucket_key():
     assert raw_client_ip(v6, "Fly-Client-IP") == "2001:db8:1:2:aaaa::1"  # audit keeps all of it
     assert raw_client_ip(_request({"Fly-Client-IP": "garbage"}), "Fly-Client-IP") == "10.1.2.3"
     assert raw_client_ip(_request({}, peer=None), None) is None
+    # zone ids and other non-inet values never reach the audit insert
+    assert raw_client_ip(_request({"Fly-Client-IP": "fe80::1%eth0"}), "Fly-Client-IP") == "10.1.2.3"
     assert raw_client_ip(_request({"X-Forwarded-For": "6.6.6.6"}), None) == "10.1.2.3"
 
 
@@ -320,5 +322,5 @@ async def test_origin_middleware_exposes_the_address_to_handlers():
         }
         # a spoofable header the deployment does not trust is ignored
         spoof = await c.get("/who", headers={"X-Forwarded-For": "6.6.6.6"})
-        assert spoof.json()["ip"] != "6.6.6.6"
+        assert spoof.json()["ip"] == "127.0.0.1"  # the ASGI peer, never the XFF value
     assert current_source_ip() is None  # nothing leaks out of the request

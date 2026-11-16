@@ -23,6 +23,9 @@ from bomagent_common.request_origin import (
         (None, None),
         ("1.2.3.4, 5.6.7.8", None),  # a list is not an address
         ("999.1.1.1", None),
+        ("fe80::1%eth0", None),  # zone ids would fail the inet cast of the audit insert
+        ("fe80::1%1", None),
+        ("::1%", None),
         ("203.0.113.9/24", None),
         ("x" * 500, None),
     ],
@@ -58,3 +61,14 @@ async def test_scope_is_isolated_between_concurrent_tasks():
 
     await asyncio.gather(request("a", "203.0.113.1", 0.02), request("b", "203.0.113.2", 0.0))
     assert seen == {"a": "203.0.113.1", "b": "203.0.113.2"}
+
+
+def test_audit_prefers_an_explicit_valid_address_and_never_passes_a_bad_one():
+    from bomagent_common.audit import AuditEvent
+    from bomagent_common.request_origin import current_source_ip, parse_ip
+
+    event = AuditEvent(action="x.y", object_type="t", object_id="1", source_ip="fe80::1%eth0")
+    with source_ip_scope("203.0.113.9"):
+        # what emit_audit binds: explicit and valid, else the request's address, else NULL
+        assert (parse_ip(event.source_ip) or current_source_ip()) == "203.0.113.9"
+    assert (parse_ip(event.source_ip) or current_source_ip()) is None
