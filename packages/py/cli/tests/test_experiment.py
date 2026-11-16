@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import csv
 import json
+import math
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
@@ -177,3 +178,24 @@ def test_unknown_injection_kind_is_rejected(tmp_path):
     cfg = _config(tmp_path, injection={"errors": 2, "trials": 1, "kinds": ["nonsense"]})
     with pytest.raises(ValidationError, match="nonsense"):
         ExperimentConfig.from_file(cfg)
+
+
+def test_primary_family_has_holm_effect_size_and_cluster_sensitivity(tmp_path):
+    from bomagent_cli.experiment import PRIMARY_METRICS
+
+    result = run_experiment(ExperimentConfig.from_file(_config(tmp_path, repeats=2)), tmp_path)
+    comps = result.comparisons["fake-closed"]
+    assert set(PRIMARY_METRICS) == {"line_f1", "attempted_mpn_hallucination_rate", "cost_eur"}
+    for metric in PRIMARY_METRICS:
+        c = comps[metric]
+        if c.n and not math.isnan(c.p_value):
+            assert c.p_holm >= c.p_value  # adjustment never lowers p
+            assert c.p_holm <= 1.0
+    assert all(math.isnan(c.p_holm) for m, c in comps.items() if m not in PRIMARY_METRICS)
+    assert any(not math.isnan(c.cluster_ci_low) for c in comps.values())
+    out = tmp_path / "pilot"
+    header = (out / "tables" / "paired.csv").read_text().splitlines()[0].split(",")
+    assert {"effect_size", "p_holm", "cluster_ci_low", "cluster_ci_high", "primary"} <= set(header)
+    report = (out / "report.md").read_text()
+    assert "Holm" in report
+    assert "d_z" in report

@@ -213,3 +213,13 @@ domain) and the assumptions awaiting acceptance (`docs/DECISIONS_LOG.md`, last c
   rule coverage per error kind and false alarms per rule, and `detection_by_kind.csv` has a
   `rule_covered` column. Example: `injection: {kinds: [wrong_plausible_mpn, wrong_tolerance,
   voltage_derating, obsolete_part]}` measures what the rule pack cannot see.
+
+## 2026-11-16 - TH-04
+
+- `experiment_stats`: `holm_adjust`, `cluster_bootstrap_ci`, paired effect size d_z. The experiment
+  report and `tables/paired.csv` carry the primary family (`line_f1`,
+  `attempted_mpn_hallucination_rate`, `cost_eur`) with Holm-adjusted p, d_z and the cluster
+  bootstrap interval as a sensitivity analysis.
+- `docs/thesis/PREREJESTRACJA.md` (Polish, draft): hypotheses, unit of analysis, metric families,
+  Holm, effect sizes, sensitivity analysis, rules. Owner: review and freeze it before the first
+  real-model run.

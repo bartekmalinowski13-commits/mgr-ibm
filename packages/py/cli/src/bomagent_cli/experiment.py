@@ -39,7 +39,13 @@ from pydantic import BaseModel, Field, field_validator
 
 from bomagent_cad import parse_files
 from bomagent_cli.experiment_figures import Estimate, bar_panels, dot_interval_chart, slope_chart
-from bomagent_eval.experiment_stats import PairedComparison, bootstrap_ci, compare_paired
+from bomagent_eval.experiment_stats import (
+    PairedComparison,
+    bootstrap_ci,
+    cluster_bootstrap_ci,
+    compare_paired,
+    holm_adjust,
+)
 from bomagent_eval.injection import rule_coverage
 from bomagent_eval.metrics import evaluate
 from bomagent_eval.reference import load_reference
@@ -78,6 +84,9 @@ KEY_METRICS: dict[str, int] = {
 
 Variant = Literal["A", "B"]
 #: validation metrics on injected errors; direction as in KEY_METRICS
+#: pre-registered primary family (docs/thesis/PREREJESTRACJA.md): Holm-adjusted together;
+#: everything else is secondary and reported without multiplicity correction
+PRIMARY_METRICS = ("line_f1", "attempted_mpn_hallucination_rate", "cost_eur")
 INJECTION_METRICS: dict[str, int] = {"detection_rate": 1, "false_alarm_rate": -1}
 
 
@@ -338,7 +347,14 @@ def run_experiment(config: ExperimentConfig, out_root: Path) -> ExperimentResult
             for metric in KEY_METRICS:
                 a = [_design_mean(records, d, "A", model, metric) for d in designs]
                 b = [_design_mean(records, d, "B", model, metric) for d in designs]
-                comparisons[model][metric] = compare_paired(a, b, seed=config.seed)
+                comparisons[model][metric] = _with_cluster_ci(
+                    compare_paired(a, b, seed=config.seed), records, designs, model, metric, config
+                )
+            adjusted = holm_adjust({m: comparisons[model][m].p_value for m in PRIMARY_METRICS})
+            for metric, p_holm in adjusted.items():
+                comparisons[model][metric] = comparisons[model][metric].model_copy(
+                    update={"p_holm": p_holm}
+                )
 
     repeatability = {
         (v, m): statistics.fmean(
@@ -369,6 +385,33 @@ def run_experiment(config: ExperimentConfig, out_root: Path) -> ExperimentResult
     )
     _write(result, config)
     return result
+
+
+def _with_cluster_ci(
+    comparison: PairedComparison,
+    records: list[dict[str, Any]],
+    designs: list[str],
+    model: str,
+    metric: str,
+    config: ExperimentConfig,
+) -> PairedComparison:
+    """Sensitivity analysis: cluster bootstrap of the B - A difference (designs = clusters,
+    repetition i of A paired with repetition i of B)."""
+
+    def runs(design: str, variant: str) -> dict[int, float]:
+        return {
+            r["repeat"]: float(r["metrics"][metric])
+            for r in records
+            if (r["design"], r["variant"], r["model"]) == (design, variant, model)
+            and r["metrics"].get(metric) is not None
+        }
+
+    clusters = []
+    for design in designs:
+        a, b = runs(design, "A"), runs(design, "B")
+        clusters.append([b[i] - a[i] for i in sorted(a.keys() & b.keys())])
+    lo, hi = cluster_bootstrap_ci(clusters, seed=config.seed)
+    return comparison.model_copy(update={"cluster_ci_low": lo, "cluster_ci_high": hi})
 
 
 def _design_mean(
@@ -525,6 +568,11 @@ def _write_tables(result: ExperimentResult, config: ExperimentConfig) -> None:
                 "ci_low",
                 "ci_high",
                 "p_value",
+                "primary",
+                "p_holm",
+                "effect_size",
+                "cluster_ci_low",
+                "cluster_ci_high",
                 "b_better",
                 "a_better",
                 "ties",
@@ -550,6 +598,11 @@ def _write_tables(result: ExperimentResult, config: ExperimentConfig) -> None:
                         c.ci_low,
                         c.ci_high,
                         c.p_value,
+                        metric in PRIMARY_METRICS,
+                        c.p_holm,
+                        c.effect_size,
+                        c.cluster_ci_low,
+                        c.cluster_ci_high,
                         b_better,
                         a_better,
                         c.ties,
@@ -701,8 +754,15 @@ def _report(result: ExperimentResult, config: ExperimentConfig) -> str:
             " design are not independent). Difference B - A; p: two-sided exact paired"
             " permutation test - with n designs the smallest attainable p is 2 / 2^n.",
             "",
-            "| metric | better | n | A | B | B - A [95 % CI] | p | B better / A better / ties |",
-            "|---|---|---|---|---|---|---|---|",
+            "Primary family (Holm-adjusted together, see `docs/thesis/PREREJESTRACJA.md`):"
+            f" {', '.join(f'`{m}`' for m in PRIMARY_METRICS)}; other rows are secondary and"
+            " carry no multiplicity correction. d_z = mean(B - A) / sd(B - A), the standardised"
+            " paired effect size. Cluster CI: sensitivity analysis resampling designs and then"
+            " repetitions (not a replacement for the permutation test).",
+            "",
+            "| metric | better | n | A | B | B - A [95 % CI] | d_z | p | p (Holm) |"
+            " cluster CI | B better / A better / ties |",
+            "|---|---|---|---|---|---|---|---|---|---|---|",
         ]
         for metric, c in comps.items():
             better = "higher" if KEY_METRICS[metric] > 0 else "lower"
@@ -710,12 +770,20 @@ def _report(result: ExperimentResult, config: ExperimentConfig) -> str:
                 (c.wins_b, c.wins_a) if KEY_METRICS[metric] > 0 else (c.wins_a, c.wins_b)
             )
             p = MISSING if math.isnan(c.p_value) else f"{c.p_value:.4f}"
+            holm = MISSING if math.isnan(c.p_holm) else f"{c.p_holm:.4f}"
+            dz = MISSING if math.isnan(c.effect_size) else f"{c.effect_size:.2f}"
+            cluster = (
+                MISSING
+                if math.isnan(c.cluster_ci_low)
+                else f"[{_fmt(c.cluster_ci_low, metric)}; {_fmt(c.cluster_ci_high, metric)}]"
+            )
             diff = (
                 f"{_fmt(c.mean_diff, metric)} [{_fmt(c.ci_low, metric)}; {_fmt(c.ci_high, metric)}]"
             )
             lines.append(
                 f"| {metric} | {better} | {c.n} | {_fmt(c.mean_a, metric)} | "
-                f"{_fmt(c.mean_b, metric)} | {diff} | {p} | {wins_b} / {wins_a} / {c.ties} |"
+                f"{_fmt(c.mean_b, metric)} | {diff} | {dz} | {p} | {holm} | {cluster} | "
+                f"{wins_b} / {wins_a} / {c.ties} |"
             )
         lines.append("")
     if result.injection_records:
