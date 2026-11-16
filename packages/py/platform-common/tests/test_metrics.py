@@ -76,6 +76,14 @@ def test_parse_outcomes_and_failure_codes():
     )
 
 
+def test_malware_scan_outcomes():
+    before = _points("bomagent_malware_scan_total")
+    metrics.record_malware_scan("clean", duration_s=0.01)
+    metrics.record_malware_scan("infected", duration_s=0.02)
+    assert _delta("bomagent_malware_scan_total", {"outcome": "clean"}, before) == 1
+    assert _delta("bomagent_malware_scan_total", {"outcome": "infected"}, before) == 1
+
+
 def test_reliability_counters():
     before_dead = _points("bomagent_outbox_dead_total")
     before_q = _points("bomagent_queue_dead_total")

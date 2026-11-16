@@ -17,7 +17,7 @@ import asyncio
 import json
 import time
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
@@ -30,15 +30,47 @@ from bomagent_common.db import tenant_transaction
 from bomagent_common.logging import get_logger
 from bomagent_common.messaging import Message
 from bomagent_common.storage import ObjectStore, key_belongs_to
+from bomagent_ingest.scanner import (
+    FileScanner,
+    MalwareDetectedError,
+    ScannerError,
+    scanner_from_env,
+)
 
 log = get_logger(__name__)
 FILE_UPLOADED = "file.uploaded"
+MALWARE_ERROR = "file.rejected"
+# deliberately generic: no signature name, no hint about which scanner or which file
+MALWARE_MESSAGE = (
+    "A file in this project was rejected by the security check and nothing was processed. "
+    "Remove the file and upload the project again."
+)
 
 
 @dataclass
 class IngestWorker:
     engine: AsyncEngine
     store: ObjectStore
+    # ClamAV when BOMAGENT_MALWARE_SCAN_CLAMD_ADDR is set, else the EICAR-only scanner (SEC-09)
+    scanner: FileScanner = field(default_factory=scanner_from_env)
+
+    async def _scan_all(self, files: list[FileRef]) -> None:
+        """Scan every file before any parser runs; raises :class:`MalwareDetectedError`."""
+        findings: dict[str, str] = {}
+        for f in files:
+            started = time.monotonic()
+            try:
+                result = await self.scanner.scan(f.name, f.data)
+            except ScannerError:
+                metrics.record_malware_scan("error", duration_s=time.monotonic() - started)
+                raise  # fail closed: not clean, the message is retried
+            metrics.record_malware_scan(
+                "clean" if result.clean else "infected", duration_s=time.monotonic() - started
+            )
+            if not result.clean:
+                findings[f.name] = result.signature or "unknown"
+        if findings:
+            raise MalwareDetectedError(findings)
 
     async def handle(self, message: Message) -> None:
         if message.type != FILE_UPLOADED:
@@ -64,6 +96,7 @@ class IngestWorker:
                 )
             ).all()
         files: list[FileRef] = []
+        findings: dict[str, str] = {}
         started = time.monotonic()
         for row in rows:
             if not key_belongs_to(message.tenant_id, row.object_key):
@@ -75,6 +108,7 @@ class IngestWorker:
                 budget.add(row.name, int(row.size_bytes or 0))
             for row in rows:
                 files.append(FileRef(row.name, await self.store.get(row.object_key)))
+            await self._scan_all(files)  # before any parser touches the bytes (SEC-09)
             # CPU-bound and untrusted input: resource-limited subprocess, off the event loop
             design = await asyncio.to_thread(parse_files_sandboxed, files)
             metrics.record_parse("ok", None, duration_s=time.monotonic() - started)
@@ -86,6 +120,11 @@ class IngestWorker:
                 "confidence": design.confidence,
                 "limitations": design.limitations[:20],
             }
+        except MalwareDetectedError as exc:
+            findings = exc.findings
+            log.warning("file_malware_detected", project_id=str(project_id), files=len(findings))
+            status, fmt = "failed", None
+            summary = {"error": MALWARE_ERROR, "message": MALWARE_MESSAGE}
         except ParseError as exc:
             metrics.record_parse("failed", exc.code, duration_s=time.monotonic() - started)
             status, fmt = "failed", None
@@ -107,4 +146,14 @@ class IngestWorker:
                     after={"format": fmt, "files": len(files)},
                 ),
             )
+            if findings:  # data-changing: the project's files were rejected
+                await emit_audit(
+                    conn,
+                    AuditEvent(
+                        action="project.file_malware_detected",
+                        object_type="project",
+                        object_id=str(project_id),
+                        after={"findings": dict(list(findings.items())[:20])},
+                    ),
+                )
         log.info("project_parsed", project_id=str(project_id), status=status)
