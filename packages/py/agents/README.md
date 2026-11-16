@@ -26,10 +26,18 @@ only the architecture differs (`docs/thesis/ARCHITEKTURA_WARIANTOW.md`).
   pending writes in `runs.graph_checkpoints` / `runs.graph_writes` (migration 0012):
   tenant-scoped with RLS, thread = run id, deleted with the run. The agent worker uses it
   for runs started through the API (`context_factory(..., checkpointer=...)`); the CLI,
-  experiments and unit tests keep the in-memory checkpointer. Each run executes once (the
-  worker claims `queued -> running`); resuming a crashed run from its last checkpoint is
-  not wired yet - the reaper fails stuck runs - so the worker deletes a run's checkpoints
-  when the run ends (data minimisation). Deserialisation is strict (LangGraph's safe types
+  experiments and unit tests keep the in-memory checkpointer. Resume (ARCH-05, `resume.py`): the worker claims `queued -> running`; a redelivered
+  message for a `running` run whose last checkpoint/state write (`created_at`, the
+  heartbeat) is older than the stale threshold takes the run over and calls the runtime
+  with `resume=True`: process-side state (budget, trace, evidence MPNs, findings) is restored from a per-step snapshot
+  (`TenantCheckpointSaver.save_state`, namespace `bomagent.state`) and the graph continues with
+  `ainvoke(None, config)` from its last checkpoint - both LangGraph variants. The result carries
+  `RunOutput.resumed` (`ResumeRecord`: mode `checkpoint`/`restart`, checkpoint id, restored
+  steps and LLM calls, attempt) plus a `run.resumed` trace marker; the interrupted spend stays
+  in the budget and a cut-off step runs (and is traced) again. Without a checkpoint, and for
+  `claude_agent_sdk_a` (no checkpoints), the run restarts from scratch and says so
+  (`mode=restart`). Checkpoints are deleted when the run ends (data minimisation), but kept
+  when the worker is cancelled so the redelivery can resume. Deserialisation is strict (LangGraph's safe types
   only, no pickle, no arbitrary class import).
 - The SDK adapter meters usage per assistant turn, so a run stopped by the time budget is
   still billed for the turns it made.

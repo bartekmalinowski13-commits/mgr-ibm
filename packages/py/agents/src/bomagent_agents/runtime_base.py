@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import time
+import uuid
 from collections.abc import Awaitable, Callable
 from contextvars import ContextVar
 from dataclasses import dataclass, field
@@ -13,7 +14,14 @@ from typing import Any, TypeVar
 from opentelemetry import trace
 from pydantic import BaseModel
 
-from bomagent_agents.contracts import Budget, BudgetExceededError, RunConfig, TraceStep
+from bomagent_agents import resume
+from bomagent_agents.contracts import (
+    Budget,
+    BudgetExceededError,
+    ResumeRecord,
+    RunConfig,
+    TraceStep,
+)
 from bomagent_agents.prompts import Prompt, data_block, load_prompt
 from bomagent_agents.retrieval import Evidence, Retriever
 from bomagent_agents.schemas import schema_of
@@ -62,6 +70,13 @@ class AgentContext:
     #: LangGraph checkpointer for this run (tenant-scoped Postgres in the worker);
     #: None -> in memory (CLI, experiments, tests)
     checkpointer: Any = None
+    #: process-side state snapshot per step (``resume.RunStateStore``); needed to resume
+    state_store: Any = None
+    #: the worker asks to continue a crashed run from its last checkpoint (ARCH-05)
+    resume: bool = False
+    resume_attempt: int = 1
+    #: set by ``resume.begin`` when the run did not start from scratch
+    resumed: ResumeRecord | None = None
 
     def __post_init__(self) -> None:
         self.budget = Budget(self.config)
@@ -196,6 +211,30 @@ class AgentContext:
                     await self.on_step(finished, self.budget.usage.model_copy())
                 except Exception:  # progress is best-effort; the result is what counts
                     log.warning("step progress callback failed (node %s)", node, exc_info=True)
+            await self.save_state()
+
+    async def save_state(self) -> None:
+        """Snapshot of the process-side state for a later resume (best-effort)."""
+        if self.state_store is None:
+            return
+        try:
+            await self.state_store.save_state(uuid.UUID(self.run_id), resume.snapshot(self))
+        except Exception:  # a missed snapshot only makes a resume restart from scratch
+            log.warning("run state snapshot failed", exc_info=True)
+
+    async def record_resume(self) -> None:
+        """Trace marker (and live progress) for a run that did not start from scratch."""
+        if self.resumed is None:
+            return
+        marker = TraceStep(
+            node=resume.RESUME_NODE, duration_s=0.0, detail=self.resumed.model_dump(mode="json")
+        )
+        self.trace.append(marker)
+        if self.on_step is not None:
+            try:
+                await self.on_step(marker, self.budget.usage.model_copy())
+            except Exception:
+                log.warning("resume marker callback failed", exc_info=True)
 
 
 def agent_provenance(

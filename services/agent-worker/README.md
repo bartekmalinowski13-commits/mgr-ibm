@@ -17,4 +17,13 @@ Run tables, progress streaming (SSE) and run status in the API come with M4.
 `BOMAGENT_PLATFORM_DATABASE_PASSWORD` is required). Without either the worker runs in
 health-only mode.
 
+**Resume (ARCH-05):** a redelivered `run.requested` for a run still `running` whose last
+checkpoint/state write is older than `BOMAGENT_RUN_RESUME_STALE_S` (default 300 s) is taken
+over (compare-and-swap on `started_at`, audit `run.resumed`) and continued from the last
+checkpoint; a younger one raises `RunInProgressError` (not acked, retried later). After
+`BOMAGENT_RUN_MAX_RESUMES` (3) resumes the run is failed. The final audit event and the
+trace carry the resume record. Limits without a migration: no heartbeat column (liveness is
+the newest `runs.graph_checkpoints.created_at`), and the reaper still fails runs by
+`started_at` (reset on takeover).
+
 Tests: `uv run pytest services/agent-worker` (PostgreSQL).

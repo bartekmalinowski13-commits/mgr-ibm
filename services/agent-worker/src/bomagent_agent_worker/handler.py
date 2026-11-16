@@ -10,6 +10,11 @@ without running (and paying for) the LLM pipeline again. A failure marks the run
 ``failed`` with an audit event. Messages without a row (CLI, tests) are accepted only
 when ``allow_unregistered`` is set (local/test environments).
 
+Resume (ARCH-05): a redelivered message for a ``running`` run whose last checkpoint/state
+write is older than ``resume_stale_after_s`` takes the run over and continues it from its
+last checkpoint (``run.resumed`` audit event, ``run.resumed`` trace marker, ``resumed`` in the
+final audit event); a run that still looks alive is retried later (message not acked).
+
 Results: ``bom.json`` and ``trace.json`` under ``tenants/{tenant}/runs/{run_id}/``,
 version 1 in ``bom.versions`` and ``run.<status>`` in the tenant's audit chain.
 """
@@ -20,15 +25,16 @@ import asyncio
 import json
 import time
 import uuid
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
+from bomagent_agents import resume
 from bomagent_agents.checkpoint import TenantCheckpointSaver
-from bomagent_agents.contracts import RunConfig, RunInput, RunOutput, TraceStep
+from bomagent_agents.contracts import ResumeRecord, RunConfig, RunInput, RunOutput, TraceStep
 from bomagent_agents.registry import context_factory, runtime_for
 from bomagent_agents.retrieval import KbRetriever, Retriever
 from bomagent_bom.model import Requirements, Usage
@@ -53,6 +59,11 @@ class RejectedRunError(ValueError):
     pass
 
 
+class RunInProgressError(RuntimeError):
+    """The run is ``running`` and its worker still looks alive (or another worker is taking
+    it over): the message is not acknowledged, so the queue redelivers it later."""
+
+
 @dataclass
 class RunWorker:
     engine: AsyncEngine
@@ -61,6 +72,10 @@ class RunWorker:
     kb: KnowledgeBase
     retriever_factory: Callable[[uuid.UUID, str | None], Retriever] | None = None
     allow_unregistered: bool = False
+    #: a ``running`` run without a checkpoint/state write for this long is taken to have lost
+    #: its worker and is resumed on redelivery (must exceed the longest single step)
+    resume_stale_after_s: float = 300.0
+    max_resumes: int = 3
 
     def _retriever(self, tenant_id: uuid.UUID, snapshot: str | None) -> Retriever:
         if self.retriever_factory is not None:
@@ -82,40 +97,106 @@ class RunWorker:
                     text(
                         "UPDATE runs.runs SET status = 'running', started_at = now()"
                         " WHERE id = :i AND status = 'queued'"
-                        " RETURNING project_id, variant, runtime, model_id, requirements"
+                        " RETURNING project_id, variant, runtime, model_id, requirements,"
+                        " kb_snapshot_id"
                     ),
                     {"i": run_id},
                 )
             ).first()
             if row is not None:
-                keys = (
-                    await conn.execute(
-                        text(
-                            "SELECT object_key FROM projects.files"
-                            " WHERE project_id = :p AND status = 'parsed' ORDER BY name"
-                        ),
-                        {"p": row.project_id},
-                    )
-                ).scalars()
-                return {
-                    "variant": row.variant,
-                    "runtime": row.runtime,
-                    "model_id": row.model_id,
-                    "requirements": row.requirements,
-                    "object_keys": list(keys),
-                    "registered": True,
-                }
-            exists = (
+                return await self._params(conn, row)
+            seen = (
                 await conn.execute(
-                    text("SELECT status FROM runs.runs WHERE id = :i"), {"i": run_id}
+                    text("SELECT status, started_at, now() AS now FROM runs.runs WHERE id = :i"),
+                    {"i": run_id},
                 )
-            ).scalar()
-        if exists is not None:
-            log.info("run_already_claimed", run_id=str(run_id), status=exists)
+            ).first()
+        if seen is not None:
+            if seen.status == "running":
+                return await self._takeover(message, run_id, seen.started_at, seen.now)
+            log.info("run_already_claimed", run_id=str(run_id), status=seen.status)
             return None
         if not self.allow_unregistered:
             raise RejectedRunError("unknown run (no runs.runs row in this tenant)")
         return dict(message.payload) | {"registered": False}
+
+    @staticmethod
+    async def _params(conn: AsyncConnection, row: Any) -> dict[str, Any]:
+        keys = (
+            await conn.execute(
+                text(
+                    "SELECT object_key FROM projects.files"
+                    " WHERE project_id = :p AND status = 'parsed' ORDER BY name"
+                ),
+                {"p": row.project_id},
+            )
+        ).scalars()
+        return {
+            "variant": row.variant,
+            "runtime": row.runtime,
+            "model_id": row.model_id,
+            "requirements": row.requirements,
+            "kb_snapshot_id": row.kb_snapshot_id,
+            "object_keys": list(keys),
+            "registered": True,
+        }
+
+    async def _takeover(
+        self, message: Message, run_id: uuid.UUID, started_at: Any, now: Any
+    ) -> dict[str, Any] | None:
+        """Redelivery for a ``running`` run (ARCH-05): if nothing was written for
+        ``resume_stale_after_s`` its worker is taken to be dead and this worker continues the
+        run from the last checkpoint; otherwise the message is retried later.
+
+        Takeover is a compare-and-swap on ``started_at`` (reset to now: the reaper's clock
+        restarts), so two workers never resume the same run; the original start time is kept
+        in the resume record."""
+        saver = TenantCheckpointSaver(self.engine, message.tenant_id)
+        last = await saver.last_activity(run_id)
+        idle_s = (now - max(started_at, last or started_at)).total_seconds()
+        if idle_s < self.resume_stale_after_s:
+            raise RunInProgressError(f"run {run_id} is running (idle {idle_s:.0f}s)")
+        async with tenant_transaction(self.engine, message.tenant_id) as conn:
+            row = (
+                await conn.execute(
+                    text(
+                        "UPDATE runs.runs SET started_at = now()"
+                        " WHERE id = :i AND status = 'running' AND started_at = :s"
+                        " RETURNING project_id, variant, runtime, model_id, requirements,"
+                        " kb_snapshot_id,"
+                        " (SELECT count(*) FROM jsonb_array_elements(trace) t"
+                        "  WHERE t->>'node' = :n) AS resumes"
+                    ),
+                    {"i": run_id, "s": started_at, "n": resume.RESUME_NODE},
+                )
+            ).first()
+            if row is None:  # finished, reaped or taken over by another worker meanwhile
+                raise RunInProgressError(f"run {run_id} changed while taking it over")
+            if row.resumes >= self.max_resumes:
+                params = None
+            else:
+                params = await self._params(conn, row)
+                params["resume"] = {
+                    "attempt": int(row.resumes) + 1,
+                    "previous_started_at": started_at.isoformat(),
+                }
+        if params is None:
+            exc = RuntimeError("resume limit reached")
+            await self._fail(message, run_id, exc, None)
+            log.warning("run_resume_limit", run_id=str(run_id))
+            return None
+        async with tenant_transaction(self.engine, message.tenant_id) as conn:
+            await emit_audit(
+                conn,
+                AuditEvent(
+                    action="run.resumed",
+                    object_type="run",
+                    object_id=str(run_id),
+                    after={**params["resume"], "idle_s": round(idle_s)},
+                ),
+            )
+        log.info("run_resuming", run_id=str(run_id), attempt=params["resume"]["attempt"])
+        return params
 
     async def _fail(
         self,
@@ -194,6 +275,52 @@ class RunWorker:
                 },
             )
 
+    async def _invoke(
+        self,
+        message: Message,
+        run_id: uuid.UUID,
+        run: RunInput,
+        p: dict[str, Any],
+        runtime: str | None,
+        on_step: Callable[[TraceStep, Usage], Awaitable[None]],
+    ) -> RunOutput:
+        config = run.config
+        saver = TenantCheckpointSaver(self.engine, message.tenant_id) if p["registered"] else None
+        resume_info: dict[str, Any] | None = p.get("resume")
+        factory = context_factory(
+            self.chat,
+            self._retriever(message.tenant_id, config.kb_snapshot_id),
+            tenant_id=str(message.tenant_id),
+            on_step=on_step if p["registered"] else None,
+            # graph state in the tenant's own rows (RLS) while the run executes; CLI runs
+            # have no run row and keep the in-memory checkpointer
+            checkpointer=(lambda _run: saver) if saver is not None else None,
+            state_store=(lambda _run: saver) if saver is not None else None,
+            resume=resume_info is not None,
+            resume_attempt=int(resume_info["attempt"]) if resume_info else 1,
+        )
+        try:
+            result = await runtime_for(config.variant, factory, runtime=runtime).run(run)
+        except Exception:
+            # a failed run is final (``execute`` marks it failed): keep customer design state
+            # no longer than the run. A cancelled worker (shutdown) leaves the run ``running``
+            # with its checkpoints, so a redelivery resumes it (ARCH-05).
+            if saver is not None:
+                await saver.adelete_thread(str(run_id))
+            raise
+        if saver is not None:
+            await saver.adelete_thread(str(run_id))  # data minimisation: done with the run
+        if resume_info is not None and result.resumed is None:
+            # a runtime without checkpoints (claude_agent_sdk_a) ran again from scratch
+            result.resumed = ResumeRecord(mode="restart", attempt=int(resume_info["attempt"]))
+            marker = TraceStep(
+                node=resume.RESUME_NODE,
+                duration_s=0.0,
+                detail=result.resumed.model_dump(mode="json"),
+            )
+            result.trace.insert(0, marker)
+        return result
+
     async def _run(
         self, message: Message, run_id: uuid.UUID, p: dict[str, Any], spent: dict[str, Usage]
     ) -> RunOutput:
@@ -230,23 +357,8 @@ class RunWorker:
             async with progress_lock:
                 await self._progress(message.tenant_id, run_id, step, usage)
 
-        saver = TenantCheckpointSaver(self.engine, message.tenant_id) if p["registered"] else None
-        factory = context_factory(
-            self.chat,
-            self._retriever(message.tenant_id, config.kb_snapshot_id),
-            tenant_id=str(message.tenant_id),
-            on_step=on_step if p["registered"] else None,
-            # graph state in the tenant's own rows (RLS) while the run executes; CLI runs
-            # have no run row and keep the in-memory checkpointer
-            checkpointer=(lambda _run: saver) if saver is not None else None,
-        )
-        try:
-            result = await runtime_for(config.variant, factory, runtime=runtime).run(run)
-        finally:
-            # resume from a checkpoint is not wired yet: keep customer design state no
-            # longer than the run itself (data minimisation)
-            if saver is not None:
-                await saver.adelete_thread(str(run_id))
+        result = await self._invoke(message, run_id, run, p, runtime, on_step)
+        resume_info: dict[str, Any] | None = p.get("resume")
         spent["usage"] = result.usage
         base = (message.tenant_id, "runs", str(run_id))
         await self.store.put(
@@ -315,6 +427,14 @@ class RunWorker:
                             "runtime": result.runtime,
                             "lines": len(result.bom.items),
                             "llm_calls": result.usage.llm_calls,
+                            **(
+                                {
+                                    "resumed": result.resumed.model_dump(mode="json")
+                                    | {"previous_started_at": resume_info["previous_started_at"]}
+                                }
+                                if result.resumed is not None and resume_info is not None
+                                else {}
+                            ),
                         },
                     ),
                 )

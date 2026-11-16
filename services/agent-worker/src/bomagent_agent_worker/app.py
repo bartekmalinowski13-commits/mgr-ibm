@@ -27,6 +27,9 @@ class Settings(ServiceSettings):
     llm_gateway_url: str | None = None
     llm_gateway_key: str | None = None
     embedding_model: str = "fake-embedding"
+    #: a running run idle for this long is resumed from its checkpoint on redelivery
+    run_resume_stale_s: float = 300.0
+    run_max_resumes: int = 3
 
 
 def build_handler(settings: Settings) -> Handler:
@@ -56,6 +59,8 @@ def build_handler(settings: Settings) -> Handler:
         chat=chat,
         kb=KnowledgeBase(embedder),
         allow_unregistered=settings.environment in {"local", "test"},
+        resume_stale_after_s=settings.run_resume_stale_s,
+        max_resumes=settings.run_max_resumes,
     )
     return worker.handle
 
