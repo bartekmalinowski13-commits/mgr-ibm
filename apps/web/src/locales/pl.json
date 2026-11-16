@@ -281,7 +281,8 @@
     "rule": "Reguła {{rule}} ({{pack}} {{version}})",
     "agent": "{{agent}} · model {{model}}",
     "parser": "Odczytane z pliku ({{parser}})",
-    "user": "Zmienione przez {{user}}"
+    "user": "Zmienione przez {{user}}",
+    "savedLive": "Zapisano. Wersja BOM {{version}}."
   },
   "runs": {
     "title": "Przebiegi",
@@ -350,8 +351,40 @@
     "ssoUnavailable": "Logowanie jednokrotne jest dostępne tylko we wdrożeniu AWS. To wdrożenie loguje e-mailem i hasłem."
   },
   "errors": {
-    "notMember": "Nie masz dostępu do tej organizacji. Wybierz inną organizację.",
-    "notFound": "Nie znaleziono tego elementu. Mógł zostać usunięty albo należy do innej organizacji."
+    "already-member": "Ta osoba jest już członkiem organizacji.",
+    "domain-not-verified": "Nie znaleziono jeszcze rekordu DNS TXT. Zmiany DNS mogą potrwać; spróbuj ponownie później.",
+    "domain-taken": "Inna organizacja zweryfikowała już tę domenę.",
+    "email-not-verified": "Zweryfikuj adres e-mail, aby kontynuować.",
+    "empty-patch": "Nie ma czego zmieniać: edytuj co najmniej jedno pole.",
+    "file-in-use": "Przebieg tego projektu jest w kolejce lub trwa. Poczekaj na jego koniec i spróbuj ponownie.",
+    "file-too-large": "Plik jest za duży. Wgraj mniejszy.",
+    "forbidden-action": "Twoja rola nie pozwala na tę czynność. Poproś właściciela organizacji o dostęp.",
+    "idempotency-key": "Nie udało się bezpiecznie wysłać żądania. Odśwież stronę i spróbuj ponownie.",
+    "idempotency-mismatch": "To żądanie zostało już wysłane z inną treścią. Odśwież stronę i spróbuj ponownie.",
+    "invalid-cursor": "Pozycja na liście wygasła. Odśwież listę.",
+    "invalid-reference": "BOM referencyjny musi być plikiem CSV z kolumną oznaczeń (np. Reference) i co najmniej jedną linią.",
+    "invalid-token": "Sesja wygasła. Zaloguj się ponownie.",
+    "invitation-pending": "Zaproszenie dla tej osoby już oczekuje.",
+    "last-owner": "Organizacja musi mieć co najmniej jednego właściciela.",
+    "missing-token": "Nie jesteś zalogowany. Zaloguj się i spróbuj ponownie.",
+    "model-not-allowed": "Ten model nie jest dozwolony w Twoim planie. Wybierz inny model.",
+    "no-bom": "Ten przebieg nie ma jeszcze BOM. Poczekaj na jego zakończenie.",
+    "no-files": "Wgraj pliki projektu i poczekaj na ich sprawdzenie, zanim uruchomisz przebieg.",
+    "not-a-member": "Nie jesteś członkiem tej organizacji.",
+    "not-deletable": "Tutaj można usuwać tylko projekty przykładowe.",
+    "not-found": "Nie znaleziono elementu. Mógł zostać usunięty; odśwież stronę.",
+    "org-required": "Wybierz organizację i spróbuj ponownie.",
+    "owner-only": "Tylko właściciele mogą nadawać lub zmieniać rolę właściciela.",
+    "project-too-large": "Projekt osiągnął limit plików lub rozmiaru. Usuń plik, zanim wgrasz kolejny.",
+    "quota-exceeded": "Osiągnięto limit planu. Skontaktuj się z właścicielem organizacji, aby go zwiększyć.",
+    "rate-limited": "Zbyt wiele żądań. Poczekaj chwilę i spróbuj ponownie.",
+    "runtime-variant": "To środowisko nie obsługuje wybranego wariantu. Wybierz inny wariant.",
+    "sample-read-only": "Projekty przykładowe są tylko do odczytu. Utwórz własny projekt, aby wgrać pliki.",
+    "slug-taken": "Ten adres organizacji jest już zajęty. Wybierz inny.",
+    "sso-not-ready": "Wymuszenie logowania jednokrotnego wymaga działającego połączenia i co najmniej jednej zweryfikowanej domeny.",
+    "sso-required": "Twoja organizacja wymaga logowania jednokrotnego dla tej domeny e-mail. Użyj przycisku SSO.",
+    "unsupported-type": "Nieobsługiwany typ pliku. Wgraj plik PDF, Markdown lub tekstowy.",
+    "user-token-required": "Ta czynność wymaga zalogowanego użytkownika, a nie klucza API."
   },
   "compare": {
     "title": "Porównanie wariantów",

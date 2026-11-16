@@ -1,4 +1,5 @@
 import { ApiError, type components, createApiClient, type Problem } from "@bomagent/api-client";
+import i18n from "./i18n";
 import { auth } from "./session";
 
 export type Schemas = components["schemas"];
@@ -118,6 +119,12 @@ export async function streamRun(
 }
 
 export function problemMessage(error: unknown): string {
-  if (error instanceof ApiError) return error.problem.detail ?? error.problem.title;
+  if (error instanceof ApiError) {
+    // Localised by problem slug (the last segment of `type`); the server detail is the fallback.
+    const slug = error.problem.type.split("/problems/")[1];
+    const key = `errors.${slug}`;
+    if (slug && i18n.exists(key)) return i18n.t(key);
+    return error.problem.detail ?? error.problem.title;
+  }
   return error instanceof Error ? error.message : String(error);
 }

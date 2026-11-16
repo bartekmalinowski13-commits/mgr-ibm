@@ -54,5 +54,6 @@ html {
   *::after {
     animation-duration: 1ms !important;
     transition-duration: 1ms !important;
+    scroll-behavior: auto !important;
   }
 }
