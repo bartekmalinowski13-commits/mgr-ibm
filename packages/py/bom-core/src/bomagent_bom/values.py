@@ -189,7 +189,20 @@ def _require(unit: Unit | None, raw: str) -> Unit:
 def parse_quantity(
     text: str, default_unit: Unit | None = None, kind: str | None = None
 ) -> Quantity:
-    """Parse a single token like ``4k7``, ``100nF``, ``10 kΩ`` or ``4.7UF``."""
+    """Parse a single token like ``4k7``, ``100nF``, ``10 kΩ`` or ``4.7UF``.
+
+    A farad or henry value of one million or more is rejected: a bare ``M`` on a capacitor
+    or inductor (``1M``, ``1M0``, ``1MEG``) is ambiguous (legacy microfarad?) and mega-farad
+    / mega-henry do not exist in BOMs, so it must never become ``1 MF`` silently."""
+    q = _parse_quantity(text, default_unit, kind)
+    if q.unit in {"F", "H"} and q.value >= 1_000_000:
+        raise ValueParseError(f"implausible {q.unit} value in {text.strip()!r} (write µ or m)")
+    return q
+
+
+def _parse_quantity(
+    text: str, default_unit: Unit | None = None, kind: str | None = None
+) -> Quantity:
     raw = _SPACED_UNIT.sub(r"\1\2", text.strip())
     if not raw:
         raise ValueParseError("empty value")
