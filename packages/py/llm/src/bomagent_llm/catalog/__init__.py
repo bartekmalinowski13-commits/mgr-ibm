@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from datetime import date
 from enum import StrEnum
 from importlib import resources
 from pathlib import Path
@@ -33,6 +34,8 @@ class ModelSpec(BaseModel):
     dimensions: int | None = None
     cost_in_eur: float = 0.0  # per 1M input tokens
     cost_out_eur: float = 0.0  # per 1M output tokens
+    price_source_url: str | None = None  # provider price list the costs were taken from
+    price_checked_on: date | None = None  # when that list was last checked
     enabled: bool = False
     verified: bool = False
     notes: str = ""

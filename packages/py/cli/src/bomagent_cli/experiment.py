@@ -46,6 +46,11 @@ from bomagent_eval.stats import pairwise_agreement
 MISSING = "n/a"
 experiment_app = typer.Typer(help="Thesis experiment: variant A vs B on the evaluation set.")
 
+SAMPLING_NOTE = (
+    "temperature is fixed by the platform and the seed only drives the experiment's own "
+    "sampling (mutations, bootstrap); hosted models are not deterministic even at "
+    "temperature 0, so repeats measure run-to-run variance"
+)
 PROMPT_IDS = ["extract_group", "mpn_select", "compose", "validate", "repair", "claude_agent_sdk"]
 #: metrics compared between variants; direction: +1 = higher is better, -1 = lower is better
 KEY_METRICS: dict[str, int] = {
@@ -135,6 +140,7 @@ def _commit() -> str:
 def _manifest(config: ExperimentConfig) -> dict[str, Any]:
     from bomagent_agents.prompts import load_prompt
     from bomagent_llm.catalog import load_catalog
+    from bomagent_llm.chat import DEFAULT_TEMPERATURE
     from bomagent_rules.core_v1 import PACK_VERSION
 
     catalog = load_catalog()
@@ -145,6 +151,12 @@ def _manifest(config: ExperimentConfig) -> dict[str, Any]:
         "prompts": {p: load_prompt(p).full_version for p in PROMPT_IDS},
         "rule_pack": {"id": "core", "version": PACK_VERSION},
         "models": {m: catalog.get(m).model_dump(mode="json") for m in config.models},
+        "model_ids": {m: catalog.get(m).gateway_model for m in config.models},
+        "sampling": {
+            "temperature": DEFAULT_TEMPERATURE,
+            "seed": config.seed,
+            "note": SAMPLING_NOTE,
+        },
     }
 
 
