@@ -190,13 +190,13 @@ def parse_files_sandboxed(
         raise killed_error(proc.returncode, proc.stderr)
     try:
         reply = json.loads(proc.stdout.splitlines()[-1])
+        _report_hardening(reply)
         failure = (
             None
             if reply["ok"]
             else ParseError(str(reply["message"])[:500], code=str(reply["code"]))
         )
         design = ParsedDesign.model_validate(reply["design"]) if failure is None else None
-        _report_hardening(reply)
     except Exception as exc:
         raise ParseError(
             f"the parser returned an invalid reply ({type(exc).__name__})", code="parse.internal"

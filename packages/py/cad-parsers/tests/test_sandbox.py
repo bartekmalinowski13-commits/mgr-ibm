@@ -127,27 +127,25 @@ out = {
     "fsize": resource.getrlimit(resource.RLIMIT_FSIZE)[0],
     "core": resource.getrlimit(resource.RLIMIT_CORE)[0],
 }
-port = int(sys.argv[1])
+port, probe_path = int(sys.argv[1]), sys.argv[2]
 try:
     socket.create_connection(("127.0.0.1", port), timeout=2).close()
     out["connected"] = True
 except OSError:
     out["connected"] = False
 try:
-    with open("/tmp/sandbox-probe-should-not-exist", "wb") as f:
+    with open(probe_path, "wb") as f:
         f.write(b"x" * 10)
         f.flush()
     out["wrote"] = True
 except OSError:
     out["wrote"] = False
-import os
-if os.path.exists("/tmp/sandbox-probe-should-not-exist"):
-    os.unlink("/tmp/sandbox-probe-should-not-exist")
+
 print(json.dumps(out))
 """
 
 
-def _probe() -> dict:
+def _probe(tmp_path) -> dict:
     import json
     import socket
     import subprocess
@@ -156,7 +154,14 @@ def _probe() -> dict:
         listener.bind(("127.0.0.1", 0))
         listener.listen(1)
         proc = subprocess.run(
-            [sys.executable, "-I", "-c", _PROBE, str(listener.getsockname()[1])],
+            [
+                sys.executable,
+                "-I",
+                "-c",
+                _PROBE,
+                str(listener.getsockname()[1]),
+                str(tmp_path / "probe.bin"),
+            ],
             capture_output=True,
             timeout=30,
             check=True,
@@ -164,8 +169,8 @@ def _probe() -> dict:
     return json.loads(proc.stdout.splitlines()[-1])
 
 
-def test_child_cannot_gain_privileges_and_has_small_file_limits():
-    out = _probe()
+def test_child_cannot_gain_privileges_and_has_small_file_limits(tmp_path):
+    out = _probe(tmp_path)
     assert out["no_new_privs"] == 1
     assert out["report"]["no_new_privs"] is True
     assert out["nofile"] <= 64
@@ -174,8 +179,8 @@ def test_child_cannot_gain_privileges_and_has_small_file_limits():
     assert out["wrote"] is False
 
 
-def test_child_loses_the_network_when_the_kernel_allows_a_new_namespace():
-    out = _probe()
+def test_child_loses_the_network_when_the_kernel_allows_a_new_namespace(tmp_path):
+    out = _probe(tmp_path)
     if not out["report"]["network_isolated"]:
         pytest.skip("this environment forbids unshare(CLONE_NEWNET); the limit is best effort")
     assert out["connected"] is False
@@ -195,12 +200,12 @@ def test_hardening_failures_are_reported_not_raised(monkeypatch):
     assert {"RLIMIT_CORE", "RLIMIT_NOFILE", "RLIMIT_FSIZE"} <= set(limits)
 
 
-def test_parent_reports_what_the_child_could_apply(caplog):
+def test_parent_reports_what_the_child_could_apply(caplog, monkeypatch):
     import logging
 
     from bomagent_cad import sandbox
 
-    sandbox._reported.clear()
+    monkeypatch.setattr(sandbox, "_reported", set())
     with caplog.at_level(logging.INFO, logger="bomagent_cad.sandbox"):
         sandbox._report_hardening({"hardening": {"no_new_privs": True, "network_isolated": False}})
         sandbox._report_hardening({"hardening": {"no_new_privs": True, "network_isolated": False}})
@@ -209,3 +214,24 @@ def test_parent_reports_what_the_child_could_apply(caplog):
     messages = [r.getMessage() for r in caplog.records]
     assert sum("not fully isolated" in m for m in messages) == 1  # once per outcome
     assert sum("empty network namespace" in m for m in messages) == 1
+
+
+def test_real_fixtures_parse_in_the_hardened_child_and_errors_keep_their_code():
+    """NOFILE 32 / FSIZE 0 must not break real parsers (pipes only, no temp files)."""
+    assert parse_files_sandboxed(_files()).components
+    with pytest.raises(ParseError) as err:
+        parse_files_sandboxed([FileRef("x.unknown-extension", b"not a design")])
+    assert err.value.code.startswith("parse.") or "." in err.value.code
+
+
+def test_hardening_exceptions_are_reported_not_raised(monkeypatch):
+    from bomagent_cad import _sandbox_child
+
+    monkeypatch.setattr(_sandbox_child, "_limit", lambda kind, value: None)
+
+    def boom(*args):
+        raise OSError("no libc")
+
+    monkeypatch.setattr(_sandbox_child, "_prctl", boom)
+    monkeypatch.setattr(_sandbox_child, "_unshare_network", boom)
+    assert _sandbox_child.apply_hardening() == {"no_new_privs": False, "network_isolated": False}

@@ -26,7 +26,7 @@ _Updated by Claude Code after every milestone (see `docs/prompts/CLAUDE_CODE_MAS
   in flight, about 16 MiB per upload instead of the whole file).
 
 - **SEC-01 (code part) parse child hardening:** `no_new_privs`, `RLIMIT_NOFILE` 32, `RLIMIT_FSIZE` 0,
-  empty network namespace where `unshare` is allowed (outcome logged once; warning when the host
+  empty network namespace where `unshare(CLONE_NEWNET)` is allowed (no user-namespace fallback; outcome logged once; warning when the host
   does not allow it). The no-egress parser process group is still the real boundary (ARCH-02).
 
 ## 2026-11-12 - deployment paths ready (AWS single-account dev, Supabase pilot); nothing deployed yet
