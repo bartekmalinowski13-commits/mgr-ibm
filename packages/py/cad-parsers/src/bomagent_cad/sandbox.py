@@ -6,8 +6,12 @@ the parsers; this adds the last line of defence: the parse runs in a separate in
 minimal environment. The child runs as the same user, so the worker makes itself
 non-dumpable first (``harden_parent``: its ``/proc/<pid>/environ`` is then readable by root
 only) - a child taken over by a hostile file cannot read the worker's secrets from there.
-This is a resource and secrets boundary, not a network jail. ``ProjectSize`` bounds what a
-worker loads for one project before anything is read from storage. A child that is
+The child also sets ``no_new_privs``, a small descriptor table, no regular-file writes
+(``RLIMIT_FSIZE`` 0) and, where the kernel allows ``unshare``, leaves the network namespace
+(best effort and reported in the log; a parser app without network access is the real jail,
+audit SEC-01). This is a resource and secrets boundary, not a complete jail.
+``ProjectSize`` bounds what a worker loads for one project before anything is read from
+storage. A child that is
 killed, times out or exceeds a limit is a ``ParseError`` (``parse.resource_limit`` /
 ``parse.timeout``): the worker marks the file failed instead of crashing and redelivering
 the message forever.
@@ -21,6 +25,7 @@ Memory and CPU limits need the POSIX ``resource`` module; elsewhere only the tim
 from __future__ import annotations
 
 import json
+import logging
 import os
 import signal
 import subprocess
@@ -36,6 +41,27 @@ MiB = 1024 * 1024
 #: cap on the child's reply (a ParsedDesign is small; anything bigger is a misbehaving child)
 MAX_REPLY_BYTES = 128 * MiB
 _ENV_KEEP = ("LANG", "LC_ALL", "TZ")
+log = logging.getLogger(__name__)
+_reported: set[tuple[bool, bool]] = set()
+
+
+def _report_hardening(reply: Mapping[str, object]) -> None:
+    """Log what the child could apply, once per distinct outcome (best effort varies by host)."""
+    raw = reply.get("hardening")
+    if not isinstance(raw, dict):
+        return
+    state = (bool(raw.get("no_new_privs")), bool(raw.get("network_isolated")))
+    if state in _reported:
+        return
+    _reported.add(state)
+    if state == (True, True):
+        log.info("parse sandbox: no_new_privs, empty network namespace")
+    else:
+        log.warning(
+            "parse sandbox: not fully isolated (no_new_privs=%s, network_isolated=%s); "
+            "run the parser in a process group without network access (SEC-01)",
+            *state,
+        )
 
 
 #: per-project bounds (the parent holds all files of a project in memory before parsing)
@@ -164,6 +190,7 @@ def parse_files_sandboxed(
         raise killed_error(proc.returncode, proc.stderr)
     try:
         reply = json.loads(proc.stdout.splitlines()[-1])
+        _report_hardening(reply)
         failure = (
             None
             if reply["ok"]
