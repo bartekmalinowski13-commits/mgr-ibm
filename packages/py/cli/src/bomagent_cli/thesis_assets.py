@@ -248,7 +248,7 @@ def _table(headers: list[str], rows: list[list[Any]]) -> str:
 
 def _num(value: str | None) -> str:
     try:
-        return f"{float(value):.3f}" if value not in (None, "") else "n/a"  # type: ignore[arg-type]
+        return f"{float(value):.3f}" if value not in (None, "") else "n/a"
     except ValueError:
         return str(value)
 
