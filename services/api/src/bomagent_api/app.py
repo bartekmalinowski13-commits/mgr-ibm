@@ -128,6 +128,9 @@ class Settings(ServiceSettings):
     kb_queue_url: str | None = None
     llm_gateway_url: str | None = None
     llm_gateway_key: str | None = None
+    #: run without a gateway on non-semantic hashing embeddings (explicit opt-in outside
+    #: local/test, ARCH-07); never set this for real customer data
+    allow_fake_llm: bool = False
     embedding_model: str = "fake-embedding"
     cors_origins: list[str] = Field(default_factory=list)
     maintenance_interval_s: float = 30.0  # outbox relay + stuck-run reaper; 0 disables
@@ -182,6 +185,20 @@ SECURITY_HEADERS = {
     "Content-Security-Policy": "default-src 'none'; frame-ancestors 'none'",
     "Cache-Control": "no-store",
 }
+
+
+def _embedder_for(settings: Settings, *, local: bool) -> EmbeddingClient:
+    """Gateway embeddings; hashing only in local/test or with an explicit opt-in (ARCH-07)."""
+    if settings.llm_gateway_url and settings.llm_gateway_key:
+        return GatewayEmbeddings(
+            settings.llm_gateway_url, settings.llm_gateway_key, settings.embedding_model
+        )
+    if local or settings.allow_fake_llm:
+        return HashingEmbeddings()
+    raise RuntimeError(
+        "BOMAGENT_LLM_GATEWAY_URL/KEY are required outside local/test"
+        " (BOMAGENT_ALLOW_FAKE_LLM=true opts in to non-semantic hashing embeddings)"
+    )
 
 
 def create_app(
@@ -247,13 +264,7 @@ def create_app(
             )
         }
     app.state.queues = queues
-    embedder: EmbeddingClient = (
-        GatewayEmbeddings(
-            settings.llm_gateway_url, settings.llm_gateway_key, settings.embedding_model
-        )
-        if settings.llm_gateway_url and settings.llm_gateway_key
-        else HashingEmbeddings()
-    )
+    embedder = _embedder_for(settings, local=local)
     app.state.kb = kb or KnowledgeBase(embedder)
     app.state.catalog = load_catalog()
     app.state.allow_local_models = local

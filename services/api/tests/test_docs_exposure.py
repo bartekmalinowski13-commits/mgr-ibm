@@ -23,6 +23,7 @@ def test_docs_and_openapi_are_not_served_in_production():
         oidc_issuer="https://idp.example.eu",
         oidc_jwks_url="https://idp.example.eu/jwks",
         client_ip_header="Fly-Client-IP",
+        allow_fake_llm=True,  # the embeddings policy is tested in test_embeddings_policy.py
     )
     with TestClient(create_app(settings)) as client:
         assert client.get("/docs").status_code == 404

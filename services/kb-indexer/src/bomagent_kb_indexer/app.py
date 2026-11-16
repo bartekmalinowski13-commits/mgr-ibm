@@ -32,6 +32,8 @@ class Settings(ServiceSettings):
     llm_gateway_url: str | None = None
     llm_gateway_key: str | None = None
     embedding_model: str = "fake-embedding"
+    #: explicit opt-in to hashing embeddings outside local/test (ARCH-07)
+    allow_fake_llm: bool = False
     use_docling: bool = False
 
 
@@ -49,8 +51,13 @@ def build_handler(settings: Settings) -> Handler:
         embedder = GatewayEmbeddings(
             settings.llm_gateway_url, settings.llm_gateway_key, settings.embedding_model
         )
-    else:
+    elif settings.environment in {"local", "test"} or settings.allow_fake_llm:
         embedder = HashingEmbeddings()
+    else:
+        raise RuntimeError(
+            "BOMAGENT_LLM_GATEWAY_URL/KEY are required outside local/test"
+            " (BOMAGENT_ALLOW_FAKE_LLM=true opts in to non-semantic hashing embeddings)"
+        )
     indexer = KbIndexer(
         kb=KnowledgeBase(embedder),
         app_engine=make_engine(settings.database_url),
