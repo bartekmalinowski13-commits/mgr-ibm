@@ -2,7 +2,8 @@
 
 Rules (ADR-0005 roles): owners and admins manage members; only owners grant, change or
 remove the ``owner`` role; an organisation always keeps at least one owner. Invitations
-carry a random secret shown once to the inviter (later sent by e-mail); the database
+carry a random secret shown once to the inviter and e-mailed to the invitee when a mailer
+and ``invite_base_url`` are configured (UX-02); the database
 keeps only its SHA-256. Accepting requires a verified e-mail equal to the invited one.
 """
 
@@ -34,9 +35,12 @@ from bomagent_api.schemas import (
 )
 from bomagent_common.audit import AuditEvent, emit_audit
 from bomagent_common.db import tenant_transaction
+from bomagent_common.logging import get_logger
+from bomagent_common.mailer import MailError, invitation_mail
 from bomagent_common.problems import ProblemError
 from bomagent_common.tenancy import TenantContext, require_tenant
 
+log = get_logger(__name__)
 router = APIRouter(
     prefix="/v1", tags=["members"], responses=problem_responses(400, 401, 403, 404, 409, 422, 429)
 )
@@ -283,7 +287,57 @@ async def create_invitation(
                 after={"email": email, "roles": roles, "expires_at": expires.isoformat()},
             ),
         )
+        org_name = (
+            await conn.execute(
+                text("SELECT name FROM tenancy.tenants WHERE id = app.current_tenant_id()")
+            )
+        ).scalar_one()
+        inviter = (
+            await conn.execute(
+                text(
+                    "SELECT coalesce(nullif(display_name, ''), email) FROM tenancy.memberships"
+                    " WHERE user_sub = :s AND tenant_id = app.current_tenant_id()"
+                ),
+                {"s": ctx.actor_id},
+            )
+        ).scalar_one_or_none()
+    await _send_invitation_email(
+        request, inv_id, email, token, org_name=org_name, inviter=inviter or "BOM Agent"
+    )
     return InvitationCreated(**row._mapping, token=token)
+
+
+async def _send_invitation_email(
+    request: Request, inv_id: uuid.UUID, email: str, token: str, *, org_name: str, inviter: str
+) -> None:
+    """Best effort after commit: a relay outage must not lose the invitation (the inviter
+    still holds the token). The outcome is audited; the token is never logged."""
+    base: str = request.app.state.invite_base_url
+    if not base:
+        return
+    mail = invitation_mail(
+        to=email,
+        org_name=org_name,
+        inviter=inviter,
+        link=f"{base}/invite/{token}",
+        days=INVITATION_TTL.days,
+    )
+    outcome = "sent"
+    try:
+        await request.app.state.mailer.send(mail)
+    except MailError as exc:
+        outcome = "failed"
+        log.warning("invitation.email_failed", invitation_id=str(inv_id), error=str(exc))
+    async with tenant_transaction(request.app.state.engine) as conn:
+        await emit_audit(
+            conn,
+            AuditEvent(
+                action="member.invitation_emailed",
+                object_type="invitation",
+                object_id=str(inv_id),
+                after={"email": email, "outcome": outcome},
+            ),
+        )
 
 
 @router.delete("/invitations/{invitation_id}", status_code=204, summary="Revoke an invitation")

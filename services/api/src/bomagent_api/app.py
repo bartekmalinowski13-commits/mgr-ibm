@@ -30,6 +30,7 @@ from bomagent_common.config import ServiceSettings
 from bomagent_common.db import make_engine, ping
 from bomagent_common.health import ReadinessCheck
 from bomagent_common.logging import get_logger
+from bomagent_common.mailer import Mailer, mailer_from_settings
 from bomagent_common.messaging import InMemoryQueue, Queue, make_queue
 from bomagent_common.problems import ProblemError, problem_response
 from bomagent_common.service import create_service_app
@@ -97,6 +98,17 @@ class Settings(ServiceSettings):
     #: ``<url>/auth/v1/user`` + the anon key) - for providers whose claim the user can edit
     oidc_userinfo_url: str | None = None
     oidc_userinfo_apikey: str | None = None
+
+    #: invitation e-mail (UX-02). Off unless ``smtp_host`` is set (no default host: the EU
+    #: relay is the operator's choice); ``invite_base_url`` is the web origin used for the
+    #: ``/invite/<token>`` link. Without it the invitation is created but nothing is sent.
+    smtp_host: str | None = None
+    smtp_port: int = 587
+    smtp_username: str | None = None
+    smtp_password: str | None = Field(default=None, repr=False)
+    smtp_sender: str | None = None
+    smtp_implicit_tls: bool = False
+    invite_base_url: str | None = None
 
     @field_validator("oidc_algorithms")
     @classmethod
@@ -201,6 +213,18 @@ def _embedder_for(settings: Settings, *, local: bool) -> EmbeddingClient:
     )
 
 
+def _configure_mail(app: FastAPI, settings: Settings, mailer: Mailer | None) -> None:
+    app.state.invite_base_url = (settings.invite_base_url or "").rstrip("/")
+    app.state.mailer = mailer or mailer_from_settings(
+        settings.smtp_host,
+        port=settings.smtp_port,
+        username=settings.smtp_username,
+        password=settings.smtp_password,
+        sender=settings.smtp_sender,
+        implicit_tls=settings.smtp_implicit_tls,
+    )
+
+
 def create_app(
     settings: Settings | None = None,
     *,
@@ -209,6 +233,7 @@ def create_app(
     store: ObjectStore | None = None,
     queues: dict[str, Queue] | None = None,
     kb: KnowledgeBase | None = None,
+    mailer: Mailer | None = None,
     readiness: Mapping[str, ReadinessCheck] | None = None,
 ) -> FastAPI:
     settings = settings or Settings()
@@ -245,8 +270,7 @@ def create_app(
             settings.maintenance_interval_s, settings.run_timeout_s, anchor_sink_for(settings)
         ),
     )
-    app.state.engine = engine
-    app.state.platform_engine = platform_engine
+    app.state.engine, app.state.platform_engine = engine, platform_engine
     app.state.store = store or (
         make_object_store(settings, settings.files_bucket)
         if not local or settings.aws_endpoint_url or settings.s3_endpoint_url
@@ -266,6 +290,7 @@ def create_app(
     app.state.queues = queues
     embedder = _embedder_for(settings, local=local)
     app.state.kb = kb or KnowledgeBase(embedder)
+    _configure_mail(app, settings, mailer)
     app.state.catalog = load_catalog()
     app.state.allow_local_models = local
     if settings.cognito_user_pool_id and settings.cognito_client_id and not local:
