@@ -24,6 +24,7 @@ import { useMe, useProjects, useUsage } from "../lib/queries";
 import { useSession } from "../lib/session";
 import { signOutRemote } from "../lib/supabase";
 import { NewRunDialog } from "./NewRunDialog";
+import { QuotaChips } from "./QuotaChips";
 
 export function Shell() {
   const { t, i18n } = useTranslation();
@@ -209,6 +210,9 @@ export function Shell() {
               <MenuIcon size={20} aria-hidden />
             </button>
             <h1 className="min-w-0 flex-1 truncate font-display text-xl font-bold">{title}</h1>
+            {usage.data ? (
+              <QuotaChips usage={usage.data.usage} limits={usage.data.limits} scope={orgId} />
+            ) : null}
             {usage.data ? (
               <Link
                 to="/settings"

@@ -260,7 +260,13 @@
     },
     "dnp": "Do not place",
     "empty": "This BOM has no lines.",
-    "noMatches": "No line has findings."
+    "noMatches": "No line matches the filters.",
+    "search": "Search lines",
+    "columnsMenu": "Columns",
+    "copyCsv": "Copy CSV",
+    "count": "{{shown}} of {{total}} lines",
+    "csvCopied": "Copied CSV ({{count}} lines)",
+    "csvFailed": "Could not copy to the clipboard"
   },
   "panel": {
     "title": "Line {{line}}",
@@ -495,5 +501,39 @@
     "title": "Demo mode.",
     "body": "The model is deterministic and does not read your design like a real one: BOMs are illustrative, not for procurement or design decisions.",
     "reference": "Demo mode: comparison figures describe the deterministic demo model."
+  },
+  "quota": {
+    "runs": "Runs {{used}}/{{limit}}",
+    "cost_eur": "LLM {{used}}/{{limit}}",
+    "label": "Plan usage this month",
+    "warn": "{{what}}: you have used 80 % of this month's limit.",
+    "full": "{{what}}: this month's limit is used up.",
+    "names": {
+      "runs": "Runs",
+      "cost_eur": "LLM budget"
+    }
+  },
+  "checklist": {
+    "title": "Your first BOM in 3 steps",
+    "progress": "{{done}} of 3 done",
+    "dismiss": "Hide checklist",
+    "steps": {
+      "project": {
+        "title": "Create a project",
+        "hint": "A project groups the design files of one device.",
+        "action": "New project"
+      },
+      "run": {
+        "title": "Upload files and start a run",
+        "hint": "KiCad, IPC-2581 or PDF – the agents build the BOM.",
+        "action": "New run"
+      },
+      "review": {
+        "title": "Review the BOM",
+        "hint": "Check the findings and fix the lines that need a person.",
+        "action": "Open runs"
+      }
+    },
+    "done": "Done"
   }
 }
