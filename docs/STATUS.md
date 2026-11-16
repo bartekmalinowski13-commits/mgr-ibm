@@ -44,6 +44,11 @@ _Updated by Claude Code after every milestone (see `docs/prompts/CLAUDE_CODE_MAS
   or `BOMAGENT_AUDIT_ANCHOR_BUCKET`, S3-compatible via `..._ENDPOINT_URL`); `GET /v1/audit-events/verify`
   compares the chain with the stored anchors. Nothing is exported until the owner configures a sink.
 
+- **DOC-02 / ARCH-01 governance:** `tools/decisions_pending.py` lists `DECISIONS_LOG` rows that wait for
+  the owner (64 of 93 today), a weekly workflow (`decisions-pending.yml`) flags rows older than 60 days
+  (visibility only); draft **ADR-0018** (deployment tiers: Standard = Fly + Supabase, Enterprise = AWS)
+  for the owner to accept together with ADR-0017.
+
 ## 2026-11-12 - deployment paths ready (AWS single-account dev, Supabase pilot); nothing deployed yet
 
 > **Owner: start with `docs/OWNER_CHECKLIST.md`** - what is ready and your steps in order.

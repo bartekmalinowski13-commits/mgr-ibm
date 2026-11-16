@@ -21,8 +21,8 @@ Scheduled task `audit-implementation-continue` (hourly, id `trig_0174gXcCFuTekwm
 | ARCH-02 process groups | todo | | | `deploy/*` change: leave PR open for owner |
 | OPS-01 OTel endpoint wiring, alert rules, uptime/error-tracking config | todo | | | Grafana/Sentry accounts = owner |
 | OPS-02 OTel metrics + dashboards JSON | merged (code); dashboards/alerts todo (deploy/*, owner PR) | claude/audit-ops-02 | #22 | this PR: metrics module + instrumentation (runs, LLM usage/cost, parse, outbox/queue dead-letters) + OTLP metrics export; dashboards JSON under `deploy/observability/` = separate PR (deploy/*, owner); queue depth/age gauges later (OPS-03) |
-| SEC-04 source IP in audit, anchor export job | part 1 merged (#23); part 2 in progress | claude/audit-sec-04b | | this PR: source IP in every API-written audit event (request-scoped, validated, from the trusted edge header); user agent needs a column = migration (owner PR); this PR (part 2): daily per-tenant anchor export to a write-once sink (`BOMAGENT_AUDIT_ANCHOR_DIR` or `BOMAGENT_AUDIT_ANCHOR_BUCKET` [+ `_ENDPOINT_URL`]), `verify` compares against stored anchors; partitioning = migration (owner PR); OWNER: create the Object Lock bucket (AWS) / write-once bucket + second off-platform copy (pilot) and set the env vars |
-| DOC-02 decision-log acceptance helper, ADR-0017/0018 drafts | needs owner | | | Acceptance of DECISIONS_LOG rows and ADRs = owner; code side: ADR-0018 draft, nightly staleness check |
+| SEC-04 source IP in audit, anchor export job | merged (#23, #24); partitioning + user agent = migration (owner PR) | claude/audit-sec-04b | #23, #24 | this PR: source IP in every API-written audit event (request-scoped, validated, from the trusted edge header); user agent needs a column = migration (owner PR); this PR (part 2): daily per-tenant anchor export to a write-once sink (`BOMAGENT_AUDIT_ANCHOR_DIR` or `BOMAGENT_AUDIT_ANCHOR_BUCKET` [+ `_ENDPOINT_URL`]), `verify` compares against stored anchors; partitioning = migration (owner PR); OWNER: create the Object Lock bucket (AWS) / write-once bucket + second off-platform copy (pilot) and set the env vars |
+| DOC-02 decision-log acceptance helper, ADR-0017/0018 drafts | in PR (code side); acceptance = needs owner | claude/audit-doc-02 | | Acceptance of DECISIONS_LOG rows and ADRs = owner; code side: ADR-0018 draft, nightly staleness check |
 | SEC-08 virtual keys, rotation runbook | todo | | | rotate real keys = owner |
 
 ## Phase 1 - thesis experiment (code-only items)
@@ -76,7 +76,7 @@ Scheduled task `audit-implementation-continue` (hourly, id `trig_0174gXcCFuTekwm
 | SEC-11 docs/openapi off outside dev | todo | | | |
 | SEC-12 injection corpus, canary, free-text sanitising | todo | | | |
 | SEC-16/17 low items (CODEOWNERS, SECURITY.md, idempotency TTL, parser error leak test) | todo | | | branch protection = owner |
-| ARCH-01 deployment tiers ADR | todo | | | acceptance = owner |
+| ARCH-01 deployment tiers ADR | in PR (draft ADR-0018, Proposed) | claude/audit-doc-02 | | acceptance = owner |
 | ARCH-07 embeddings status in readyz | todo | | | |
 | ARCH-08 wire eu_guard check_environment at gateway start | todo | | | |
 | ARCH-09 / DOC-01 as-built section, status files cleanup | todo | | | |
