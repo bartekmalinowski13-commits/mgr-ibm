@@ -279,7 +279,8 @@
     "rule": "Rule {{rule}} ({{pack}} {{version}})",
     "agent": "{{agent}} · model {{model}}",
     "parser": "Read from the file ({{parser}})",
-    "user": "Changed by {{user}}"
+    "user": "Changed by {{user}}",
+    "savedLive": "Saved. BOM version {{version}}."
   },
   "runs": {
     "title": "Runs",
@@ -348,8 +349,40 @@
     "ssoUnavailable": "Single sign-on is available only in the AWS deployment. This deployment signs in with e-mail and password."
   },
   "errors": {
-    "notMember": "You do not have access to this organisation. Choose another one.",
-    "notFound": "This item was not found. It may have been deleted or belong to another organisation."
+    "already-member": "This person is already a member of the organisation.",
+    "domain-not-verified": "The DNS TXT record was not found yet. DNS changes can take a while; try again later.",
+    "domain-taken": "Another organisation has already verified this domain.",
+    "email-not-verified": "Verify your e-mail address to continue.",
+    "empty-patch": "Nothing to change: edit at least one field.",
+    "file-in-use": "A run of this project is queued or running. Wait until it finishes and try again.",
+    "file-too-large": "The file is too large. Upload a smaller one.",
+    "forbidden-action": "Your role does not allow this action. Ask an organisation owner for access.",
+    "idempotency-key": "The request could not be sent safely. Reload the page and try again.",
+    "idempotency-mismatch": "This request was already sent with different content. Reload the page and try again.",
+    "invalid-cursor": "The list position has expired. Reload the list.",
+    "invalid-reference": "The reference BOM must be a CSV file with a designator column (for example Reference) and at least one line.",
+    "invalid-token": "Your session has expired. Sign in again.",
+    "invitation-pending": "A pending invitation for this person already exists.",
+    "last-owner": "An organisation must keep at least one owner.",
+    "missing-token": "You are not signed in. Sign in and try again.",
+    "model-not-allowed": "This model is not allowed on your plan. Choose another model.",
+    "no-bom": "There is no BOM for this run yet. Wait until the run finishes.",
+    "no-files": "Upload design files and wait until they are checked before starting a run.",
+    "not-a-member": "You are not a member of this organisation.",
+    "not-deletable": "Only sample projects can be deleted here.",
+    "not-found": "The item was not found. It may have been removed; reload the page.",
+    "org-required": "Choose an organisation and try again.",
+    "owner-only": "Only owners can grant or change the owner role.",
+    "project-too-large": "The project has reached its file or size limit. Remove a file before uploading another.",
+    "quota-exceeded": "Your plan limit has been reached. Contact an organisation owner to raise it.",
+    "rate-limited": "Too many requests. Wait a moment and try again.",
+    "runtime-variant": "This runtime does not support the chosen variant. Choose another variant.",
+    "sample-read-only": "Sample projects are read-only. Create your own project to upload files.",
+    "slug-taken": "This organisation address is already taken. Choose another one.",
+    "sso-not-ready": "Enforcing single sign-on needs a working connection and at least one verified domain.",
+    "sso-required": "Your organisation requires single sign-on for this e-mail domain. Use the SSO button.",
+    "unsupported-type": "Unsupported file type. Upload a PDF, Markdown or text file.",
+    "user-token-required": "This action needs a signed-in user, not an API key."
   },
   "compare": {
     "title": "Variant comparison",

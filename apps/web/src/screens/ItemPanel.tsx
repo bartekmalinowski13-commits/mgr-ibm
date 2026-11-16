@@ -2,7 +2,13 @@ import { Button, Input, Textarea } from "@bomagent/ui";
 import { useQueryClient } from "@tanstack/react-query";
 import type { TFunction } from "i18next";
 import { X } from "lucide-react";
-import { type FormEvent, useEffect, useState } from "react";
+import {
+  type FormEvent,
+  type KeyboardEvent as ReactKeyboardEvent,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { useTranslation } from "react-i18next";
 import { api, call, problemMessage, type Schemas } from "../lib/api";
 import { type BomItem, PROVENANCE_COLOR, type ProvenanceKind } from "../lib/provenance";
@@ -46,12 +52,23 @@ export function ItemPanel({
   const [values, setValues] = useState(initial);
   const [reason, setReason] = useState("");
   const [error, setError] = useState<string>();
+  const [announcement, setAnnouncement] = useState("");
+  const panelRef = useRef<HTMLElement>(null);
+  const titleRef = useRef<HTMLHeadingElement>(null);
   // biome-ignore lint/correctness/useExhaustiveDependencies: reset the form when another line is opened
   useEffect(() => {
     setValues(initial());
     setReason("");
     setError(undefined);
   }, [item.line]);
+  // Focus moves into the panel on open and returns to the row that opened it on close.
+  useEffect(() => {
+    const opener = document.activeElement as HTMLElement | null;
+    titleRef.current?.focus();
+    return () => {
+      if (opener?.isConnected) opener.focus();
+    };
+  }, []);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", onKey);
@@ -74,15 +91,40 @@ export function ItemPanel({
       );
       queryClient.setQueryData(["bom", orgId, runId], saved);
       toast(t("panel.saved", { version: saved.version }));
+      setAnnouncement(t("panel.savedLive", { version: saved.version }));
       setReason("");
     } catch (err) {
       setError(problemMessage(err));
+    }
+  };
+  // Below 2xl the panel is a drawer over the page: keep Tab inside it. At 2xl it is a side column.
+  const trapTab = (e: ReactKeyboardEvent<HTMLElement>) => {
+    if (e.key !== "Tab" || !panelRef.current) return;
+    if (typeof window.matchMedia === "function" && window.matchMedia("(min-width: 1536px)").matches)
+      return;
+    const stops = [
+      ...panelRef.current.querySelectorAll<HTMLElement>("button, input, textarea, [tabindex]"),
+    ].filter((el) => el.tabIndex >= 0 && !(el as HTMLButtonElement).disabled);
+    const first = stops[0];
+    const last = stops[stops.length - 1];
+    if (!first || !last) return;
+    if (
+      e.shiftKey &&
+      (document.activeElement === first || document.activeElement === titleRef.current)
+    ) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && document.activeElement === last) {
+      e.preventDefault();
+      first.focus();
     }
   };
   const changed = EDITABLE.some((f) => values[f] !== (item[f] ?? ""));
 
   return (
     <aside
+      ref={panelRef}
+      onKeyDown={trapTab}
       aria-labelledby="panel-title"
       className={
         "fixed inset-x-0 bottom-0 z-30 max-h-[80vh] w-full overflow-y-auto rounded-t-panel border border-line bg-surface p-5 shadow-dialog " +
@@ -90,9 +132,17 @@ export function ItemPanel({
         "2xl:sticky 2xl:top-20 2xl:z-auto 2xl:h-auto 2xl:max-h-[calc(100vh-6rem)] 2xl:w-[400px] 2xl:shrink-0 2xl:rounded-panel 2xl:border 2xl:shadow-none"
       }
     >
+      <p role="status" aria-live="polite" className="sr-only">
+        {announcement}
+      </p>
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h3 id="panel-title" className="font-display text-xl font-bold">
+          <h3
+            id="panel-title"
+            ref={titleRef}
+            tabIndex={-1}
+            className="font-display text-xl font-bold focus-visible:outline-2 focus-visible:outline-focus"
+          >
             {t("panel.title", { line: item.line })}
           </h3>
           <p className="font-mono text-[13px] text-muted">{item.refdes.join(", ")}</p>
