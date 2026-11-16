@@ -146,3 +146,34 @@ def test_kb_snapshot_id_tracks_content(tmp_path):
     assert kb_snapshot(tmp_path)[0] != first[0]
     (tmp_path / "b.txt").write_text("beta", encoding="utf-8")
     assert kb_snapshot(tmp_path)[1] == 2
+
+
+def test_beyond_rule_kinds_can_be_injected_and_reported_with_coverage(tmp_path):
+    from bomagent_eval.injection import BEYOND_RULES_KINDS
+
+    cfg = _config(
+        tmp_path,
+        repeats=1,
+        injection={"errors": 6, "trials": 4, "kinds": list(BEYOND_RULES_KINDS)},
+    )
+    run_experiment(ExperimentConfig.from_file(cfg), tmp_path)
+    out = tmp_path / "pilot"
+    trials = [json.loads(line) for line in (out / "injection.jsonl").read_text().splitlines()]
+    assert {e["kind"] for t in trials for e in t["errors"]} <= set(BEYOND_RULES_KINDS)
+    assert all("false_alarms_by_rule" in t for t in trials)
+    b = [t for t in trials if t["variant"] == "B"]
+    assert sum(t["detected"] for t in b) == 0  # B's rules cannot see these classes
+    report = (out / "report.md").read_text()
+    assert "rule coverage" in report
+    assert "| no |" in report
+    header = (out / "tables" / "detection_by_kind.csv").read_text().splitlines()[0]
+    assert "rule_covered" in header
+
+
+def test_unknown_injection_kind_is_rejected(tmp_path):
+    import pytest
+    from pydantic import ValidationError
+
+    cfg = _config(tmp_path, injection={"errors": 2, "trials": 1, "kinds": ["nonsense"]})
+    with pytest.raises(ValidationError, match="nonsense"):
+        ExperimentConfig.from_file(cfg)
