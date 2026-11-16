@@ -39,17 +39,19 @@ def _instruments() -> dict[str, Any]:
     meter = metrics.get_meter("bomagent")
     return {
         "runs": meter.create_counter("bomagent_runs_total", description="Finished agent runs"),
+        # units are part of the names (``_s``, ``_eur``) and not repeated as OTel units: the
+        # Prometheus-style names in dashboards and alerts then equal the names below
         "run_duration": meter.create_histogram(
-            "bomagent_run_duration_s", unit="s", description="Wall time of an agent run"
+            "bomagent_run_duration_s", description="Wall time of an agent run, seconds"
         ),
         "llm_calls": meter.create_counter("bomagent_llm_calls_total", description="LLM calls"),
         "llm_tokens": meter.create_counter("bomagent_llm_tokens_total", description="LLM tokens"),
         "llm_cost": meter.create_counter(
-            "bomagent_llm_cost_eur_total", unit="EUR", description="LLM spend"
+            "bomagent_llm_cost_eur_total", description="LLM spend in euro"
         ),
         "parse": meter.create_counter("bomagent_parse_total", description="Design file parses"),
         "parse_duration": meter.create_histogram(
-            "bomagent_parse_duration_s", unit="s", description="Wall time of a file parse"
+            "bomagent_parse_duration_s", description="Wall time of a file parse, seconds"
         ),
         "malware_scan": meter.create_counter(
             "bomagent_malware_scan_total", description="Uploaded file malware scans"

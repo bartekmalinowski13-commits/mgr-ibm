@@ -1,8 +1,16 @@
-# Fly.io configuration of the Supabase pilot: ONE machine running the all-in-one image
-# (API + ingest/agent/KB workers + SPA), region Frankfurt next to the Supabase project.
-# Deploy from the repository root (the build context must be the whole repository):
+# Fly.io configuration of the Supabase pilot: the all-in-one image as two PROCESS GROUPS
+# (audit ARCH-02), region Frankfurt next to the Supabase project:
+#   web    - API + SPA + outbox relay / reaper / audit anchors (BOMAGENT_ROLE=web), public
+#   worker - ingest, agent and KB consumers (BOMAGENT_ROLE=worker), NO public port
+# so deploying the web group does not interrupt a running agent run and a parse that runs out
+# of memory restarts only the worker. Deploy from the repository root:
 #   fly deploy . --config deploy/supabase/fly.toml \
 #     --dockerfile deploy/docker/allinone.Dockerfile --ha=false
+# --ha=false keeps one machine per group (cost); for zero-downtime web deploys run
+#   fly scale count web=2 worker=1 -a mgr-ibm-bomagent
+# FIRST DEPLOY AFTER THIS CHANGE: an old single machine (role "all") and the new groups both
+# consume the queue for a moment; that is safe (rows are taken with SKIP LOCKED). Afterwards
+# `fly status` must show one web and one worker machine and no machine without a group.
 # Secrets are set with `fly secrets set` (deploy/supabase/README.md), never in this file.
 app = "mgr-ibm-bomagent"
 primary_region = "fra"
@@ -12,10 +20,16 @@ kill_timeout = "60s" # workers finish the current message (30 s grace) before ex
 [build]
   dockerfile = "../docker/allinone.Dockerfile"
 
+[processes]
+  web = "env BOMAGENT_ROLE=web python -m bomagent_allinone serve"
+  # fewer connections: the worker needs 3 consumers and platform-role polling, not request
+  # concurrency (each process opens its own pools: mind the Supavisor session limit)
+  worker = "env BOMAGENT_ROLE=worker BOMAGENT_DB_POOL_SIZE=3 python -m bomagent_allinone serve"
+
 [deploy]
   # Alembic upgrade as the migrator role, in a temporary machine before the new release
   release_command = "python -m bomagent_allinone migrate"
-  strategy = "immediate" # a single machine: no rolling/canary
+  strategy = "rolling" # with one machine per group Fly replaces it; two web machines = no gap
 
 [env]
   BOMAGENT_ENVIRONMENT = "dev"
@@ -46,7 +60,9 @@ kill_timeout = "60s" # workers finish the current message (30 s grace) before ex
 [http_service]
   internal_port = 8000
   force_https = true
-  # the workers run in this process: never stop the machine when HTTP traffic is idle
+  processes = ["web"] # the worker group has no public port: nothing outside can reach it
+  # the outbox relay, the stuck-run reaper and the audit anchor export run in the web group:
+  # never stop it when HTTP traffic is idle
   auto_stop_machines = "off"
   auto_start_machines = true
   min_machines_running = 1
@@ -61,8 +77,26 @@ kill_timeout = "60s" # workers finish the current message (30 s grace) before ex
     interval = "15s"
     timeout = "5s"
     method = "GET"
-    path = "/readyz" # database reachable and all queue consumers alive
+    path = "/readyz" # database reachable (web has no consumers)
+
+# The worker group's own health check: /readyz also needs all three queue consumers alive. The
+# web /readyz cannot see a missing worker group, so also watch the worker check in `fly status`.
+[checks.worker_ready]
+  type = "http"
+  port = 8000
+  method = "GET"
+  path = "/readyz"
+  interval = "15s"
+  timeout = "5s"
+  grace_period = "30s"
+  processes = ["worker"]
 
 [[vm]]
+  processes = ["web"]
+  size = "shared-cpu-1x"
+  memory = "1gb"
+
+[[vm]]
+  processes = ["worker"]
   size = "shared-cpu-2x"
-  memory = "2gb" # API + workers + one sandboxed parse child (RLIMIT_AS 1 GiB)
+  memory = "2gb" # three consumers + one sandboxed parse child (RLIMIT_AS 1 GiB)
