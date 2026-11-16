@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import time
 import uuid
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -33,6 +34,7 @@ from bomagent_agents.retrieval import KbRetriever, Retriever
 from bomagent_bom.model import Requirements, Usage
 from bomagent_cad import FileRef
 from bomagent_cad.sandbox import ProjectSize, parse_files_sandboxed
+from bomagent_common import metrics
 from bomagent_common.audit import AuditEvent, emit_audit
 from bomagent_common.db import tenant_transaction
 from bomagent_common.logging import get_logger
@@ -116,7 +118,15 @@ class RunWorker:
         return dict(message.payload) | {"registered": False}
 
     async def _fail(
-        self, message: Message, run_id: uuid.UUID, exc: BaseException, usage: Usage | None
+        self,
+        message: Message,
+        run_id: uuid.UUID,
+        exc: BaseException,
+        usage: Usage | None,
+        *,
+        variant: str = "",
+        model: str = "",
+        duration_s: float = 0.0,
     ) -> None:
         error = f"{type(exc).__name__}: run failed"  # no exception text: it may echo file content
         async with tenant_transaction(self.engine, message.tenant_id) as conn:
@@ -129,17 +139,21 @@ class RunWorker:
             )
             # LLM spend counts against the budget even when the run failed afterwards
             await _meter(conn, usage, runs=1 if updated.rowcount else 0)
-            if not updated.rowcount:  # already failed (e.g. by the reaper): nothing to report
-                return
-            await emit_audit(
-                conn,
-                AuditEvent(
-                    action="run.failed",
-                    object_type="run",
-                    object_id=str(run_id),
-                    after={"error": error},
-                ),
-            )
+            failed = bool(updated.rowcount)  # else already failed (e.g. by the reaper)
+            if failed:
+                await emit_audit(
+                    conn,
+                    AuditEvent(
+                        action="run.failed",
+                        object_type="run",
+                        object_id=str(run_id),
+                        after={"error": error},
+                    ),
+                )
+        # metrics only after the commit: a rolled-back transaction must not be counted
+        _observe(usage, model=model, tenant=message.tenant_id)
+        if failed:
+            metrics.record_run("failed", variant, duration_s=duration_s)
 
     async def execute(self, message: Message) -> RunOutput | None:
         run_id = uuid.UUID(message.payload["run_id"])
@@ -147,11 +161,20 @@ class RunWorker:
         if p is None:
             return None
         spent: dict[str, Usage] = {}
+        started = time.monotonic()
         try:
             return await self._run(message, run_id, p, spent)
         except Exception as exc:
             if p["registered"]:
-                await self._fail(message, run_id, exc, spent.get("usage"))
+                await self._fail(
+                    message,
+                    run_id,
+                    exc,
+                    spent.get("usage"),
+                    variant=str(p.get("variant", "")),
+                    model=str(p.get("model_id", "")),
+                    duration_s=time.monotonic() - started,
+                )
             raise
 
     async def _progress(
@@ -174,6 +197,7 @@ class RunWorker:
     async def _run(
         self, message: Message, run_id: uuid.UUID, p: dict[str, Any], spent: dict[str, Usage]
     ) -> RunOutput:
+        t0 = time.monotonic()
         runtime = p.get("runtime")
         if runtime is not None and RUNTIME_VARIANT.get(runtime) != p["variant"]:
             raise RejectedRunError(f"runtime {runtime!r} does not implement variant {p['variant']}")
@@ -248,7 +272,8 @@ class RunWorker:
                     "i": run_id,
                 },
             )
-            if p["registered"] and not updated.rowcount:
+            discarded = p["registered"] and not updated.rowcount
+            if discarded:
                 # the reaper failed the run meanwhile: keep the row as it is, meter the spend
                 await _meter(conn, result.usage, runs=0)
                 await emit_audit(
@@ -260,39 +285,46 @@ class RunWorker:
                         after={"status": result.status, "reason": "run no longer running"},
                     ),
                 )
-                log.warning("run_result_discarded", run_id=str(run_id))
-                return result
-            await _meter(conn, result.usage, runs=1)
-            if updated.rowcount:  # runs started through the API have a row; CLI runs do not
-                await conn.execute(
-                    text(
-                        "INSERT INTO bom.versions (id, tenant_id, run_id, version, content,"
-                        " reason, created_by) VALUES (:i, app.current_tenant_id(), :r, 1,"
-                        " CAST(:c AS jsonb), 'generated', :u)"
+            else:
+                await _meter(conn, result.usage, runs=1)
+            if not discarded:
+                if updated.rowcount:  # API runs have a row; CLI runs do not
+                    await conn.execute(
+                        text(
+                            "INSERT INTO bom.versions (id, tenant_id, run_id, version, content,"
+                            " reason, created_by) VALUES (:i, app.current_tenant_id(), :r, 1,"
+                            " CAST(:c AS jsonb), 'generated', :u)"
+                        ),
+                        {
+                            "i": uuid.uuid4(),
+                            "r": run_id,
+                            "c": result.bom.model_dump_json(),
+                            "u": f"agent:{result.runtime}",
+                        },
+                    )
+                await emit_audit(
+                    conn,
+                    AuditEvent(
+                        action=f"run.{result.status}",
+                        object_type="run",
+                        object_id=str(run_id),
+                        after={
+                            "status": result.status,
+                            "variant": config.variant,
+                            "model": config.model_id,
+                            "runtime": result.runtime,
+                            "lines": len(result.bom.items),
+                            "llm_calls": result.usage.llm_calls,
+                        },
                     ),
-                    {
-                        "i": uuid.uuid4(),
-                        "r": run_id,
-                        "c": result.bom.model_dump_json(),
-                        "u": f"agent:{result.runtime}",
-                    },
                 )
-            await emit_audit(
-                conn,
-                AuditEvent(
-                    action=f"run.{result.status}",
-                    object_type="run",
-                    object_id=str(run_id),
-                    after={
-                        "status": result.status,
-                        "variant": config.variant,
-                        "model": config.model_id,
-                        "runtime": result.runtime,
-                        "lines": len(result.bom.items),
-                        "llm_calls": result.usage.llm_calls,
-                    },
-                ),
-            )
+        # metrics only after the commit: a rolled-back transaction must not be counted (a
+        # failure above makes ``execute`` run ``_fail``, which observes the same spend once)
+        _observe(result.usage, model=config.model_id, tenant=message.tenant_id)
+        if discarded:
+            log.warning("run_result_discarded", run_id=str(run_id))
+            return result
+        metrics.record_run(result.status, config.variant, duration_s=time.monotonic() - t0)
         log.info(
             "run_finished",
             run_id=str(run_id),
@@ -307,6 +339,19 @@ async def _meter(conn: AsyncConnection, usage: Usage | None, *, runs: int) -> No
     await record_usage(
         conn,
         runs=runs,
+        llm_calls=u.llm_calls,
+        input_tokens=u.input_tokens,
+        output_tokens=u.output_tokens,
+        cost_eur=u.cost_eur,
+    )
+
+
+def _observe(usage: Usage | None, *, model: str, tenant: uuid.UUID) -> None:
+    """LLM spend as metrics; call once per metered spend, after its transaction committed."""
+    u = usage or Usage()
+    metrics.record_llm(
+        model=model,
+        tenant=str(tenant),
         llm_calls=u.llm_calls,
         input_tokens=u.input_tokens,
         output_tokens=u.output_tokens,

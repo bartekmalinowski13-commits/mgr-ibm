@@ -15,6 +15,7 @@ from collections.abc import Mapping, Sequence
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
+from bomagent_common import metrics
 from bomagent_common.db import tenant_transaction
 from bomagent_common.logging import get_logger
 from bomagent_common.messaging import Message, Queue
@@ -82,6 +83,7 @@ async def deliver(
                     )
                 ).scalar()
                 if dead:
+                    metrics.record_outbox_dead()
                     log.error(  # noqa: TRY400
                         "outbox_message_dead",
                         outbox_id=str(row.id),
@@ -98,6 +100,7 @@ async def deliver(
                 ),
                 {"i": row.id},
             )
+            metrics.record_outbox_sent()
             sent += 1
     return sent
 

@@ -17,6 +17,7 @@ from fastapi import FastAPI
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
+from bomagent_common import metrics
 from bomagent_common.audit import AuditEvent, emit_audit
 from bomagent_common.db import platform_transaction, tenant_transaction
 from bomagent_common.logging import get_logger
@@ -35,24 +36,20 @@ async def reap_stuck_runs(engine: AsyncEngine, tenant_id: uuid.UUID, timeout_s: 
     ctx = TenantContext(tenant_id=tenant_id, actor_id="maintenance", actor_type="system")
     async with tenant_transaction(engine, tenant_id) as conn:
         reaped = (
-            (
-                await conn.execute(
-                    text(
-                        "UPDATE runs.runs SET status = 'failed', finished_at = now(),"
-                        " error = 'TimeoutError: run did not finish in time'"
-                        " WHERE (status = 'running'"
-                        " AND started_at < now() - make_interval(secs => :t))"
-                        " OR (status = 'queued'"
-                        " AND created_at < now() - make_interval(secs => :t))"
-                        " RETURNING id"
-                    ),
-                    {"t": timeout_s},
-                )
+            await conn.execute(
+                text(
+                    "UPDATE runs.runs SET status = 'failed', finished_at = now(),"
+                    " error = 'TimeoutError: run did not finish in time'"
+                    " WHERE (status = 'running'"
+                    " AND started_at < now() - make_interval(secs => :t))"
+                    " OR (status = 'queued'"
+                    " AND created_at < now() - make_interval(secs => :t))"
+                    " RETURNING id, variant"
+                ),
+                {"t": timeout_s},
             )
-            .scalars()
-            .all()
-        )
-        for run_id in reaped:
+        ).all()
+        for run_id, _variant in reaped:
             await emit_audit(
                 conn,
                 AuditEvent(
@@ -63,6 +60,9 @@ async def reap_stuck_runs(engine: AsyncEngine, tenant_id: uuid.UUID, timeout_s: 
                 ),
                 ctx,
             )
+    # counted after the commit; a crashed or hung worker never records its own failure
+    for _run_id, variant in reaped:
+        metrics.record_run("failed", str(variant), duration_s=-1)
     return len(reaped)
 
 

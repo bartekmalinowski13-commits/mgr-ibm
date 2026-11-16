@@ -23,6 +23,24 @@ from bomagent_testing.kb import make_kb
 pytestmark = pytest.mark.integration
 
 
+def _counter(name: str, attrs: dict[str, str]) -> float:
+    """Cumulative value of a counter data point in the in-memory metric reader."""
+    from bomagent_common.config import ServiceSettings
+    from bomagent_common.telemetry import configure_telemetry, metric_reader
+
+    configure_telemetry(ServiceSettings(service_name="test", environment="test"))
+    data = metric_reader().get_metrics_data()
+    total = 0.0
+    for rm in data.resource_metrics if data else []:
+        for sm in rm.scope_metrics:
+            for m in sm.metrics:
+                if m.name == name:
+                    total += sum(
+                        float(dp.value) for dp in m.data.data_points if dict(dp.attributes) == attrs
+                    )
+    return total
+
+
 async def _worker(app_engine, store):
     retriever = await InMemoryRetriever.from_directory(FIXTURES / "datasheets")
     return RunWorker(
@@ -162,6 +180,7 @@ async def test_registered_run_uses_database_and_redelivery_is_a_no_op(app_engine
     rid = await _registered_run(app_engine, store, tenant)
     worker = await _worker(app_engine, store)
     worker.allow_unregistered = False
+    completed_before = _counter("bomagent_runs_total", {"status": "completed", "variant": "B"})
     # forged payload: another model, variant and someone else's files - all ignored
     forged = Message.create(
         RUN_REQUESTED,
@@ -187,6 +206,8 @@ async def test_registered_run_uses_database_and_redelivery_is_a_no_op(app_engine
         ).one()
     assert runs == 1  # metered once despite the redelivery
     assert calls == result.usage.llm_calls
+    completed_after = _counter("bomagent_runs_total", {"status": "completed", "variant": "B"})
+    assert completed_after - completed_before == 1  # counted once as well
     # checkpoints lived in the tenant's rows during the run and are gone after it
     async with tenant_transaction(app_engine, tenant.tenant_id) as conn:
         checkpoints = await conn.scalar(
@@ -202,8 +223,11 @@ async def test_failed_run_is_marked_failed_and_unknown_runs_rejected(app_engine,
     worker = await _worker(app_engine, store)
     worker.allow_unregistered = False
     msg = Message.create(RUN_REQUESTED, tenant, {"run_id": str(rid)})
+    failed = {"status": "failed", "variant": "B"}
+    failed_before = _counter("bomagent_runs_total", failed)
     with tenant_scope(tenant), pytest.raises(Exception):  # noqa: B017, PT011
         await worker.execute(msg)
+    assert _counter("bomagent_runs_total", failed) - failed_before == 1
     status, error, actions, _ = await _state(app_engine, tenant, rid)
     assert status == "failed"
     assert error.endswith("run failed")

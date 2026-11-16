@@ -29,6 +29,11 @@ _Updated by Claude Code after every milestone (see `docs/prompts/CLAUDE_CODE_MAS
   empty network namespace where `unshare(CLONE_NEWNET)` is allowed (no user-namespace fallback; outcome logged once; warning when the host
   does not allow it). The no-egress parser process group is still the real boundary (ARCH-02).
 
+- **OPS-02 (code) metrics:** `bomagent_common.metrics` (runs, run duration, LLM calls/tokens/cost per
+  model and tenant, parse outcomes and durations, outbox sent/dead, queue dead letters), OTLP metrics
+  export next to the traces (`BOMAGENT_OTEL_EXPORTER_OTLP_ENDPOINT`), an in-memory reader always
+  attached. Dashboards and alert rules: see `deploy/observability/` (owner PR).
+
 ## 2026-11-12 - deployment paths ready (AWS single-account dev, Supabase pilot); nothing deployed yet
 
 > **Owner: start with `docs/OWNER_CHECKLIST.md`** - what is ready and your steps in order.
