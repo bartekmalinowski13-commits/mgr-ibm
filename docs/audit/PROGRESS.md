@@ -8,6 +8,8 @@ the Notes column says what the owner must do.
 PRs touching RLS policies, migrations, `auth.py`, `authz.py`, `sso.py`, web session handling or
 `deploy/*` stay open for the owner (status `in PR, needs owner`).
 
+Scheduled task `audit-implementation-continue` (hourly, id `trig_0174gXcCFuTekwmbAvZAoULc`) exists and is enabled; it was created from the parent session. Disable it with `update_trigger` when all doable work is done.
+
 ## Phase 0 - before any real user data on the pilot
 
 | Task | Status | Branch | PR | Notes |
