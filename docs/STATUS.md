@@ -181,6 +181,7 @@ domain) and the assumptions awaiting acceptance (`docs/DECISIONS_LOG.md`, last c
 - `attempted_mpn_hallucination_rate` (+ decision counts) in the eval summary, experiment key
   metrics and quality figure; lying-model end-to-end tests for A and B; methodology note in
   `docs/thesis/METODYKA.md`. A-unguarded ablation still to do.
+
 ## 2026-11-16 - TH-05 (code part)
 
 - Catalogue entries carry `price_source_url` and `price_checked_on`; a test requires both on any
