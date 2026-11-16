@@ -77,7 +77,8 @@
         "network": "Cannot reach the sign-in service. Check your connection.",
         "unknown": "Something went wrong. Try again in a moment."
       }
-    }
+    },
+    "rateLimited": "Too many sign-in attempts from this network. Wait a minute and try again."
   },
   "onboarding": {
     "title": "Create an organisation",

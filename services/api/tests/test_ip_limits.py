@@ -5,9 +5,11 @@ No database: a bare FastAPI app carries the middleware, a fake clock drives the 
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 import httpx
 import pytest
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, Response
 
 from bomagent_api.ip_limits import (
     DEFAULT_RULES,
@@ -106,13 +108,15 @@ def test_client_ip_reads_the_ip_of_cloudfront_viewer_address():
     req = _request({"CloudFront-Viewer-Address": "198.51.100.7:48220"})
     assert client_ip(req, "CloudFront-Viewer-Address") == "198.51.100.7"
     v6 = _request({"CloudFront-Viewer-Address": "[2001:db8::1]:48220"})
-    assert client_ip(v6, "CloudFront-Viewer-Address") == "2001:db8::1"
+    assert client_ip(v6, "CloudFront-Viewer-Address") == "2001:db8::"  # keyed on the /64
 
 
 # ---------------------------------------------------------------- middleware
 
 
-def _app(rules, *, header: str | None = "Fly-Client-IP", clock=None, enabled=True) -> FastAPI:
+def _app(
+    rules: Sequence[Rule], *, header: str | None = "Fly-Client-IP", clock=None, enabled=True
+) -> FastAPI:
     app = FastAPI()
     install_problem_handlers(app)
     install_ip_limits(app, enabled=enabled, header=header, rules=rules, clock=clock or Clock())
@@ -226,12 +230,61 @@ def test_default_rules_are_sane(rule: Rule):
     assert rule.path or rule.path_prefix
 
 
-def test_ip_limits_default_to_on_outside_local_and_test():
+def test_ip_limits_need_a_client_ip_header_outside_local_and_test():
     from bomagent_api.app import Settings
 
-    assert not Settings(environment="test", auth_mode="local").ip_limits_on
-    assert not Settings(environment="local", auth_mode="local").ip_limits_on
-    assert Settings(environment="dev", auth_mode="local").ip_limits_on
-    assert Settings(environment="prod", auth_mode="local").ip_limits_on
+    h = "Fly-Client-IP"
+    assert not Settings(environment="test", auth_mode="local", client_ip_header=h).ip_limits_on
+    assert not Settings(environment="local", auth_mode="local", client_ip_header=h).ip_limits_on
+    assert Settings(environment="dev", auth_mode="local", client_ip_header=h).ip_limits_on
+    assert Settings(environment="prod", auth_mode="local", client_ip_header=h).ip_limits_on
+    # no trusted edge header: the peer is a shared proxy address, so the limits stay off
+    assert not Settings(environment="prod", auth_mode="local").ip_limits_on
     assert not Settings(environment="prod", auth_mode="local", ip_rate_limit=False).ip_limits_on
     assert Settings(environment="test", auth_mode="local", ip_rate_limit=True).ip_limits_on
+
+
+def test_client_ip_ignores_values_that_are_not_one_address():
+    for bad in ("a, b", "6.6.6.6, 7.7.7.7", "x" * 5000, "not-an-ip", "999.1.1.1"):
+        assert client_ip(_request({"Fly-Client-IP": bad}), "Fly-Client-IP") == "10.1.2.3"
+
+
+def test_ipv6_clients_share_a_bucket_per_64_prefix():
+    a = client_ip(_request({"Fly-Client-IP": "2001:db8:1:2:aaaa::1"}), "Fly-Client-IP")
+    b = client_ip(_request({"Fly-Client-IP": "2001:db8:1:2:bbbb::9"}), "Fly-Client-IP")
+    c = client_ip(_request({"Fly-Client-IP": "2001:db8:1:3::1"}), "Fly-Client-IP")
+    assert a == b != c
+
+
+async def test_invalid_tokens_cost_the_caller_but_valid_traffic_is_free():
+    failure_rule = Rule(
+        "auth-failure", per_minute=60, burst=2, path_prefix="/v1/", failure_status=401
+    )
+    app = _app([*RULES, failure_rule])
+
+    @app.get("/v1/secret")
+    async def secret(request: Request) -> Response:
+        ok = request.headers.get("authorization") == "Bearer good"
+        return Response(status_code=200 if ok else 401)
+
+    async with _client(app) as c:
+        h = {"Fly-Client-IP": "203.0.113.9"}
+        for _ in range(5):  # valid tokens are never counted
+            assert (
+                await c.get("/v1/secret", headers={**h, "Authorization": "Bearer good"})
+            ).status_code == 200
+        bad = {**h, "Authorization": "x"}
+        assert [(await c.get("/v1/secret", headers=bad)).status_code for _ in range(3)] == [
+            401,
+            401,
+            429,
+        ]
+        # the address is now refused even with a valid token, until tokens come back
+        assert (
+            await c.get("/v1/secret", headers={**h, "Authorization": "Bearer good"})
+        ).status_code == 429
+        assert (
+            await c.get(
+                "/v1/secret", headers={"Fly-Client-IP": "203.0.113.10", "Authorization": "x"}
+            )
+        ).status_code == 401
