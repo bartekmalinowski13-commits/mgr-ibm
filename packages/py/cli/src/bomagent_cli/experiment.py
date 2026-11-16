@@ -57,6 +57,9 @@ KEY_METRICS: dict[str, int] = {
     "acc_value": 1,
     "mpn_coverage": 1,
     "mpn_out_of_reference_rate": -1,
+    #: primary PB2 metric: rejected MPN decisions / all agent MPN decisions (TH-01)
+    "attempted_mpn_hallucination_rate": -1,
+    #: residual: unverified MPNs left in the final BOM (the guard makes it ~0 for every variant)
     "mpn_hallucination_rate": -1,
     "llm_calls": -1,
     "input_tokens": -1,
@@ -385,6 +388,7 @@ QUALITY_FIGURE = [
     "acc_mpn",
     "acc_value",
     "mpn_coverage",
+    "attempted_mpn_hallucination_rate",
     "mpn_hallucination_rate",
 ]
 

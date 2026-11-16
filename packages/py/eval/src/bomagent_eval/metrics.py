@@ -26,7 +26,7 @@ from dataclasses import dataclass, field
 
 from pydantic import BaseModel, Field
 
-from bomagent_bom.model import BomItem, BomVersion, Usage
+from bomagent_bom.model import BomItem, BomVersion, Finding, ProvenanceKind, Usage
 from bomagent_bom.values import values_equivalent
 
 MATCH_THRESHOLD = 0.5
@@ -109,8 +109,19 @@ class FieldScore(BaseModel):
         return _ratio(self.correct, self.reference_total)
 
 
+#: rule id of the finding both variants record when the evidence-only guard discards an MPN
+MPN_REJECTED = "agent.mpn_rejected"
+
+
 class MpnMetrics(BaseModel):
     predicted: int = 0
+    #: MPN decisions of the agents: MPNs in the final BOM that an agent chose (provenance
+    #: ``agent``) plus the ones the guard rejected - what the model *tried* to put in the BOM
+    agent_mpn_decisions: int = 0
+    #: of those, the ones discarded because they were in no retrieved evidence
+    rejected_mpn_decisions: int = 0
+    #: findings were available (a BomVersion), so the two counts above are real, not unknown
+    decisions_known: bool = False
     reference_parts: int = 0
     covered: int = 0
     out_of_reference: int = 0
@@ -128,8 +139,19 @@ class MpnMetrics(BaseModel):
 
     @property
     def rate(self) -> float:
-        """Hallucination rate: MPNs absent from every trusted catalogue (NaN if unchecked)."""
+        """Residual hallucination rate: MPNs *in the final BOM* absent from every trusted
+        catalogue (NaN if unchecked). The evidence-only guard runs in every variant, so this is
+        close to zero by construction - the thesis' primary measure is :attr:`attempted_rate`."""
         return _ratio(self.unverified, self.predicted) if self.catalogue_checked else NAN
+
+    @property
+    def attempted_rate(self) -> float:
+        """Attempted hallucination rate (primary PB2 metric): rejected MPN decisions over all
+        agent MPN decisions. NaN when the BOM carries no findings or the agents made no MPN
+        decision (undefined, not zero)."""
+        if not self.decisions_known or self.agent_mpn_decisions == 0:
+            return NAN
+        return self.rejected_mpn_decisions / self.agent_mpn_decisions
 
 
 # backwards-compatible name used in reports
@@ -164,6 +186,9 @@ class EvalReport(BaseModel):
             "mpn_coverage": h.coverage,
             "mpn_out_of_reference_rate": h.out_of_reference_rate,
             "mpn_hallucination_rate": h.rate,
+            "attempted_mpn_hallucination_rate": h.attempted_rate,
+            "mpn_agent_decisions": float(h.agent_mpn_decisions),
+            "mpn_rejected_decisions": float(h.rejected_mpn_decisions),
             "input_tokens": float(self.usage.input_tokens),
             "output_tokens": float(self.usage.output_tokens),
             "llm_calls": float(self.usage.llm_calls),
@@ -299,6 +324,8 @@ def evaluate(
         score("quantity", p.quantity == e.quantity, e.refdes[0], str(p.quantity), str(e.quantity))
 
     mpn = _mpn_metrics(pred_items, reference, pred_by_ref, ref_by_ref, known_mpns, design_mpns)
+    if isinstance(predicted, BomVersion):
+        _count_mpn_decisions(mpn, pred_items, predicted.findings)
 
     return EvalReport(
         design=design,
@@ -347,6 +374,21 @@ def _mpn_metrics(
             if len(mpn.examples) < 20:
                 mpn.examples.append(p.mpn)
     return mpn
+
+
+def _count_mpn_decisions(mpn: MpnMetrics, items: list[BomItem], findings: list[Finding]) -> None:
+    """Agent MPN decisions = MPNs an agent chose that survived + the ones the guard rejected
+    (each rejection finding is one attempted MPN; the rejected value is gone from the BOM)."""
+    kept = sum(
+        1
+        for item in items
+        if item.mpn
+        and (prov := item.provenance.get("mpn")) is not None
+        and prov.kind == ProvenanceKind.AGENT
+    )
+    mpn.rejected_mpn_decisions = sum(1 for f in findings if f.rule_id == MPN_REJECTED)
+    mpn.agent_mpn_decisions = kept + mpn.rejected_mpn_decisions
+    mpn.decisions_known = True
 
 
 def isnan(x: float) -> bool:

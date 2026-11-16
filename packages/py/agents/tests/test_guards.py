@@ -128,3 +128,30 @@ async def test_per_step_call_counts_are_not_mixed_between_branches(retriever):
     assert selects
     assert all(s.llm_calls == 1 for s in selects)
     assert sum(s.llm_calls for s in out.trace) == out.usage.llm_calls
+
+
+@pytest.mark.parametrize("variant", ["A", "B"])
+async def test_a_lying_model_shows_in_the_attempted_rate_not_in_the_final_bom(variant, retriever):
+    """TH-01: the guard empties the final-BOM hallucination rate, the attempted rate stays."""
+    from bomagent_eval import evaluate
+
+    def liar(request):
+        data = heuristic_responder(request)
+        if request.prompt_id == "mpn_select":
+            return {"mpn": "NOT-IN-EVIDENCE-1", "confidence": 1.0}
+        if request.prompt_id == "compose":
+            for line in data["lines"]:
+                line["mpn"] = "INVENTED-A"
+        return data
+
+    out = await run_with(liar, variant, retriever)
+    known = await retriever.known_mpns()  # the catalogue, as the experiment measures it
+    report = evaluate(out.bom, [], known_mpns=known)
+    h = report.hallucinations
+    assert h.rejected_mpn_decisions > 0
+    assert h.attempted_rate > 0
+    # nothing invented survives in the final BOM: the residual measure cannot see the attempts
+    assert not any(("INVENTED" in x or "NOT-IN-EVIDENCE" in x) for x in h.examples)
+    assert all(i.mpn not in {"INVENTED-A", "NOT-IN-EVIDENCE-1"} for i in out.bom.items)
+    honest = evaluate((await run_with(heuristic_responder, variant, retriever)).bom, [])
+    assert honest.hallucinations.rejected_mpn_decisions == 0

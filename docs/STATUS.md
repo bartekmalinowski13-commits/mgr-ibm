@@ -60,6 +60,11 @@ _Updated by Claude Code after every milestone (see `docs/prompts/CLAUDE_CODE_MAS
   outbox relay or reaper). Lets Fly run web and workers as separate process groups; the Fly config
   change is a `deploy/*` PR for the owner.
 
+- **TH-01 attempted hallucinations (thesis):** `evaluate` reports `attempted_mpn_hallucination_rate` =
+  rejected MPN decisions (`agent.mpn_rejected` findings) / all agent MPN decisions (agent-provenance MPNs
+  kept + rejected); the final-BOM `mpn_hallucination_rate` stays as the residual. Both are in the experiment
+  tables/figures; `docs/thesis/METODYKA.md` states which deterministic parts A and B share.
+
 ## 2026-11-12 - deployment paths ready (AWS single-account dev, Supabase pilot); nothing deployed yet
 
 > **Owner: start with `docs/OWNER_CHECKLIST.md`** - what is ready and your steps in order.
