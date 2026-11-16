@@ -190,7 +190,8 @@ def test_a_refused_key_request_reports_the_gateway_error_and_stores_nothing(env)
     out = result.stdout + result.stderr
     assert result.returncode != 0
     assert "alias already exists" in out
-    assert NEW_KEY not in out and MASTER not in out
+    assert NEW_KEY not in out
+    assert MASTER not in out
     assert "secrets import" not in Path(env["SHIM_LOG"]).read_text()
 
 
