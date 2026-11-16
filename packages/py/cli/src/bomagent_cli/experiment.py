@@ -38,6 +38,7 @@ import yaml
 from pydantic import BaseModel, Field, field_validator
 
 from bomagent_cad import parse_files
+from bomagent_cli import thesis_assets
 from bomagent_cli.experiment_figures import Estimate, bar_panels, dot_interval_chart, slope_chart
 from bomagent_eval.experiment_stats import (
     PairedComparison,
@@ -53,6 +54,7 @@ from bomagent_eval.stats import pairwise_agreement
 
 MISSING = "n/a"
 experiment_app = typer.Typer(help="Thesis experiment: variant A vs B on the evaluation set.")
+thesis_assets.register(experiment_app)
 
 SAMPLING_NOTE = (
     "temperature is fixed by the platform and the seed only drives the experiment's own "
