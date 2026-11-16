@@ -15,7 +15,7 @@ FLY_SHIM = r"""#!/usr/bin/env bash
 echo "fly $*" >> "$SHIM_LOG"
 case "$1 $2" in
   "auth whoami") exit 0 ;;
-  "apps list") echo '[{"Name":"mgr-ibm-llm-gateway","Organization":{"Slug":"o"}},{"Name":"mgr-ibm-bomagent","Organization":{"Slug":"o"}}]' ;;
+  "apps list") echo "$SHIM_APPS" ;;
   "secrets list")
     [ -z "${SHIM_LIST_FAIL:-}" ] || { echo "fly: auth expired" >&2; exit 1; }
     printf '%s\n' "${SHIM_SECRETS_JSON:-[]}" ;;
@@ -41,6 +41,10 @@ def env(tmp_path):
         "PATH": f"{shims}:{os.environ['PATH']}",
         "HOME": str(home),
         "SHIM_LOG": str(log),
+        "SHIM_APPS": (
+            '[{"Name":"mgr-ibm-llm-gateway","Organization":{"Slug":"o"}},'
+            '{"Name":"mgr-ibm-bomagent","Organization":{"Slug":"o"}}]'
+        ),
     }
 
 
