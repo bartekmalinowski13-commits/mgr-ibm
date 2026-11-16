@@ -152,6 +152,10 @@ class Settings(ServiceSettings):
 
 
 def anchor_sink_for(settings: Settings) -> AnchorSink | None:
+    if settings.audit_anchor_bucket and settings.audit_anchor_dir:
+        log.warning("audit_anchor_config_conflict", used="bucket", ignored="dir")
+    if settings.audit_anchor_endpoint_url and not settings.audit_anchor_bucket:
+        log.warning("audit_anchor_endpoint_without_bucket")
     if settings.audit_anchor_bucket:
         return S3AnchorSink(
             settings.audit_anchor_bucket,
@@ -303,8 +307,15 @@ def _install_guards(app: FastAPI, settings: Settings) -> None:
     """URL/upload guards, per-IP limits and security headers on every response."""
     install_origin(app, header=settings.client_ip_header)
     install_ip_limits(app, enabled=settings.ip_limits_on, header=settings.client_ip_header)
-    if not settings.ip_limits_on and settings.environment not in {"local", "test"}:
-        log.warning("ip_limits_off", reason="set BOMAGENT_CLIENT_IP_HEADER to the edge header")
+    if not settings.client_ip_header and settings.environment not in {"local", "test"}:
+        # behind a proxy the socket peer is the proxy: the per-IP limits stay off and audit
+        # events record the proxy's address
+        log.warning(
+            "client_ip_header_unset",
+            limits="off",
+            audit_source_ip="socket peer",
+            fix="set BOMAGENT_CLIENT_IP_HEADER to the trusted edge header",
+        )
 
     @app.middleware("http")
     async def upload_size_guard(

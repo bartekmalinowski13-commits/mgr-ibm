@@ -74,3 +74,50 @@ async def test_s3_sink_contract_with_moto(monkeypatch):
             Bucket="anchors", CreateBucketConfiguration={"LocationConstraint": "eu-central-1"}
         )
         await _contract(S3AnchorSink("anchors", region="eu-central-1"))
+
+
+# ---------------------------------------------------------------- review hardening
+
+
+async def test_future_dated_anchors_cannot_poison_verification(tmp_path):
+    from bomagent_common.audit_anchor import load_anchors
+
+    sink = FileAnchorSink(tmp_path)
+    good = json.dumps({"tenant": str(TENANT), "seq": 1, "hash": "aa" * 32}).encode()
+    bogus = json.dumps({"tenant": str(TENANT), "seq": 1, "hash": "00" * 32}).encode()
+    await sink.write_once(anchor_key(TENANT, DAY), good)
+    await sink.write_once(anchor_key(TENANT, datetime(2099, 1, 1, tzinfo=UTC)), bogus)
+    anchors = await load_anchors(sink, TENANT, today=DAY.date())
+    assert anchors == [ChainAnchor(1, "aa" * 32)]  # the 2099 object is ignored until its day
+
+
+async def test_unreadable_or_garbage_anchors_are_skipped_not_fatal(tmp_path):
+    from bomagent_common.audit_anchor import load_anchors
+
+    class Flaky(FileAnchorSink):
+        async def read(self, key: str) -> bytes:
+            if key.endswith("2026-11-17.json"):
+                raise OSError("boom")
+            return await super().read(key)
+
+    sink = Flaky(tmp_path)
+    ok = json.dumps({"tenant": str(TENANT), "seq": 3, "hash": "bb" * 32}).encode()
+    await sink.write_once(anchor_key(TENANT, DAY), ok)
+    await sink.write_once(anchor_key(TENANT, datetime(2026, 11, 17, tzinfo=UTC)), ok)
+    await sink.write_once(anchor_key(TENANT, datetime(2026, 11, 18, tzinfo=UTC)), b"x" * 10_000)
+    got = await load_anchors(sink, TENANT, today=datetime(2026, 11, 30).date())
+    assert got == [ChainAnchor(3, "bb" * 32)]
+
+
+async def test_file_sink_writes_atomically_and_ignores_leftover_temp_files(tmp_path):
+    sink = FileAnchorSink(tmp_path)
+    key = anchor_key(TENANT, DAY)
+    await sink.write_once(key, b"{}")
+    leftovers = list((tmp_path / "audit-anchors" / str(TENANT)).iterdir())
+    assert [p.name for p in leftovers] == ["2026-11-16.json"]  # no temp file remains
+    (tmp_path / "audit-anchors" / str(TENANT) / ".crashed.tmp").write_bytes(b"partial")
+    assert await sink.list(f"audit-anchors/{TENANT}/") == [key]  # a crashed temp is not an anchor
+
+
+def test_oversized_documents_are_not_anchors():
+    assert parse_anchor(b" " * 5000 + b"{}", TENANT) is None

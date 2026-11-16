@@ -29,6 +29,7 @@ from bomagent_common.tenancy import TenantContext
 
 log = get_logger(__name__)
 OUTBOX_GRACE_S = 30.0  # requests deliver their own messages first
+ANCHOR_TIMEOUT_S = 15.0
 _anchored: dict[uuid.UUID, date] = {}  # tenant -> day its anchor was written (this process)
 
 
@@ -81,14 +82,21 @@ async def sweep(
     async with platform_transaction(platform_engine) as conn:
         tenants = (await conn.execute(text("SELECT id FROM tenancy.tenants"))).scalars().all()
     totals = {"sent": 0, "reaped": 0, "purged": 0}
-    today = datetime.now(UTC).date()
+    now = datetime.now(UTC)
+    today = now.date()
+    anchoring = anchor_sink is not None
     for tenant_id in tenants:
-        if anchor_sink is not None and _anchored.get(tenant_id) != today:
+        if anchoring and anchor_sink is not None and _anchored.get(tenant_id) != today:
             try:  # the chain head goes to write-once storage once a day (ADR-0011)
-                await export_anchor(engine, anchor_sink, tenant_id)
+                await asyncio.wait_for(
+                    export_anchor(engine, anchor_sink, tenant_id, now), ANCHOR_TIMEOUT_S
+                )
                 _anchored[tenant_id] = today
             except Exception:
+                # a failing sink must not hold up delivery and reaping for every tenant: skip
+                # the rest of this sweep's anchors, the next sweep retries
                 log.exception("audit_anchor_export_failed", tenant_id=str(tenant_id))
+                anchoring = False
         totals["sent"] += await deliver(engine, tenant_id, queues, older_than_s=outbox_grace_s)
         totals["purged"] += await cleanup_sent(engine, tenant_id)
         totals["reaped"] += await reap_stuck_runs(engine, tenant_id, run_timeout_s)

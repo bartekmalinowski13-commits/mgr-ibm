@@ -201,13 +201,29 @@ async def test_full_flow_and_tenant_boundaries(env, tmp_path):
     sink = FileAnchorSink(tmp_path)
     assert await export_anchor(env.engine, sink, tenant_id)
     env.app.state.anchor_sink = sink
+    anchored = (await c.get("/v1/audit-events/verify", headers=alice)).json()
+    assert anchored["ok"] is True
+    assert anchored["anchors_checked"] == 1
+    assert anchored["anchors_error"] is False
+    now = dt.datetime.now(dt.UTC)
+    forged = json.dumps({"tenant": str(tenant_id), "seq": 1, "hash": "0" * 64, "at": "x"}).encode()
+    # an anchor planted for a future day is ignored (it must not break verification for good)
+    await sink.write_once(anchor_key(tenant_id, now + dt.timedelta(days=1)), forged)
     assert (await c.get("/v1/audit-events/verify", headers=alice)).json()["ok"] is True
-    tomorrow = dt.datetime.now(dt.UTC) + dt.timedelta(days=1)
-    forged = {"tenant": str(tenant_id), "seq": 1, "hash": "0" * 64, "at": "x"}
-    await sink.write_once(anchor_key(tenant_id, tomorrow), json.dumps(forged).encode())
+    # a past anchor that does not match the chain does
+    await sink.write_once(anchor_key(tenant_id, now - dt.timedelta(days=1)), forged)
     broken = (await c.get("/v1/audit-events/verify", headers=alice)).json()
     assert broken["ok"] is False
     assert broken["first_broken_seq"] == 1
+
+    # an unreadable anchor store degrades to the recomputation and says so
+    class Down(FileAnchorSink):
+        async def list(self, prefix: str) -> list[str]:
+            raise OSError("sink down")
+
+    env.app.state.anchor_sink = Down(tmp_path)
+    down = (await c.get("/v1/audit-events/verify", headers=alice)).json()
+    assert (down["ok"], down["anchors_error"], down["anchors_checked"]) == (True, True, 0)
     env.app.state.anchor_sink = None
 
     # ---- tenant boundaries

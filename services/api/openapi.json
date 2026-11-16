@@ -629,6 +629,16 @@
       "ChainStatus": {
         "additionalProperties": false,
         "properties": {
+          "anchors_checked": {
+            "default": 0,
+            "title": "Anchors Checked",
+            "type": "integer"
+          },
+          "anchors_error": {
+            "default": false,
+            "title": "Anchors Error",
+            "type": "boolean"
+          },
           "checked": {
             "title": "Checked",
             "type": "integer"

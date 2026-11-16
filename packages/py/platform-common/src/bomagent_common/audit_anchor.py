@@ -13,9 +13,11 @@ never overwrite: a second write of the same key returns ``False``.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
+import os
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Protocol
 
@@ -30,6 +32,10 @@ log = get_logger(__name__)
 PREFIX = "audit-anchors/"
 #: anchors compared on verification (about 13 months of daily anchors)
 MAX_ANCHORS = 400
+#: an anchor document is about 200 bytes; anything larger is not one
+MAX_ANCHOR_BYTES = 4096
+#: parallel reads when loading anchors for verification
+READ_CONCURRENCY = 8
 
 
 class AnchorSink(Protocol):
@@ -50,6 +56,8 @@ def anchor_key(tenant_id: uuid.UUID, at: datetime) -> str:
 
 def parse_anchor(data: bytes, tenant_id: uuid.UUID) -> ChainAnchor | None:
     """The anchor in ``data`` if it is a well-formed document of this tenant, else ``None``."""
+    if len(data) > MAX_ANCHOR_BYTES:
+        return None
     try:
         doc = json.loads(data)
     except ValueError:
@@ -62,16 +70,40 @@ def parse_anchor(data: bytes, tenant_id: uuid.UUID) -> ChainAnchor | None:
     return ChainAnchor(seq, digest)
 
 
+def _key_day(key: str) -> date | None:
+    try:
+        return date.fromisoformat(key.rsplit("/", 1)[-1].removesuffix(".json"))
+    except ValueError:
+        return None
+
+
 async def load_anchors(
-    sink: AnchorSink, tenant_id: uuid.UUID, limit: int = MAX_ANCHORS
+    sink: AnchorSink,
+    tenant_id: uuid.UUID,
+    limit: int = MAX_ANCHORS,
+    today: date | None = None,
 ) -> list[ChainAnchor]:
-    keys = (await sink.list(f"{PREFIX}{tenant_id}/"))[-limit:]
-    anchors = []
-    for key in keys:
-        anchor = parse_anchor(await sink.read(key), tenant_id)
-        if anchor is not None:
-            anchors.append(anchor)
-    return anchors
+    """The tenant's newest ``limit`` anchors. Objects dated after ``today`` (UTC) are ignored:
+    whoever can write to the sink must not be able to plant a bogus anchor for a future day
+    and so make verification fail for good. A listing failure raises; an unreadable or
+    malformed object is skipped (and logged)."""
+    today = today or datetime.now(UTC).date()
+    keys = [
+        k
+        for k in await sink.list(f"{PREFIX}{tenant_id}/")
+        if (day := _key_day(k)) is not None and day <= today
+    ][-limit:]
+    gate = asyncio.Semaphore(READ_CONCURRENCY)
+
+    async def one(key: str) -> ChainAnchor | None:
+        async with gate:
+            try:
+                return parse_anchor(await sink.read(key), tenant_id)
+            except Exception:
+                log.exception("audit_anchor_unreadable", key=key)
+                return None
+
+    return [a for a in await asyncio.gather(*(one(k) for k in keys)) if a is not None]
 
 
 async def export_anchor(
@@ -104,17 +136,28 @@ class FileAnchorSink:
 
         def write() -> bool:
             path.parent.mkdir(parents=True, exist_ok=True)
+            tmp = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
+            with tmp.open("wb") as f:  # complete content first, so a crash leaves no partial key
+                f.write(data)
+                f.flush()
+                os.fsync(f.fileno())
             try:
-                with path.open("xb") as f:  # exclusive create: never overwrites
-                    f.write(data)
+                os.link(tmp, path)  # atomic and refuses to replace an existing key
             except FileExistsError:
                 return False
+            finally:
+                with contextlib.suppress(OSError):
+                    tmp.unlink()
             return True
 
         return await asyncio.to_thread(write)
 
     async def read(self, key: str) -> bytes:
-        return await asyncio.to_thread(self._path(key).read_bytes)
+        def read() -> bytes:
+            with self._path(key).open("rb") as f:
+                return f.read(MAX_ANCHOR_BYTES + 1)
+
+        return await asyncio.to_thread(read)
 
     async def list(self, prefix: str) -> list[str]:
         base = self._path(prefix.rstrip("/") + "/x").parent
@@ -122,7 +165,11 @@ class FileAnchorSink:
         def scan() -> list[str]:
             if not base.is_dir():
                 return []
-            return sorted(f"{prefix.rstrip('/')}/{p.name}" for p in base.iterdir() if p.is_file())
+            return sorted(
+                f"{prefix.rstrip('/')}/{p.name}"
+                for p in base.iterdir()
+                if p.is_file() and p.name.endswith(".json")
+            )
 
         return await asyncio.to_thread(scan)
 
@@ -145,7 +192,13 @@ class S3AnchorSink:
         import boto3
         from botocore.config import Config
 
-        options: dict[str, Any] = {"signature_version": "s3v4"}
+        # short timeouts and few retries: an S3 outage must not stall the maintenance sweep
+        options: dict[str, Any] = {
+            "signature_version": "s3v4",
+            "connect_timeout": 5,
+            "read_timeout": 10,
+            "retries": {"max_attempts": 2},
+        }
         if endpoint_url:
             options["s3"] = {"addressing_style": "path"}
         if s3_compatible:
@@ -192,7 +245,7 @@ class S3AnchorSink:
     async def read(self, key: str) -> bytes:
         _check(key)
         resp = await asyncio.to_thread(self._s3.get_object, Bucket=self._bucket, Key=key)
-        body: bytes = await asyncio.to_thread(resp["Body"].read)
+        body: bytes = await asyncio.to_thread(resp["Body"].read, MAX_ANCHOR_BYTES + 1)
         return body
 
     async def list(self, prefix: str) -> list[str]:
