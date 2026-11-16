@@ -25,6 +25,7 @@ from bomagent_api.sso import (
     InMemoryIdentityProviders,
     StaticTxtResolver,
 )
+from bomagent_common.audit_anchor import AnchorSink, FileAnchorSink, S3AnchorSink
 from bomagent_common.config import ServiceSettings
 from bomagent_common.db import make_engine, ping
 from bomagent_common.health import ReadinessCheck
@@ -72,6 +73,11 @@ class Settings(ServiceSettings):
     #: when ``client_ip_header`` is set; without it the socket peer is a shared proxy address and
     #: every user would share one bucket, so the limits stay off.
     ip_rate_limit: bool | None = None
+    #: daily audit-chain anchors (ADR-0011): a directory (write-once volume / off-platform copy)
+    #: or an S3 bucket with Object Lock; both unset = no export
+    audit_anchor_dir: str | None = None
+    audit_anchor_bucket: str | None = None
+    audit_anchor_endpoint_url: str | None = None  # S3-compatible stores (Supabase Storage)
     #: edge header that carries the client address (``Fly-Client-IP``,
     #: ``CloudFront-Viewer-Address``); never X-Forwarded-For. Unset = socket peer.
     client_ip_header: str | None = None
@@ -145,6 +151,23 @@ class Settings(ServiceSettings):
         return self.environment not in {"local", "test"} and bool(self.client_ip_header)
 
 
+def anchor_sink_for(settings: Settings) -> AnchorSink | None:
+    if settings.audit_anchor_bucket and settings.audit_anchor_dir:
+        log.warning("audit_anchor_config_conflict", used="bucket", ignored="dir")
+    if settings.audit_anchor_endpoint_url and not settings.audit_anchor_bucket:
+        log.warning("audit_anchor_endpoint_without_bucket")
+    if settings.audit_anchor_bucket:
+        return S3AnchorSink(
+            settings.audit_anchor_bucket,
+            region=settings.aws_region,
+            endpoint_url=settings.audit_anchor_endpoint_url,
+            s3_compatible=bool(settings.audit_anchor_endpoint_url),
+        )
+    if settings.audit_anchor_dir:
+        return FileAnchorSink(settings.audit_anchor_dir)
+    return None
+
+
 SECURITY_HEADERS = {
     "X-Content-Type-Options": "nosniff",
     "X-Frame-Options": "DENY",
@@ -195,7 +218,9 @@ def create_app(
         title="BOM Agent API",
         readiness=checks,
         docs=True,
-        lifespan=maintenance.lifespan(settings.maintenance_interval_s, settings.run_timeout_s),
+        lifespan=maintenance.lifespan(
+            settings.maintenance_interval_s, settings.run_timeout_s, anchor_sink_for(settings)
+        ),
     )
     app.state.engine = engine
     app.state.platform_engine = platform_engine
@@ -282,8 +307,15 @@ def _install_guards(app: FastAPI, settings: Settings) -> None:
     """URL/upload guards, per-IP limits and security headers on every response."""
     install_origin(app, header=settings.client_ip_header)
     install_ip_limits(app, enabled=settings.ip_limits_on, header=settings.client_ip_header)
-    if not settings.ip_limits_on and settings.environment not in {"local", "test"}:
-        log.warning("ip_limits_off", reason="set BOMAGENT_CLIENT_IP_HEADER to the edge header")
+    if not settings.client_ip_header and settings.environment not in {"local", "test"}:
+        # behind a proxy the socket peer is the proxy: the per-IP limits stay off and audit
+        # events record the proxy's address
+        log.warning(
+            "client_ip_header_unset",
+            limits="off",
+            audit_source_ip="socket peer",
+            fix="set BOMAGENT_CLIENT_IP_HEADER to the trusted edge header",
+        )
 
     @app.middleware("http")
     async def upload_size_guard(

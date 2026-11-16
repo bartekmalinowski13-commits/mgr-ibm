@@ -11,9 +11,12 @@ from bomagent_api.auth import OrgContext
 from bomagent_api.authz import require
 from bomagent_api.pagination import clamp
 from bomagent_api.schemas import AuditEventOut, ChainStatus, Page, problem_responses
-from bomagent_common.audit import verify_chain
+from bomagent_common.audit import ChainAnchor, verify_chain
+from bomagent_common.audit_anchor import load_anchors
 from bomagent_common.db import tenant_transaction
+from bomagent_common.logging import get_logger
 
+log = get_logger(__name__)
 router = APIRouter(
     prefix="/v1/audit-events",
     tags=["audit"],
@@ -57,8 +60,22 @@ async def list_events(
 @router.get("/verify", summary="Verify the organisation's audit hash chain")
 async def verify(request: Request, ctx: OrgContext) -> ChainStatus:
     require(ctx, "audit.read")
+    sink = getattr(request.app.state, "anchor_sink", None)
+    anchors: list[ChainAnchor] | None = None
+    anchors_error = False
+    if sink is not None:
+        try:
+            anchors = await load_anchors(sink, ctx.tenant_id)
+        except Exception:
+            # the chain is still checked; the answer says that the anchors could not be
+            log.exception("audit_anchors_unavailable", tenant_id=str(ctx.tenant_id))
+            anchors_error = True
     async with tenant_transaction(request.app.state.engine) as conn:
-        result = await verify_chain(conn, ctx.tenant_id)
+        result = await verify_chain(conn, ctx.tenant_id, anchors)
     return ChainStatus(
-        ok=result.ok, checked=result.checked, first_broken_seq=result.first_broken_seq
+        ok=result.ok,
+        checked=result.checked,
+        first_broken_seq=result.first_broken_seq,
+        anchors_checked=len(anchors or []),
+        anchors_error=anchors_error,
     )

@@ -39,6 +39,11 @@ _Updated by Claude Code after every milestone (see `docs/prompts/CLAUDE_CODE_MAS
   `emit_audit` stores it in `audit.events.source_ip`. Worker-written events have no address.
   Still open: user agent (needs a column), anchor export, partitioning.
 
+- **SEC-04 (part 2) audit chain anchors:** once a day per tenant the maintenance sweep writes
+  `audit-anchors/<tenant>/<date>.json` (`seq`, `hash`) to a write-once sink (`BOMAGENT_AUDIT_ANCHOR_DIR`
+  or `BOMAGENT_AUDIT_ANCHOR_BUCKET`, S3-compatible via `..._ENDPOINT_URL`); `GET /v1/audit-events/verify`
+  compares the chain with the stored anchors. Nothing is exported until the owner configures a sink.
+
 ## 2026-11-12 - deployment paths ready (AWS single-account dev, Supabase pilot); nothing deployed yet
 
 > **Owner: start with `docs/OWNER_CHECKLIST.md`** - what is ready and your steps in order.

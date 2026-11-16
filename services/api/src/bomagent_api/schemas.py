@@ -145,6 +145,10 @@ class ChainStatus(_M):
     ok: bool
     checked: int
     first_broken_seq: int | None
+    #: externally stored anchors the chain was compared with (0 = recomputation only)
+    anchors_checked: int = 0
+    #: the anchor store could not be read: only the recomputation was done
+    anchors_error: bool = False
 
 
 Role = Literal["owner", "admin", "engineer", "reviewer", "viewer"]

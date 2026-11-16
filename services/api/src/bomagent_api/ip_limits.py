@@ -172,11 +172,6 @@ def client_ip(request: Request, header: str | None) -> str:
 
 def install_origin(app: FastAPI, *, header: str | None) -> None:
     """Make the caller's address visible to audit emission for the duration of a request."""
-    if not header:
-        log.info(
-            "audit_source_ip_is_the_socket_peer",
-            note="set BOMAGENT_CLIENT_IP_HEADER behind a proxy",
-        )
 
     @app.middleware("http")
     async def origin_guard(

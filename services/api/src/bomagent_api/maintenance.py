@@ -12,6 +12,7 @@ import asyncio
 import contextlib
 import uuid
 from collections.abc import AsyncIterator, Mapping
+from datetime import UTC, date, datetime
 
 from fastapi import FastAPI
 from sqlalchemy import text
@@ -19,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from bomagent_common import metrics
 from bomagent_common.audit import AuditEvent, emit_audit
+from bomagent_common.audit_anchor import AnchorSink, export_anchor
 from bomagent_common.db import platform_transaction, tenant_transaction
 from bomagent_common.logging import get_logger
 from bomagent_common.messaging import Queue
@@ -27,6 +29,8 @@ from bomagent_common.tenancy import TenantContext
 
 log = get_logger(__name__)
 OUTBOX_GRACE_S = 30.0  # requests deliver their own messages first
+ANCHOR_TIMEOUT_S = 15.0
+_anchored: dict[uuid.UUID, date] = {}  # tenant -> day its anchor was written (this process)
 
 
 async def reap_stuck_runs(engine: AsyncEngine, tenant_id: uuid.UUID, timeout_s: float) -> int:
@@ -73,11 +77,26 @@ async def sweep(
     *,
     run_timeout_s: float,
     outbox_grace_s: float = OUTBOX_GRACE_S,
+    anchor_sink: AnchorSink | None = None,
 ) -> dict[str, int]:
     async with platform_transaction(platform_engine) as conn:
         tenants = (await conn.execute(text("SELECT id FROM tenancy.tenants"))).scalars().all()
     totals = {"sent": 0, "reaped": 0, "purged": 0}
+    now = datetime.now(UTC)
+    today = now.date()
+    anchoring = anchor_sink is not None
     for tenant_id in tenants:
+        if anchoring and anchor_sink is not None and _anchored.get(tenant_id) != today:
+            try:  # the chain head goes to write-once storage once a day (ADR-0011)
+                await asyncio.wait_for(
+                    export_anchor(engine, anchor_sink, tenant_id, now), ANCHOR_TIMEOUT_S
+                )
+                _anchored[tenant_id] = today
+            except Exception:
+                # a failing sink must not hold up delivery and reaping for every tenant: skip
+                # the rest of this sweep's anchors, the next sweep retries
+                log.exception("audit_anchor_export_failed", tenant_id=str(tenant_id))
+                anchoring = False
         totals["sent"] += await deliver(engine, tenant_id, queues, older_than_s=outbox_grace_s)
         totals["purged"] += await cleanup_sent(engine, tenant_id)
         totals["reaped"] += await reap_stuck_runs(engine, tenant_id, run_timeout_s)
@@ -86,9 +105,12 @@ async def sweep(
     return totals
 
 
-def lifespan(interval_s: float, run_timeout_s: float):  # type: ignore[no-untyped-def]
+def lifespan(  # type: ignore[no-untyped-def]
+    interval_s: float, run_timeout_s: float, anchor_sink: AnchorSink | None = None
+):
     @contextlib.asynccontextmanager
     async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
+        app.state.anchor_sink = anchor_sink  # read by GET /v1/audit-events/verify
         stop = asyncio.Event()
 
         async def loop() -> None:
@@ -103,6 +125,7 @@ def lifespan(interval_s: float, run_timeout_s: float):  # type: ignore[no-untype
                         app.state.platform_engine,
                         app.state.queues,
                         run_timeout_s=run_timeout_s,
+                        anchor_sink=anchor_sink,
                     )
                 except Exception:
                     log.exception("maintenance_sweep_failed")

@@ -914,6 +914,16 @@ export interface components {
         };
         /** ChainStatus */
         ChainStatus: {
+            /**
+             * Anchors Checked
+             * @default 0
+             */
+            anchors_checked: number;
+            /**
+             * Anchors Error
+             * @default false
+             */
+            anchors_error: boolean;
             /** Checked */
             checked: number;
             /** First Broken Seq */
