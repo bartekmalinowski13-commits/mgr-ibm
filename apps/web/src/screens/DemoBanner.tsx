@@ -8,8 +8,8 @@ export function DemoBanner() {
   const runtime = useRuntime();
   if (runtime.data?.mode !== "demo") return null;
   return (
-    <div
-      role="status"
+    <aside
+      aria-label={t("demo.title")}
       data-testid="demo-banner"
       className="flex items-start gap-2 border-b border-warn/40 bg-warn/10 px-4 py-2 text-sm text-ink sm:px-8"
     >
@@ -17,6 +17,6 @@ export function DemoBanner() {
       <p>
         <strong>{t("demo.title")}</strong> {t("demo.body")}
       </p>
-    </div>
+    </aside>
   );
 }

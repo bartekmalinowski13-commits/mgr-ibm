@@ -327,7 +327,8 @@ def _install_frontend(app: FastAPI, settings: Settings) -> None:
     async def config_json() -> Response:
         runtime = {
             "mode": "demo" if app.state.demo else "live",
-            **app.state.readyz_info,
+            "llm": app.state.readyz_info["llm"],
+            "embeddings": app.state.readyz_info["embeddings"],
         }
         if settings.auth_mode == "local":
             return JSONResponse({"auth": {"mode": "local"}, **runtime})

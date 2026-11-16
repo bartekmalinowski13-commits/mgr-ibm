@@ -30,17 +30,17 @@ describe("demo banner", () => {
     runtime.mockResolvedValue({ mode: "demo", llm: "fake", embeddings: "fake" });
     await i18n.changeLanguage("en");
     view();
-    expect((await screen.findByRole("status")).textContent).toMatch(/Demo mode/);
+    expect((await screen.findByTestId("demo-banner")).textContent).toMatch(/Demo mode/);
     cleanup();
     await i18n.changeLanguage("pl");
     view();
-    expect((await screen.findByRole("status")).textContent).toMatch(/Tryb demo/);
+    expect((await screen.findByTestId("demo-banner")).textContent).toMatch(/Tryb demo/);
   });
 
   it("is absent on a live deployment", async () => {
     runtime.mockResolvedValue({ mode: "live" });
     view();
     await vi.waitFor(() => expect(runtime).toHaveBeenCalled());
-    expect(screen.queryByRole("status")).toBeNull();
+    expect(screen.queryByTestId("demo-banner")).toBeNull();
   });
 });

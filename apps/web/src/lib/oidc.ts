@@ -34,6 +34,10 @@ function deploymentConfig(): Promise<DeploymentConfig | undefined> {
   cached ??= fetch("/config.json")
     .then(async (r) => (r.ok ? ((await r.json()) as DeploymentConfig) : undefined))
     .catch(() => undefined);
+  // a transient failure must not hide the demo notice for the whole page lifetime
+  void cached.then((cfg) => {
+    if (cfg === undefined) cached = undefined;
+  });
   return cached;
 }
 
