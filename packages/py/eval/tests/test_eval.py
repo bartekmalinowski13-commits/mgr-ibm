@@ -235,3 +235,121 @@ def test_markdown_reports():
     table = comparison_markdown([report])
     assert "| ecg-frontend | B | fake-closed |" in table
     assert report.summary()["llm_calls"] == 3
+
+
+# ---------------------------------------------------------------- attempted hallucinations (TH-01)
+
+
+def _agent(mpn: str):
+    from bomagent_bom.model import Provenance, ProvenanceKind
+
+    return {
+        "mpn": Provenance(kind=ProvenanceKind.AGENT, rationale="chosen from evidence"),
+        "manufacturer": Provenance(kind=ProvenanceKind.AGENT, rationale="chosen from evidence"),
+    }
+
+
+def _bom_with_rejections(rejected: int) -> BomVersion:
+    from bomagent_bom.model import Finding, Provenance, ProvenanceKind, Severity
+
+    items = [
+        BomItem(
+            line=1,
+            refdes=["R1"],
+            quantity=1,
+            value="10k",
+            mpn="RC0603FR-0710KL",
+            provenance=_agent(""),
+        ),
+        BomItem(
+            line=2,
+            refdes=["R2"],
+            quantity=1,
+            value="1k",
+            mpn="ERJ-3EKF1001V",
+            provenance=_agent(""),
+        ),
+        # an MPN read from the design file is not an agent decision
+        BomItem(
+            line=3,
+            refdes=["U1"],
+            quantity=1,
+            value="X",
+            mpn="PARSED-1",
+            provenance={"mpn": Provenance(kind=ProvenanceKind.PARSER)},
+        ),
+        BomItem(line=4, refdes=["C1"], quantity=1, value="100n"),  # no MPN at all
+    ]
+    findings = [
+        Finding(
+            rule_id="agent.mpn_rejected",
+            severity=Severity.WARNING,
+            message="mpn_select: MPN 'MADEUP' is not among the evidence candidates",
+            refdes=["C1"],
+        )
+        for _ in range(rejected)
+    ] + [Finding(rule_id="core.other", severity=Severity.INFO, message="unrelated")]
+    return BomVersion(design_name="t", items=items, findings=findings)
+
+
+def test_attempted_hallucination_rate_counts_rejected_over_all_agent_mpn_decisions():
+    ref = load_reference_csv("Reference,Value\nR1,10k\nR2,1k\nU1,X\nC1,100n\n")
+    report = evaluate(_bom_with_rejections(2), ref, known_mpns=set())
+    h = report.hallucinations
+    assert h.agent_mpn_decisions == 4  # two kept agent MPNs + two rejected ones
+    assert h.rejected_mpn_decisions == 2
+    assert h.attempted_rate == pytest.approx(0.5)
+    summary = report.summary()
+    assert summary["attempted_mpn_hallucination_rate"] == pytest.approx(0.5)
+    assert summary["mpn_rejected_decisions"] == 2.0
+    assert summary["mpn_agent_decisions"] == 4.0
+
+
+def test_the_final_bom_rate_is_the_residual_and_stays_separate():
+    ref = load_reference_csv("Reference,Value\nR1,10k\nR2,1k\nU1,X\nC1,100n\n")
+    report = evaluate(
+        _bom_with_rejections(3),
+        ref,
+        known_mpns={"RC0603FR-0710KL"},
+        design_mpns={"PARSED-1"},  # read from the design file: trusted
+    )
+    s = report.summary()
+    assert s["attempted_mpn_hallucination_rate"] == pytest.approx(3 / 5)
+    # the guard removed every rejected MPN from the BOM: only what is still in it is judged
+    assert s["mpn_hallucination_rate"] == pytest.approx(1 / 3)  # only ERJ-3EKF1001V is unknown
+
+
+def test_no_agent_decisions_means_the_rate_is_not_defined():
+    ref = load_reference_csv("Reference,Value\nR1,10k\n")
+    bom = BomVersion(
+        design_name="t", items=[BomItem(line=1, refdes=["R1"], quantity=1, value="10k")]
+    )
+    h = evaluate(bom, ref).hallucinations
+    assert (h.agent_mpn_decisions, h.rejected_mpn_decisions) == (0, 0)
+    assert math.isnan(h.attempted_rate)
+
+
+def test_a_plain_item_list_carries_no_findings_so_the_rate_is_not_measured():
+    ref = load_reference_csv("Reference,Value\nR1,10k\n")
+    items = [
+        BomItem(line=1, refdes=["R1"], quantity=1, value="10k", mpn="X", provenance=_agent(""))
+    ]
+    assert math.isnan(evaluate(items, ref).hallucinations.attempted_rate)
+
+
+def test_only_mpn_rejection_findings_count():
+    from bomagent_bom.model import Finding, Severity
+
+    ref = load_reference_csv("Reference,Value\nR1,10k\n")
+    bom = BomVersion(
+        design_name="t",
+        items=[
+            BomItem(line=1, refdes=["R1"], quantity=1, value="10k", mpn="A", provenance=_agent(""))
+        ],
+        findings=[
+            Finding(rule_id="agent.something_else", severity=Severity.WARNING, message="x"),
+            Finding(rule_id="agent.mpn_rejected", severity=Severity.WARNING, message="y"),
+        ],
+    )
+    h = evaluate(bom, ref).hallucinations
+    assert (h.rejected_mpn_decisions, h.agent_mpn_decisions) == (1, 2)

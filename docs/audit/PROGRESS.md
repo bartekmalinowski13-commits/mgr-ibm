@@ -31,7 +31,7 @@ Scheduled task `audit-implementation-continue` (hourly, id `trig_0174gXcCFuTekwm
 |---|---|---|---|---|
 | TH-05 catalogue prices with date/source, manifest model ids, temperature/seed notes | todo | | | real prices/model access from provider consoles = owner |
 | TH-02 Postgres retriever in the experiment, manifest fields | todo | | | DB-backed tests run in CI only |
-| TH-01 attempted-hallucination metric, METODYKA note, A-unguarded ablation | todo | | | |
+| TH-01 attempted-hallucination metric, METODYKA note, A-unguarded ablation | in progress | claude/audit-th-01 | | this PR: metric `attempted_mpn_hallucination_rate` (+ counts) in eval summary, experiment tables and figure, `docs/thesis/METODYKA.md`; A-unguarded ablation = follow-up |
 | TH-03 dataset ingestion with double verification | needs owner | | | data collection, licences, verification = owner; code side: SOURCE/verification templates, agreement metric |
 | TH-06 extra error classes in validation experiment | todo | | | |
 | TH-04 pre-registration, Holm, cluster bootstrap, effect sizes | todo | | | |
