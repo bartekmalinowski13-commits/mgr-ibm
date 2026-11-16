@@ -44,6 +44,29 @@ def test_parse_unsupported_file(tmp_path):
     assert "unsupported.allegro_brd" in result.output
 
 
+def test_record_then_replay_with_fake_provider(tmp_path):
+    cass = tmp_path / "cassettes"
+    result = runner.invoke(app, ["record", str(ECG), "--cassettes", str(cass)])
+    assert result.exit_code == 0, result.output
+    assert list((cass / "fake-closed").glob("*.json"))
+    replay = runner.invoke(app, ["run", str(ECG), "--cassettes", str(cass)])
+    assert replay.exit_code == 0, replay.output
+
+
+def test_run_regression_thresholds_fail_the_command():
+    ref = str(ECG / "reference_bom.csv")
+    ok = runner.invoke(app, ["run", str(ECG), "--reference", ref, "--min-f1", "0.0"])
+    assert ok.exit_code == 0, ok.output
+    bad = runner.invoke(app, ["run", str(ECG), "--reference", ref, "--min-f1", "1.01"])
+    assert bad.exit_code == 1
+    assert "REGRESSION" in bad.output
+
+
+def test_thresholds_require_reference():
+    result = runner.invoke(app, ["run", str(ECG), "--min-f1", "0.5"])
+    assert result.exit_code == 2
+
+
 def test_bom_csv_and_json_and_eval(tmp_path):
     csv_out = tmp_path / "bom.csv"
     result = runner.invoke(app, ["bom", str(ECG), "--out", str(csv_out)])

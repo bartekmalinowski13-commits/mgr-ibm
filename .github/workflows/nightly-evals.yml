@@ -1,0 +1,92 @@
+# Nightly real-model evaluation (QA-02, TESTING.md "LLM evaluations").
+# Never runs in PR CI. Needs the GitHub environment "nightly-evals" with these secrets
+# (names only here; values are set by the repository owner in GitHub settings):
+#   BOMAGENT_LLM_GATEWAY_URL  - EU-resident LLM gateway endpoint (ADR-0002, ADR-0006)
+#   BOMAGENT_LLM_GATEWAY_KEY  - gateway key
+# Without them the job is a no-op that says so and succeeds.
+name: nightly-evals
+
+on:
+  schedule:
+    - cron: "17 2 * * *"
+  workflow_dispatch:
+    inputs:
+      model:
+        description: "Model id from the catalogue (must be EU-verified)"
+        required: false
+        default: "claude-sonnet-eu"
+      min_f1:
+        description: "Fail when line F1 is below this"
+        required: false
+        default: "0.80"
+      max_hallucination_rate:
+        description: "Fail when the attempted MPN hallucination rate exceeds this"
+        required: false
+        default: "0.05"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nightly-evals
+  cancel-in-progress: false
+
+env:
+  UV_PYTHON: "3.12"
+
+jobs:
+  real-model-evals:
+    name: real-model evals (skipped without secrets)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    environment: nightly-evals
+    env:
+      BOMAGENT_LLM_GATEWAY_URL: ${{ secrets.BOMAGENT_LLM_GATEWAY_URL }}
+      BOMAGENT_LLM_GATEWAY_KEY: ${{ secrets.BOMAGENT_LLM_GATEWAY_KEY }}
+      MODEL: ${{ inputs.model || 'claude-sonnet-eu' }}
+      MIN_F1: ${{ inputs.min_f1 || '0.80' }}
+      MAX_HALLUCINATION_RATE: ${{ inputs.max_hallucination_rate || '0.05' }}
+    steps:
+      - name: Check secrets
+        id: gate
+        run: |
+          if [ -z "$BOMAGENT_LLM_GATEWAY_URL" ] || [ -z "$BOMAGENT_LLM_GATEWAY_KEY" ]; then
+            echo "::notice::nightly-evals skipped: BOMAGENT_LLM_GATEWAY_URL / BOMAGENT_LLM_GATEWAY_KEY are not configured (owner action). No real model was called."
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: steps.gate.outputs.enabled == 'true'
+        with: { persist-credentials: false }
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        if: steps.gate.outputs.enabled == 'true'
+        with: { enable-cache: true }
+      - name: Install
+        if: steps.gate.outputs.enabled == 'true'
+        run: uv sync --all-packages --frozen
+      - name: Evaluate samples against references (regression gate)
+        if: steps.gate.outputs.enabled == 'true'
+        run: |
+          mkdir -p evals/reports/nightly
+          status=0
+          for dir in evals/samples/*/; do
+            name=$(basename "$dir")
+            [ -f "$dir/reference_bom.csv" ] || continue
+            for variant in A B; do
+              echo "::group::$name variant $variant ($MODEL)"
+              uv run bomagent run "$dir" --variant "$variant" --model "$MODEL" \
+                --reference "$dir/reference_bom.csv" \
+                --min-f1 "$MIN_F1" --max-hallucination-rate "$MAX_HALLUCINATION_RATE" \
+                > "evals/reports/nightly/$name-$variant.md" || status=1
+              echo "::endgroup::"
+            done
+          done
+          exit $status
+      - name: Upload reports
+        if: always() && steps.gate.outputs.enabled == 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: nightly-eval-reports
+          path: evals/reports/nightly
+          if-no-files-found: ignore

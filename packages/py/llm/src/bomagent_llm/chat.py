@@ -245,7 +245,7 @@ class FakeChat:
         self._usage: dict[str, Usage] = {}
         self.calls: list[ChatRequest] = []
         if cassette_dir is not None and Path(cassette_dir).is_dir():
-            for path in sorted(Path(cassette_dir).glob("*.json")):
+            for path in sorted(Path(cassette_dir).rglob("*.json")):  # incl. <model>/ subdirs
                 entry = json.loads(path.read_text(encoding="utf-8"))
                 self._cassettes[entry["key"]] = entry["response"]
                 if entry.get("usage"):
@@ -289,6 +289,26 @@ def record_cassette(
         entry["usage"] = usage.model_dump(mode="json")
     path.write_text(json.dumps(entry, indent=2, sort_keys=True))
     return path
+
+
+class RecordingChat:
+    """Wraps a real ``ChatClient`` and stores every response + usage as a cassette under
+    ``<directory>/<model id>/`` (``bomagent record``). Replay: ``FakeChat(..., directory)``.
+
+    Only the request key (hash), the prompt id, the parsed response and usage are stored;
+    no API keys or headers ever reach a cassette."""
+
+    def __init__(self, inner: ChatClient, directory: str | Path) -> None:
+        self._inner = inner
+        self._directory = Path(directory)
+        self.recorded: list[Path] = []
+
+    async def complete(self, request: ChatRequest) -> ChatResult:
+        result = await self._inner.complete(request)
+        self.recorded.append(
+            record_cassette(self._directory / request.model.id, request, result.data, result.usage)
+        )
+        return result
 
 
 def resolve_model(catalog: Catalog, model_id: str) -> ModelSpec:

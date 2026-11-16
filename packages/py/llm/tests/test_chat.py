@@ -157,6 +157,29 @@ async def test_gateway_gives_up_and_wraps_transport_errors():
         await malformed.complete(_request())
 
 
+async def test_recording_chat_writes_per_model_cassettes_and_replays(tmp_path):
+    from bomagent_llm.chat import RecordingChat
+
+    calls = []
+
+    def responder(r):
+        calls.append(r)
+        return {"mpn": "REAL"}
+
+    req = _request("rec")
+    recorder = RecordingChat(FakeChat(responder), tmp_path)
+    live = await recorder.complete(req)
+    assert len(recorder.recorded) == 1
+    assert recorder.recorded[0].parent == tmp_path / req.model.id
+    # replay without the inner provider: identical data and the recorded usage
+    replay = await FakeChat(lambda r: {"mpn": "SCRIPTED"}, cassette_dir=tmp_path).complete(req)
+    assert replay.data == {"mpn": "REAL"}
+    assert replay.usage.input_tokens == live.usage.input_tokens
+    assert len(calls) == 1
+    # nothing secret-shaped is stored
+    assert "authorization" not in recorder.recorded[0].read_text().lower()
+
+
 async def test_cassette_replays_recorded_usage(tmp_path):
     from bomagent_bom.model import Usage
 
