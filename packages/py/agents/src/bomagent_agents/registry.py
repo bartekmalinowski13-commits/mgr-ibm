@@ -24,6 +24,9 @@ def context_factory(
     tenant_id: str = "",
     on_step: Callable[[TraceStep, Usage], Awaitable[None]] | None = None,
     checkpointer: Callable[[RunInput], Any] | None = None,
+    state_store: Callable[[RunInput], Any] | None = None,
+    resume: bool = False,
+    resume_attempt: int = 1,
 ) -> Callable[[RunInput], AgentContext]:
     cat = catalog or load_catalog()
 
@@ -43,6 +46,9 @@ def context_factory(
             tenant_id=tenant_id,
             on_step=on_step,
             checkpointer=checkpointer(run) if checkpointer else None,
+            state_store=state_store(run) if state_store else None,
+            resume=resume,
+            resume_attempt=resume_attempt,
         )
 
     return make

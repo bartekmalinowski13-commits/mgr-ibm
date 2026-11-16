@@ -23,6 +23,7 @@ from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import Send
 
+from bomagent_agents import resume
 from bomagent_agents.contracts import RunInput, RunOutput
 from bomagent_agents.runtime_base import AgentContext, agent_provenance
 from bomagent_agents.schemas import GroupedLines, LineOut, ValidationOut
@@ -220,11 +221,11 @@ class LangGraphVariantA:
     async def run(self, run: RunInput) -> RunOutput:
         ctx: AgentContext = self._ctx_factory(run)
         start = time.perf_counter()
-        state = await self._graph(ctx, run).ainvoke(
-            {},
-            config={
-                "configurable": {"thread_id": str(run.run_id)},
-                "max_concurrency": run.config.concurrency,
-            },
-        )
+        graph = self._graph(ctx, run)
+        config: dict[str, Any] = {
+            "configurable": {"thread_id": str(run.run_id)},
+            "max_concurrency": run.config.concurrency,
+        }
+        # ``None`` continues from the last checkpoint (resume after a crash, ARCH-05)
+        state = await graph.ainvoke(await resume.begin(ctx, graph, config), config=config)
         return finish(ctx, run, state, self.name, "A", start)

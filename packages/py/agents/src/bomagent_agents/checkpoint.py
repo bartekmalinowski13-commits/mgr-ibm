@@ -12,9 +12,11 @@ Only the async API is implemented - the runtimes call ``ainvoke``.
 
 from __future__ import annotations
 
+import json
 import random
 import uuid
 from collections.abc import AsyncIterator, Sequence
+from datetime import datetime
 from typing import Any
 
 from langchain_core.runnables import RunnableConfig
@@ -51,6 +53,12 @@ _UPSERT_WRITES = _INSERT_WRITES + (
     "DO UPDATE SET channel = EXCLUDED.channel, value_type = EXCLUDED.value_type,"
     " value = EXCLUDED.value"
 )
+
+
+#: namespace of the process-side state snapshot (``resume.RunStateStore``); LangGraph only
+#: reads namespace ``""``, so the snapshot never mixes with graph checkpoints
+_STATE_NS = "bomagent.state"
+_STATE_ID = "latest"
 
 
 class TenantCheckpointSaver(BaseCheckpointSaver[str]):
@@ -208,6 +216,47 @@ class TenantCheckpointSaver(BaseCheckpointSaver[str]):
                 await conn.execute(text(_KEEP_WRITES), keep)
             if upsert:
                 await conn.execute(text(_UPSERT_WRITES), upsert)
+
+    async def save_state(self, run_id: uuid.UUID, state: dict[str, Any]) -> None:
+        """Upsert the run's state snapshot; ``created_at`` doubles as the run's heartbeat."""
+        async with tenant_transaction(self.engine, self.tenant_id) as conn:
+            await conn.execute(
+                text(
+                    "INSERT INTO runs.graph_checkpoints (tenant_id, run_id, checkpoint_ns,"
+                    " checkpoint_id, checkpoint_type, checkpoint, metadata_type, metadata)"
+                    " VALUES (app.current_tenant_id(), :r, :ns, :c, 'json', :cb, 'json', :mb)"
+                    " ON CONFLICT (tenant_id, run_id, checkpoint_ns, checkpoint_id) DO UPDATE"
+                    " SET checkpoint = EXCLUDED.checkpoint, created_at = now()"
+                ),
+                {
+                    "r": run_id,
+                    "ns": _STATE_NS,
+                    "c": _STATE_ID,
+                    "cb": json.dumps(state).encode(),
+                    "mb": b"{}",
+                },
+            )
+
+    async def load_state(self, run_id: uuid.UUID) -> dict[str, Any] | None:
+        async with tenant_transaction(self.engine, self.tenant_id) as conn:
+            raw = await conn.scalar(
+                text(
+                    "SELECT checkpoint FROM runs.graph_checkpoints"
+                    " WHERE run_id = :r AND checkpoint_ns = :ns AND checkpoint_id = :c"
+                ),
+                {"r": run_id, "ns": _STATE_NS, "c": _STATE_ID},
+            )
+        return None if raw is None else dict(json.loads(bytes(raw)))
+
+    async def last_activity(self, run_id: uuid.UUID) -> datetime | None:
+        """When the run last wrote a checkpoint or state snapshot (database clock), or
+        ``None`` if it never did: the liveness signal used to detect a dead worker."""
+        async with tenant_transaction(self.engine, self.tenant_id) as conn:
+            last: datetime | None = await conn.scalar(
+                text("SELECT max(created_at) FROM runs.graph_checkpoints WHERE run_id = :r"),
+                {"r": run_id},
+            )
+        return last
 
     async def adelete_thread(self, thread_id: str) -> None:
         run_id = uuid.UUID(str(thread_id))

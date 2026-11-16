@@ -43,6 +43,21 @@ class TraceStep(BaseModel):
     detail: dict[str, object] = Field(default_factory=dict)
 
 
+class ResumeRecord(BaseModel):
+    """A run that did not start from scratch (ARCH-05): kept in the run's trace, the audit
+    event and the output so experiments can tell resumed runs from uninterrupted ones.
+
+    ``checkpoint`` - continued from the last LangGraph checkpoint ``checkpoint_id``;
+    ``restart`` - no usable checkpoint (or a runtime without checkpoints), run from scratch.
+    """
+
+    mode: Literal["checkpoint", "restart"]
+    checkpoint_id: str | None = None
+    restored_steps: int = 0
+    restored_llm_calls: int = 0
+    attempt: int = 1
+
+
 class RunOutput(BaseModel):
     run_id: uuid.UUID
     runtime: str
@@ -50,6 +65,7 @@ class RunOutput(BaseModel):
     trace: list[TraceStep]
     usage: Usage
     status: Literal["completed", "budget_exceeded", "failed"] = "completed"
+    resumed: ResumeRecord | None = None
 
 
 class BudgetExceededError(RuntimeError):

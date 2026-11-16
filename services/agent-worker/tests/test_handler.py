@@ -9,7 +9,12 @@ import pytest
 from sqlalchemy import text
 
 from bomagent_agent_worker.app import Settings, build_handler
-from bomagent_agent_worker.handler import RUN_REQUESTED, RejectedRunError, RunWorker
+from bomagent_agent_worker.handler import (
+    RUN_REQUESTED,
+    RejectedRunError,
+    RunInProgressError,
+    RunWorker,
+)
 from bomagent_agents.fake_responder import heuristic_responder
 from bomagent_agents.retrieval import InMemoryRetriever
 from bomagent_common.db import tenant_transaction
@@ -320,3 +325,108 @@ async def test_steps_reach_the_database_while_the_run_is_running(app_engine, mak
     assert len(observed) == len(result.trace)
     status, *_ = await _state(app_engine, tenant, rid)
     assert status == "completed"
+
+
+class WorkerKilled(BaseException):
+    """The worker dies mid-run: no failure handling runs, the run stays ``running``."""
+
+
+class _DyingChat(FakeChat):
+    async def complete(self, request):
+        raise WorkerKilled
+
+
+async def _crash_midway(app_engine, store, tenant, rid):
+    """Run ``rid`` with a worker that dies at its first LLM call (after the first checkpoint)."""
+    worker = await _worker(app_engine, store)
+    worker.allow_unregistered = False
+    worker.chat = _DyingChat(heuristic_responder)
+    message = Message.create(RUN_REQUESTED, tenant, {"run_id": str(rid)})
+    with tenant_scope(tenant), pytest.raises(WorkerKilled):
+        await worker.execute(message)
+    return message
+
+
+async def _count_checkpoints(app_engine, tenant, rid) -> int:
+    async with tenant_transaction(app_engine, tenant.tenant_id) as conn:
+        return int(
+            await conn.scalar(
+                text("SELECT count(*) FROM runs.graph_checkpoints WHERE run_id = :r"), {"r": rid}
+            )
+            or 0
+        )
+
+
+async def test_crashed_run_is_resumed_from_its_checkpoint_and_says_so(app_engine, make_tenant):
+    tenant = await make_tenant()
+    store = InMemoryObjectStore(enforce_tenant=False)
+    rid = await _registered_run(app_engine, store, tenant)
+    message = await _crash_midway(app_engine, store, tenant, rid)
+    status, *_ = await _state(app_engine, tenant, rid)
+    assert status == "running"
+    assert await _count_checkpoints(app_engine, tenant, rid) >= 2  # graph + state snapshot
+
+    worker = await _worker(app_engine, store)
+    worker.allow_unregistered = False
+    # the worker still looks alive: the message is retried, nothing changes
+    with tenant_scope(tenant), pytest.raises(RunInProgressError):
+        await worker.execute(message)
+    assert (await _state(app_engine, tenant, rid))[0] == "running"
+
+    worker.resume_stale_after_s = 0.0  # the heartbeat went quiet
+    with tenant_scope(tenant):
+        result = await worker.execute(message)
+    assert result is not None
+    assert result.status == "completed"
+    assert result.resumed is not None
+    assert result.resumed.mode == "checkpoint"
+    assert result.resumed.checkpoint_id
+    assert result.resumed.attempt == 1
+    assert [s.node for s in result.trace].count("run.resumed") == 1
+    status, error, actions, versions = await _state(app_engine, tenant, rid)
+    assert (status, error, versions) == ("completed", None, 1)
+    assert actions.count("run.resumed") == 1
+    assert actions.count("run.completed") == 1
+    async with tenant_transaction(app_engine, tenant.tenant_id) as conn:
+        after = (
+            await conn.execute(
+                text("SELECT after FROM audit.events WHERE action = 'run.completed'")
+            )
+        ).scalar_one()
+        trace = (
+            await conn.execute(text("SELECT trace FROM runs.runs WHERE id = :i"), {"i": rid})
+        ).scalar_one()
+    assert after["resumed"]["checkpoint_id"] == result.resumed.checkpoint_id
+    assert after["resumed"]["previous_started_at"]
+    assert any(step["node"] == "run.resumed" for step in trace)
+    assert await _count_checkpoints(app_engine, tenant, rid) == 0  # cleaned up at the end
+
+    # a second redelivery after completion is still a no-op
+    with tenant_scope(tenant):
+        assert await worker.execute(message) is None
+
+
+async def test_run_that_keeps_dying_is_failed_after_the_resume_limit(app_engine, make_tenant):
+    tenant = await make_tenant()
+    store = InMemoryObjectStore(enforce_tenant=False)
+    rid = await _registered_run(app_engine, store, tenant)
+    message = await _crash_midway(app_engine, store, tenant, rid)
+    async with tenant_transaction(app_engine, tenant.tenant_id) as conn:
+        await conn.execute(
+            text("UPDATE runs.runs SET trace = CAST(:t AS jsonb) WHERE id = :i"),
+            {
+                "t": json.dumps(
+                    [{"node": "run.resumed", "duration_s": 0.0, "llm_calls": 0, "detail": {}}] * 3
+                ),
+                "i": rid,
+            },
+        )
+    worker = await _worker(app_engine, store)
+    worker.allow_unregistered = False
+    worker.resume_stale_after_s = 0.0
+    with tenant_scope(tenant):
+        assert await worker.execute(message) is None
+    status, error, actions, _ = await _state(app_engine, tenant, rid)
+    assert status == "failed"
+    assert error is not None
+    assert "run.failed" in actions
