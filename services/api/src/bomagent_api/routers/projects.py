@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import re
 import uuid
@@ -357,7 +358,10 @@ async def upload_file(
                 ),
             )
     except BaseException:
-        await store.delete(key)  # the row was not committed: drop the new object
+        # the row was not committed: drop the new object (best effort - a failing cleanup
+        # must not mask the original error)
+        with contextlib.suppress(Exception):
+            await store.delete(key)
         raise
     if previous is not None and previous.object_key != key:
         await store.delete(previous.object_key)  # replaced: keep no orphaned copies

@@ -203,3 +203,26 @@ async def test_s3_put_file_with_moto(monkeypatch):
             assert await store.get(key) == payload
             with pytest.raises(InvalidObjectKeyError):
                 await store.put_file(tenant_key(uuid.uuid4(), "x"), io.BytesIO(b"x"))
+
+
+async def test_s3_put_file_bounds_memory_with_a_transfer_config(monkeypatch):
+    import io
+
+    monkeypatch.setenv("AWS_ACCESS_KEY_ID", "testing")
+    monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "testing")
+    with mock_aws():
+        store = S3ObjectStore("bomagent-test", region="eu-central-1")
+        seen: dict[str, object] = {}
+
+        def fake_upload(body, bucket, key, **kwargs):
+            seen.update(kwargs)
+
+        store._s3.upload_fileobj = fake_upload  # type: ignore[method-assign]
+        tid = uuid.uuid4()
+        with tenant_scope(TenantContext(tenant_id=tid, actor_id="u")):
+            await store.put_file(tenant_key(tid, "f"), io.BytesIO(b"x"), "text/plain")
+    cfg = seen["Config"]
+    assert cfg.max_concurrency <= 2
+    assert cfg.max_in_memory_upload_chunks <= 2
+    assert cfg.multipart_chunksize == 8 * 1024 * 1024
+    assert seen["ExtraArgs"] == {"ContentType": "text/plain"}

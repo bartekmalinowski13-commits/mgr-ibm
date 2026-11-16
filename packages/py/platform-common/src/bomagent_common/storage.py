@@ -12,7 +12,7 @@ from __future__ import annotations
 import asyncio
 import re
 import uuid
-from typing import TYPE_CHECKING, BinaryIO, Protocol
+from typing import TYPE_CHECKING, Any, BinaryIO, Protocol
 
 from bomagent_common.tenancy import require_tenant
 
@@ -93,6 +93,20 @@ class InMemoryObjectStore:
         return f"memory://get/{key}?expires={expires}"
 
 
+def upload_transfer_config() -> Any:
+    """Bounded memory per upload: 2 parts of 8 MiB in flight (boto3's default is up to 10
+    parts and 10 threads, about 80 MiB per 64 MiB upload)."""
+    from boto3.s3.transfer import TransferConfig
+
+    config = TransferConfig(
+        multipart_threshold=8 * 1024 * 1024,
+        multipart_chunksize=8 * 1024 * 1024,
+        max_concurrency=2,
+    )
+    config.max_in_memory_upload_chunks = 2  # s3transfer attribute, not a boto3 kwarg
+    return config
+
+
 class S3ObjectStore:
     """S3 with SSE-KMS (bucket default encryption; enforced in CDK), or an S3-compatible
     store (Supabase Storage) at ``endpoint_url`` with ``force_path_style``.
@@ -145,6 +159,7 @@ class S3ObjectStore:
             self._bucket,
             key,
             ExtraArgs={"ContentType": content_type},
+            Config=upload_transfer_config(),
         )
 
     async def get(self, key: str) -> bytes:
