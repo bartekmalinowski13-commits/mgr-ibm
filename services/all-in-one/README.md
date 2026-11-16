@@ -6,7 +6,8 @@ package only composes them.
 
 | Part | How |
 |---|---|
-| API | `bomagent_api.create_app` unchanged, incl. the maintenance loop (outbox relay, stuck-run reaper) |
+| API | `bomagent_api.create_app` unchanged, incl. the maintenance loop (outbox relay, stuck-run reaper, daily audit anchors) |
+| Roles | `BOMAGENT_ROLE`: `all` (default: everything in one process), `web` (API + SPA + maintenance, no consumers; readiness has no "workers" check), `worker` (consumers + dead-letter purge only: no SPA or sign-in config, no maintenance loop). Web and worker report as `bomagent-allinone-web` / `-worker`. A worker process still serves the `/v1` API on its port - give its Fly group no public service and size `BOMAGENT_DB_POOL_SIZE` per group (each process opens its own pools: Supavisor session limits). Web must stay always on: the outbox relay, reaper and anchor export live there. A missing worker group is **not** visible in the web `/readyz` - check the worker group's own `/readyz` |
 | Queues | `PostgresQueue` (`app.queue_messages`, migration 0013) for `ingest`, `runs`, `kb`: the API inserts with the app role, the in-process consumers read with the platform role; handlers run in the message's tenant context with the app role (RLS) |
 | Workers | ingest (`IngestWorker`), agent (`RunWorker`), KB indexer (`KbIndexer`) - the same handlers as the AWS services; design files are parsed in the resource-limited sandbox (`bomagent_cad.sandbox`); one message at a time per queue; a dead-letter purge after 14 days |
 | SPA | files from `BOMAGENT_STATIC_DIR` (`apps/web/dist`), SPA fallback to `index.html` for non-`/v1` GET paths (a missing file with an extension -> 404), hashed `assets/` cached immutably, `index.html` `no-cache`, CSP `default-src 'self'` with `connect-src` limited to the own origin and the Supabase project |

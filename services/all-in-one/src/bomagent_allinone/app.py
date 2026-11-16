@@ -21,7 +21,7 @@ import os
 import uuid
 from collections.abc import AsyncIterator, Callable
 from pathlib import Path
-from typing import Any, Self
+from typing import Any, Literal, Self
 from urllib.parse import urlsplit
 
 from fastapi import FastAPI, Request
@@ -80,6 +80,10 @@ class Settings(ApiSettings):
     #: comma-separated Supabase social providers shown on the sign-in page (``google``,
     #: ``azure`` = Microsoft, ``apple``); empty = e-mail + password only
     social_providers: str = ""
+    #: what this process runs (audit ARCH-02): ``all`` = API + SPA + workers (the pilot today),
+    #: ``web`` = API + SPA only, ``worker`` = the queue consumers only (no SPA, no sign-in
+    #: config, no outbox relay/reaper); lets Fly run them as separate process groups
+    role: Literal["all", "web", "worker"] = "all"
     start_workers: bool = True
     queue_wait_seconds: int = 5
     db_pool_size: int = 5  # app role; the platform role uses 2 (mind the pooler's limits)
@@ -89,6 +93,14 @@ class Settings(ApiSettings):
     #: (default) = allowed only in local/test; the pilot sets it explicitly while it still
     #: runs without a gateway (``BOMAGENT_ALLOW_FAKE_LLM``)
     allow_fake_llm: bool | None = None
+
+    @property
+    def runs_workers(self) -> bool:
+        return self.start_workers and self.role in {"all", "worker"}
+
+    @property
+    def serves_web(self) -> bool:
+        return self.role in {"all", "web"}
 
     @property
     def social_provider_ids(self) -> list[str]:
@@ -168,6 +180,19 @@ def _llm(settings: Settings) -> tuple[ChatClient, EmbeddingClient]:
     return FakeChat(heuristic_responder), HashingEmbeddings()
 
 
+def effective_settings(settings: Settings) -> Settings:
+    """The settings the API is built with. A worker process leaves the outbox relay, the
+    stuck-run reaper and the audit anchors to the web process (they run there, several
+    replicas may overlap). Web and worker processes report as ``bomagent-allinone-<role>`` so
+    their traces and metrics can be told apart."""
+    if settings.role == "all":
+        return settings
+    update: dict[str, Any] = {"service_name": f"{settings.service_name}-{settings.role}"}
+    if settings.role == "worker":
+        update["maintenance_interval_s"] = 0.0
+    return settings.model_copy(update=update)
+
+
 def create_app(
     settings: Settings | None = None,
     *,
@@ -223,9 +248,9 @@ def create_app(
         ).handle,
     }
     workers = _Workers(settings, queues, handlers)
-    readiness = {"workers": workers.alive} if settings.start_workers else {}
+    readiness = {"workers": workers.alive} if settings.runs_workers else {}
     app = create_api(
-        settings,
+        effective_settings(settings),
         engine=engine,
         platform_engine=platform_engine,
         store=store,
@@ -312,7 +337,7 @@ class _Workers:
 
 def _wrap_lifespan(app: FastAPI, workers: _Workers) -> None:
     api_lifespan = app.router.lifespan_context
-    start = workers._settings.start_workers
+    start = workers._settings.runs_workers
 
     @contextlib.asynccontextmanager
     async def lifespan(a: FastAPI) -> AsyncIterator[Any]:
@@ -328,6 +353,9 @@ def _wrap_lifespan(app: FastAPI, workers: _Workers) -> None:
 
 
 def _install_frontend(app: FastAPI, settings: Settings) -> None:
+    if not settings.serves_web:  # a worker process has no browser-facing surface
+        return
+
     @app.get("/config.json", include_in_schema=False)
     async def config_json() -> Response:
         runtime = {
