@@ -197,3 +197,12 @@ domain) and the assumptions awaiting acceptance (`docs/DECISIONS_LOG.md`, last c
   hashing retriever written up in `docs/thesis/METODYKA.md`.
 - Still to do: `experiment run --retriever postgres --embedding-model <id>` (scratch tenant via
   `KnowledgeBase`; DB-backed tests run in CI only).
+
+## 2026-11-16 - TH-06 (injector part)
+
+- `bomagent_eval.injection`: four error classes outside rule coverage (`BEYOND_RULES_KINDS`),
+  `rule_coverage()` per class, `DetectionReport.false_alarms_by_rule`. Tests assert the rule pack
+  detects none of the new classes (so B is not graded only on what its own rules check). The
+  default mutation mix is unchanged so existing pilots stay comparable.
+- Follow-up: `injection.kinds` in the experiment config and the coverage/false-alarm tables in the
+  experiment report.
