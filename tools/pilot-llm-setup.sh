@@ -45,10 +45,22 @@ fi
 # the master key lives only in Fly's secret store: an existing one is never replaced here
 # (rotation: docs/platform/runbooks/key-rotation.md)
 NEW_MASTER=""
-if fly secrets list --app "$GATEWAY_APP" --json 2>/dev/null | grep -q '"Name": *"LITELLM_MASTER_KEY"'; then
+if ! LISTING="$(fly secrets list --app "$GATEWAY_APP" --json 2>&1)"; then
+  echo "Could not list the secrets of ${GATEWAY_APP}: not touching the master key. ${LISTING}" >&2
+  exit 1
+fi
+if ! HAS_MASTER="$(printf '%s' "$LISTING" | python3 -c 'import json,sys; print(any((s.get("Name") or s.get("name")) == "LITELLM_MASTER_KEY" for s in json.load(sys.stdin)))')"; then
+  echo "Could not read the secret listing of ${GATEWAY_APP}: not touching the master key." >&2
+  exit 1
+fi
+if [ "$HAS_MASTER" = "True" ]; then
   echo "== LITELLM_MASTER_KEY already set on ${GATEWAY_APP}: keeping it"
 else
-  NEW_MASTER="sk-$(openssl rand -hex 32)"
+  # secrets staged but not yet deployed may not be listed: never replace a key without asking
+  ANSWER=""
+  read -r -p "No LITELLM_MASTER_KEY is visible on ${GATEWAY_APP}. Generate a NEW one? [y/N] " ANSWER || true
+  [ "$ANSWER" = "y" ] || [ "$ANSWER" = "Y" ] || echo "== not generating a master key (the gateway will not start without one)"
+  if [ "$ANSWER" = "y" ] || [ "$ANSWER" = "Y" ]; then NEW_MASTER="sk-$(openssl rand -hex 32)"; fi
 fi
 
 echo "== setting secrets on ${GATEWAY_APP} (staged: no deploy yet)"

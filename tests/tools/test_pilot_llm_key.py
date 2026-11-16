@@ -21,8 +21,10 @@ NEW_KEY = "sk-virtual-fedcba9876543210"
 FLY_SHIM = r"""#!/usr/bin/env bash
 echo "fly $*" >> "$SHIM_LOG"
 case "$1 $2" in
-  "secrets import") { echo "--- stdin of fly secrets import"; cat; } >> "$SHIM_LOG" ;;
-  "proxy "*) exec sleep 30 ;;
+  "secrets import")
+    { echo "--- stdin of fly secrets import"; cat; } >> "$SHIM_LOG"
+    [ -z "${SHIM_IMPORT_FAIL:-}" ] || { echo "fly: boom" >&2; exit 1; } ;;
+  "proxy "*) [ -z "${SHIM_PROXY_DIES:-}" ] || exit 1; exec sleep 30 ;;
 esac
 exit 0
 """
@@ -48,7 +50,11 @@ done
 url="${@: -1}"
 case "$url" in
   *"/v1/models") echo '{"data":[{"id":"mistral-large-eu"},{"id":"claude-sonnet-eu"}]}' ;;
-  *"/key/generate") echo '{"key":"'"$SHIM_NEW_KEY"'","key_alias":"x"}' ;;
+  *"/key/generate")
+    if [ -n "${SHIM_GENERATE_FAIL:-}" ]; then
+      echo '{"error":{"message":"alias already exists"}}'; exit 22
+    fi
+    echo '{"key":"'"$SHIM_NEW_KEY"'","key_alias":"x"}' ;;
   *"/key/delete") echo '{"deleted_keys":["x"]}' ;;
   *) echo '{"status":"healthy"}' ;;
 esac
@@ -150,4 +156,84 @@ def test_delete_only_retires_a_key_without_creating_or_touching_the_app_secret(e
 def test_an_unknown_option_fails_before_anything_runs(env):
     result = run(env, "--nonsense")
     assert result.returncode != 0
+    assert Path(env["SHIM_LOG"]).read_text() == ""
+
+
+# ---------------------------------------------------------------- review hardening
+
+
+def _body(log: str, n: int = 1) -> dict:
+    return json.loads(log.split("--- request body")[n].split("\n", 2)[1])
+
+
+def test_the_tunnel_uses_a_free_local_port_bound_to_localhost(env):
+    assert run(env, "--alias", "a").returncode == 0
+    proxy = next(
+        line
+        for line in Path(env["SHIM_LOG"]).read_text().splitlines()
+        if line.startswith("fly proxy")
+    )
+    port = int(proxy.split()[2].split(":")[0])
+    assert port != 4000  # a local compose gateway on 4000 must never receive the master key
+    assert "--bind-addr 127.0.0.1" in proxy
+
+
+def test_a_dead_tunnel_is_noticed_before_any_request_carries_the_master_key(env):
+    result = run({**env, "SHIM_PROXY_DIES": "1"}, "--alias", "a")
+    assert result.returncode != 0
+    assert "tunnel" in (result.stdout + result.stderr).lower()
+    assert "--- curl config on stdin" not in Path(env["SHIM_LOG"]).read_text()
+
+
+def test_a_refused_key_request_reports_the_gateway_error_and_stores_nothing(env):
+    result = run({**env, "SHIM_GENERATE_FAIL": "1"}, "--alias", "a")
+    out = result.stdout + result.stderr
+    assert result.returncode != 0
+    assert "alias already exists" in out
+    assert NEW_KEY not in out and MASTER not in out
+    assert "secrets import" not in Path(env["SHIM_LOG"]).read_text()
+
+
+def test_when_fly_cannot_store_the_key_the_orphan_is_named_for_cleanup(env):
+    result = run({**env, "SHIM_IMPORT_FAIL": "1"}, "--alias", "bomagent-pilot-x")
+    out = result.stdout + result.stderr
+    assert result.returncode != 0
+    assert "--delete-only --delete-alias bomagent-pilot-x" in out
+    assert NEW_KEY not in out
+
+
+def test_alias_values_cannot_inject_into_the_json_bodies(env):
+    assert run(env, "--delete-only", "--delete-alias", 'a","b').returncode == 0
+    assert _body(Path(env["SHIM_LOG"]).read_text()) == {"key_aliases": ['a","b']}
+    env2 = {**env, "SHIM_LOG": str(Path(env["SHIM_LOG"]).with_name("two.log"))}
+    Path(env2["SHIM_LOG"]).write_text("")
+    assert run(env2, "--alias", 'x"y\\z').returncode == 0
+    assert _body(Path(env2["SHIM_LOG"]).read_text())["key_alias"] == 'x"y\\z'
+
+
+@pytest.mark.parametrize(
+    "args",
+    [
+        ("--alias", "same", "--delete-alias", "same"),  # would delete the key it just created
+        ("--alias", "a", "--budget", "5."),
+        ("--alias", "a", "--budget", "1.2.3"),
+        ("--alias", "a", "--budget", "-3"),
+    ],
+)
+def test_nonsense_arguments_are_refused_before_any_secret_is_read(env, args):
+    result = run(env, *args)
+    assert result.returncode == 2
+    assert Path(env["SHIM_LOG"]).read_text() == ""
+
+
+def test_a_master_key_that_would_break_the_curl_config_is_refused(env):
+    result = run(env, "--alias", "a", stdin='sk-bad"key\n')
+    assert result.returncode != 0
+    assert "--- curl config on stdin" not in Path(env["SHIM_LOG"]).read_text()
+
+
+def test_help_prints_usage_without_touching_anything(env):
+    result = run(env, "--help")
+    assert result.returncode == 0
+    assert "Usage" in result.stdout or "pilot-llm-key.sh [" in result.stdout
     assert Path(env["SHIM_LOG"]).read_text() == ""
