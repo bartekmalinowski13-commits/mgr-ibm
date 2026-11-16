@@ -357,3 +357,41 @@ def test_platform_url_composed_from_parts(monkeypatch):
         "postgresql+psycopg://bomagent_platform:x%20y@db.example:5432/bomagent?sslmode=require"
     )
     assert s.database_url is None  # app password not set: no app URL
+
+
+async def test_invitation_is_emailed_with_single_use_link_and_audited(
+    app_engine, platform_engine
+) -> None:
+    from bomagent_common.mailer import LogMailer
+
+    mailer = LogMailer()
+    env = Env(app_engine, platform_engine)
+    env.app.state.mailer = mailer
+    env.app.state.invite_base_url = "https://app.example.eu"
+    owner = await env.org(await env.login("mail-owner"), "mail-org")
+    resp = await env.invite(owner, "New@X.eu", ["viewer"])
+    assert resp.status_code == 201, resp.text
+    assert [m.to for m in mailer.sent] == ["new@x.eu"]
+    assert f"https://app.example.eu/invite/{resp.json()['token']}" in mailer.sent[0].text
+    async with tenant_transaction(app_engine, uuid.UUID(owner["X-Org-Id"])) as conn:
+        actions = (
+            (
+                await conn.execute(
+                    text("SELECT action FROM app.audit_log WHERE action LIKE 'member.invit%'")
+                )
+            )
+            .scalars()
+            .all()
+        )
+    assert "member.invitation_emailed" in actions
+
+
+async def test_no_email_without_base_url(app_engine, platform_engine) -> None:
+    from bomagent_common.mailer import LogMailer
+
+    mailer = LogMailer()
+    env = Env(app_engine, platform_engine)
+    env.app.state.mailer = mailer
+    owner = await env.org(await env.login("nomail-owner"), "nomail-org")
+    assert (await env.invite(owner, "n@x.eu", ["viewer"])).status_code == 201
+    assert mailer.sent == []
