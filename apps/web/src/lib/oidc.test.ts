@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { authorizeUrl, decodeIdToken, parseRuntime, pkceChallenge } from "./oidc";
 
 describe("PKCE", () => {
@@ -71,5 +71,19 @@ describe("runtime info from /config.json", () => {
     });
     expect(parseRuntime({ mode: "live" }).mode).toBe("live");
     expect(parseRuntime(undefined).mode).toBe("live"); // local dev: no config.json
+  });
+});
+
+describe("sso discovery", () => {
+  it("raises RateLimitedError on 429 instead of pretending the e-mail has no SSO", async () => {
+    const { discoverSso, RateLimitedError } = await import("./oidc");
+    const spy = vi.spyOn(globalThis, "fetch");
+    spy.mockResolvedValueOnce(new Response("{}", { status: 429, headers: { "Retry-After": "7" } }));
+    await expect(discoverSso("a@b.eu")).rejects.toMatchObject({ retryAfterS: 7 });
+    spy.mockResolvedValueOnce(new Response("{}", { status: 429 }));
+    await expect(discoverSso("a@b.eu")).rejects.toBeInstanceOf(RateLimitedError);
+    spy.mockResolvedValueOnce(new Response(JSON.stringify({ sso: true, provider: "p" })));
+    expect(await discoverSso("a@b.eu")).toBe("p");
+    spy.mockRestore();
   });
 });

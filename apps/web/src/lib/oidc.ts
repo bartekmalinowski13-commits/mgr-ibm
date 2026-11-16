@@ -102,10 +102,19 @@ export function decodeIdToken(token: string): { sub: string; email: string; name
   };
 }
 
-/** Redirects the browser to the hosted login. */
+/** Too many requests from this address: sign-in must not silently skip single sign-on. */
+export class RateLimitedError extends Error {
+  constructor(readonly retryAfterS: number) {
+    super("rate-limited");
+  }
+}
+
 /** Identity provider of the e-mail's organisation, if it uses single sign-on. */
 export async function discoverSso(email: string): Promise<string | undefined> {
   const resp = await fetch(`/v1/sso/discover?${new URLSearchParams({ email })}`);
+  if (resp.status === 429) {
+    throw new RateLimitedError(Number(resp.headers.get("Retry-After")) || 60);
+  }
   if (!resp.ok) return undefined;
   const body = (await resp.json()) as { sso: boolean; provider?: string | null };
   return body.sso && body.provider ? body.provider : undefined;

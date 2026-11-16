@@ -14,8 +14,8 @@ Scheduled task `audit-implementation-continue` (hourly, id `trig_0174gXcCFuTekwm
 
 | Task | Status | Branch | PR | Notes |
 |---|---|---|---|---|
-| UX-01 demo banner + watermark | in progress | claude/audit-ux-01 | | |
-| SEC-03 per-IP limits, SSO discovery as POST | todo | | | Fly/Supabase console limits = owner |
+| UX-01 demo banner + watermark | merged | claude/audit-ux-01 | #18 | demo detected only in `services/all-in-one` (DECISIONS_LOG) |
+| SEC-03 per-IP limits, SSO discovery as POST | in progress | claude/audit-sec-03 | | part 1 (in-memory per-IP buckets, `ip_limits.py`) in this PR; part 2 (discovery as POST, touches routers/sso.py + web) queued as a separate PR for the owner; Fly/Supabase console limits = owner; AWS: forward `CloudFront-Viewer-Address` + set `BOMAGENT_CLIENT_IP_HEADER` (CDK, owner PR) |
 | SEC-13 presigned uploads, parse semaphore | todo | | | |
 | SEC-01 parser isolation (no-new-privs, rlimits, netns) | todo | | | separate Fly app/AWS IAM parts = owner/deploy |
 | ARCH-02 process groups | todo | | | `deploy/*` change: leave PR open for owner |

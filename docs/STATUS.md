@@ -11,6 +11,15 @@ _Updated by Claude Code after every milestone (see `docs/prompts/CLAUDE_CODE_MAS
   (fake model) and a note on the reference comparison; CSV export gets a `Demo` column and
   `GET /v1/runs/{id}/bom` returns `demo: true`.
 
+- **SEC-03 (part 1) per-IP limits:** token buckets per client address for the routes that run before
+  the organisation context (`/v1/sso/discover`, `/v1/invitations/accept`, `POST /v1/organizations`,
+  `/v1/me`, every `/v1` request without credentials); 429 problem+json with `Retry-After`; address from
+  `Fly-Client-IP` / a configured edge header, never `X-Forwarded-For`; outside local/test on only when
+  `BOMAGENT_CLIENT_IP_HEADER` is set (`BOMAGENT_IP_RATE_LIMIT` overrides); the all-in-one image picks
+  `Fly-Client-IP` automatically on Fly; failed token verifications (401) are counted per IP; the SPA
+  shows a retry message on 429 at sign-in. In-memory, per replica. AWS needs the CloudFront header
+  forwarded (owner/CDK PR).
+
 ## 2026-11-12 - deployment paths ready (AWS single-account dev, Supabase pilot); nothing deployed yet
 
 > **Owner: start with `docs/OWNER_CHECKLIST.md`** - what is ready and your steps in order.

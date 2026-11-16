@@ -2,7 +2,13 @@ import { Button, Input } from "@bomagent/ui";
 import { Navigate, useNavigate } from "@tanstack/react-router";
 import { type FormEvent, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { type AuthConfig, authConfig, discoverSso, startLogin } from "../lib/oidc";
+import {
+  type AuthConfig,
+  authConfig,
+  discoverSso,
+  RateLimitedError,
+  startLogin,
+} from "../lib/oidc";
 import { devSignIn, useSession } from "../lib/session";
 import { AuthLayout } from "./AuthLayout";
 import { SupabaseLogin } from "./SupabaseLogin";
@@ -27,8 +33,16 @@ export function LoginScreen() {
     const continueLogin = async (e: FormEvent) => {
       e.preventDefault();
       setBusy(true);
-      // SSO organisations go straight to their identity provider, others to Cognito
-      await startLogin(oidc, email.trim() ? await discoverSso(email.trim()) : undefined);
+      setError(undefined);
+      try {
+        // SSO organisations go straight to their identity provider, others to Cognito
+        await startLogin(oidc, email.trim() ? await discoverSso(email.trim()) : undefined);
+      } catch (err) {
+        setError(
+          err instanceof RateLimitedError ? t("login.rateLimited") : t("common.unknownError"),
+        );
+        setBusy(false);
+      }
     };
     return (
       <AuthLayout title={t("login.title")} lead={t("login.lead")}>
@@ -45,6 +59,11 @@ export function LoginScreen() {
               onChange={(e) => setEmail(e.target.value)}
             />
           </label>
+          {error ? (
+            <p role="alert" className="text-sm text-error">
+              {error}
+            </p>
+          ) : null}
           <Button type="submit" disabled={busy} className="self-start">
             {t("login.continue")}
           </Button>
@@ -62,8 +81,8 @@ export function LoginScreen() {
       const provider = await discoverSso(email.trim());
       signIn(await devSignIn(email.trim(), name.trim(), provider));
       await navigate({ to: "/start" });
-    } catch {
-      setError(t("common.unknownError"));
+    } catch (err) {
+      setError(err instanceof RateLimitedError ? t("login.rateLimited") : t("common.unknownError"));
     } finally {
       setBusy(false);
     }

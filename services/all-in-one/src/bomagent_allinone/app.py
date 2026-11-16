@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import os
 import uuid
 from collections.abc import AsyncIterator, Callable
 from pathlib import Path
@@ -61,6 +62,10 @@ class Settings(ApiSettings):
     """API settings plus the pilot's: Supabase defaults, SPA, in-process workers."""
 
     service_name: str = "bomagent-allinone"
+    #: Fly's proxy is the socket peer; its edge header carries the real client (SEC-03)
+    client_ip_header: str | None = Field(
+        default_factory=lambda: "Fly-Client-IP" if os.environ.get("FLY_APP_NAME") else None
+    )
     queue_backend: QueueBackend = "postgres"
     oidc_audience: str = "authenticated"
     oidc_algorithms: list[str] = Field(default_factory=lambda: list(SUPABASE_ALGORITHMS))

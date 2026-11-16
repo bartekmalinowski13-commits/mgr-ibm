@@ -235,6 +235,18 @@ async def test_config_json_for_supabase_auth(app_engine, platform_engine):
     assert resp.headers["cache-control"] == "no-store"
 
 
+def test_client_ip_header_defaults_to_fly_only_on_fly(monkeypatch):
+    # behind Fly's proxy the socket peer is the proxy: without the edge header every user
+    # would share one per-IP bucket
+    monkeypatch.delenv("FLY_APP_NAME", raising=False)
+    assert Settings(environment="test").client_ip_header is None
+    monkeypatch.setenv("FLY_APP_NAME", "mgr-ibm")
+    assert Settings(environment="test").client_ip_header == "Fly-Client-IP"
+    assert (
+        Settings(environment="test", client_ip_header="X-Edge-IP").client_ip_header == "X-Edge-IP"
+    )
+
+
 def test_social_providers_are_parsed_from_a_comma_separated_value():
     assert Settings(environment="test").social_provider_ids == []
     s = Settings(environment="test", social_providers=" Google, azure ,apple,google,facebook,, ")
