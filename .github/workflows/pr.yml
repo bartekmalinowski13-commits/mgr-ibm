@@ -19,6 +19,30 @@ env:
   FORCE_COLOR: "1"
 
 jobs:
+  changes:
+    # Fast path (OPS-07): decides only whether the heavy image/stack jobs below may be
+    # skipped on a docs-only pull request. Job-level `if:` (never workflow-level `paths:`),
+    # so a skipped job still reports "skipped" = success to branch protection instead of
+    # staying pending. `static`, `python-tests`, `isolation` ("tenant isolation (blocking)"),
+    # `contract`, `typescript`, `security` always run. Any doubt -> docs_only=false.
+    name: detect docs-only change
+    runs-on: ubuntu-24.04
+    outputs:
+      docs_only: ${{ steps.diff.outputs.docs_only }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false, fetch-depth: 2 }
+      - id: diff
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          # pull_request checks out the merge commit: HEAD^1 = base, HEAD^2 = PR head
+          if [ "$EVENT_NAME" = "pull_request" ] && git rev-parse -q --verify HEAD^2 >/dev/null; then
+            git diff --name-only HEAD^1 HEAD | python3 tools/ci_docs_only.py | tee -a "$GITHUB_OUTPUT"
+          else
+            echo "docs_only=false" | tee -a "$GITHUB_OUTPUT"
+          fi
+
   static:
     name: lint, types, module boundaries
     runs-on: ubuntu-24.04
@@ -99,7 +123,8 @@ jobs:
   stack-smoke:
     name: compose stack + smoke + E2E (fake LLM)
     runs-on: ubuntu-24.04
-    needs: [static, python-tests]
+    needs: [changes, static, python-tests]
+    if: ${{ !cancelled() && needs.static.result == 'success' && needs.python-tests.result == 'success' && needs.changes.outputs.docs_only != 'true' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with: { persist-credentials: false }
@@ -130,7 +155,8 @@ jobs:
   allinone:
     name: all-in-one image (Supabase pilot) - build, bootstrap, migrate, serve
     runs-on: ubuntu-24.04
-    needs: [static]
+    needs: [changes, static]
+    if: ${{ !cancelled() && needs.static.result == 'success' && needs.changes.outputs.docs_only != 'true' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with: { persist-credentials: false }
@@ -172,7 +198,8 @@ jobs:
   llm-gateway:
     name: LLM gateway image - render config from the catalogue, EU-only check
     runs-on: ubuntu-24.04
-    needs: [static]
+    needs: [changes, static]
+    if: ${{ !cancelled() && needs.static.result == 'success' && needs.changes.outputs.docs_only != 'true' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with: { persist-credentials: false }
@@ -209,6 +236,8 @@ jobs:
   cdk:
     name: cdk synth + cdk-nag
     runs-on: ubuntu-24.04
+    needs: [changes]
+    if: ${{ !cancelled() && needs.changes.outputs.docs_only != 'true' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with: { persist-credentials: false }
