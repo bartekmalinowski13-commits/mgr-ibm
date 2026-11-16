@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import time
 import uuid
 from dataclasses import dataclass
 
@@ -23,6 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from bomagent_cad import FileRef, ParseError
 from bomagent_cad.sandbox import ProjectSize, parse_files_sandboxed
+from bomagent_common import metrics
 from bomagent_common.audit import AuditEvent, emit_audit
 from bomagent_common.db import tenant_transaction
 from bomagent_common.logging import get_logger
@@ -62,6 +64,7 @@ class IngestWorker:
                 )
             ).all()
         files: list[FileRef] = []
+        started = time.monotonic()
         for row in rows:
             if not key_belongs_to(message.tenant_id, row.object_key):
                 raise ValueError("file outside the tenant prefix")
@@ -74,6 +77,7 @@ class IngestWorker:
                 files.append(FileRef(row.name, await self.store.get(row.object_key)))
             # CPU-bound and untrusted input: resource-limited subprocess, off the event loop
             design = await asyncio.to_thread(parse_files_sandboxed, files)
+            metrics.record_parse("ok", None, duration_s=time.monotonic() - started)
             status, fmt = "parsed", design.source_format
             summary = {
                 "design": design.design_name,
@@ -83,6 +87,7 @@ class IngestWorker:
                 "limitations": design.limitations[:20],
             }
         except ParseError as exc:
+            metrics.record_parse("failed", exc.code, duration_s=time.monotonic() - started)
             status, fmt = "failed", None
             summary = {"error": exc.code, "message": str(exc)[:500]}
         async with tenant_transaction(self.engine, message.tenant_id) as conn:

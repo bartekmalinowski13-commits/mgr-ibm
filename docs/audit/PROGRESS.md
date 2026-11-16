@@ -17,10 +17,10 @@ Scheduled task `audit-implementation-continue` (hourly, id `trig_0174gXcCFuTekwm
 | UX-01 demo banner + watermark | merged | claude/audit-ux-01 | #18 | demo detected only in `services/all-in-one` (DECISIONS_LOG) |
 | SEC-03 per-IP limits, SSO discovery as POST | merged (part 1); part 2 todo | claude/audit-sec-03 | #19 | part 1 (in-memory per-IP buckets, `ip_limits.py`) in this PR; part 2 (discovery as POST, touches routers/sso.py + web) queued as a separate PR for the owner; Fly/Supabase console limits = owner; AWS: forward `CloudFront-Viewer-Address` + set `BOMAGENT_CLIENT_IP_HEADER` (CDK, owner PR) |
 | SEC-13 presigned uploads, parse semaphore | merged (streaming part) | claude/audit-sec-13 | #20 | this PR: streamed uploads (chunked hash, `ObjectStore.put_file`, no 64 MiB `bytes`); ingest already takes one message at a time per worker; presigned PUT + `files/complete` deferred: needs bucket CORS for the SPA origin on Supabase Storage/S3 (owner) |
-| SEC-01 parser isolation (no-new-privs, rlimits, netns) | in progress | claude/audit-sec-01 | | this PR: child sets no_new_privs, NOFILE 32, FSIZE 0, empty netns when allowed (reported in logs); separate Fly app / no-egress parser group = ARCH-02 deploy PR (owner); AWS ingest IAM/ABAC = CDK (owner) |
+| SEC-01 parser isolation (no-new-privs, rlimits, netns) | merged (code part) | claude/audit-sec-01 | #21 | this PR: child sets no_new_privs, NOFILE 32, FSIZE 0, empty netns when allowed (reported in logs); separate Fly app / no-egress parser group = ARCH-02 deploy PR (owner); AWS ingest IAM/ABAC = CDK (owner) |
 | ARCH-02 process groups | todo | | | `deploy/*` change: leave PR open for owner |
 | OPS-01 OTel endpoint wiring, alert rules, uptime/error-tracking config | todo | | | Grafana/Sentry accounts = owner |
-| OPS-02 OTel metrics + dashboards JSON | todo | | | |
+| OPS-02 OTel metrics + dashboards JSON | in progress | claude/audit-ops-02 | | this PR: metrics module + instrumentation (runs, LLM usage/cost, parse, outbox/queue dead-letters) + OTLP metrics export; dashboards JSON under `deploy/observability/` = separate PR (deploy/*, owner); queue depth/age gauges later (OPS-03) |
 | SEC-04 source IP in audit, anchor export job | todo | | | Object-store target/off-platform copy = owner |
 | DOC-02 decision-log acceptance helper, ADR-0017/0018 drafts | needs owner | | | Acceptance of DECISIONS_LOG rows and ADRs = owner; code side: ADR-0018 draft, nightly staleness check |
 | SEC-08 virtual keys, rotation runbook | todo | | | rotate real keys = owner |

@@ -26,6 +26,7 @@ from opentelemetry.propagate import extract, inject
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 
+from bomagent_common import metrics
 from bomagent_common.db import make_engine, platform_transaction, tenant_transaction
 from bomagent_common.logging import get_logger
 from bomagent_common.tenancy import TenantContext, current_tenant, tenant_scope
@@ -242,6 +243,7 @@ class PostgresQueue:
                 {"q": self.name, "max": self._max_receive},
             )
             for row_id in dead.scalars():
+                metrics.record_queue_dead(self.name)
                 log.error("queue_message_dead", queue=self.name, queue_message_id=str(row_id))
             rows = (
                 await conn.execute(
