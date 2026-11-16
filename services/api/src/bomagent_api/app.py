@@ -130,7 +130,7 @@ class Settings(ServiceSettings):
     llm_gateway_key: str | None = None
     #: run without a gateway on non-semantic hashing embeddings (explicit opt-in outside
     #: local/test, ARCH-07); never set this for real customer data
-    allow_fake_llm: bool = False
+    allow_fake_llm: bool | None = None
     embedding_model: str = "fake-embedding"
     cors_origins: list[str] = Field(default_factory=list)
     maintenance_interval_s: float = 30.0  # outbox relay + stuck-run reaper; 0 disables
