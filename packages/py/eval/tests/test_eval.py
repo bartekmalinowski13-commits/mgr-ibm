@@ -353,3 +353,59 @@ def test_only_mpn_rejection_findings_count():
     )
     h = evaluate(bom, ref).hallucinations
     assert (h.rejected_mpn_decisions, h.agent_mpn_decisions) == (1, 2)
+
+
+def test_beyond_rule_kinds_are_not_covered_by_the_rule_pack():
+    """TH-06: error classes outside `core@1.0.0` coverage - the rule pack must NOT see them,
+    otherwise the experiment is circular."""
+    from bomagent_eval.injection import BEYOND_RULES_KINDS, rule_coverage
+
+    coverage = rule_coverage()
+    assert set(BEYOND_RULES_KINDS) <= set(coverage)
+    assert not any(coverage[k] for k in BEYOND_RULES_KINDS)
+    assert all(coverage[k] for k in coverage if k not in BEYOND_RULES_KINDS)
+
+    items = reference("ecg-frontend")
+    baseline = validate(items).findings
+    seen: set[str] = set()
+    for seed in range(12):
+        mutated, errors = inject_errors(items, n=6, seed=seed, kinds=BEYOND_RULES_KINDS)
+        seen |= {e.kind for e in errors}
+        report = detection_report(errors, validate(mutated).findings, baseline)
+        assert report.detected == 0, "the rule pack must not detect beyond-rule errors"
+    assert seen == set(BEYOND_RULES_KINDS), (
+        f"injector never produced {set(BEYOND_RULES_KINDS) - seen}"
+    )
+
+
+def test_beyond_rule_errors_change_only_the_intended_field():
+    from bomagent_eval.injection import BEYOND_RULES_KINDS
+
+    items = reference("ecg-frontend")
+    for kind in BEYOND_RULES_KINDS:
+        mutated, errors = inject_errors(items, n=1, seed=1, kinds=(kind,))
+        if not errors:
+            continue  # e.g. no capacitor with a voltage rating on this seed
+        (err,) = errors
+        before = next(i for i in items if i.line == err.line)
+        after = next(i for i in mutated if i.line == err.line)
+        changed = {
+            f
+            for f in ("value", "mpn", "footprint", "quantity", "refdes", "fields")
+            if getattr(before, f) != getattr(after, f)
+        }
+        assert changed == {"fields" if err.field == "lifecycle" else err.field}, kind
+
+
+def test_false_alarms_are_reported_per_rule():
+    from bomagent_bom.model import Finding, Severity
+
+    items = reference("ecg-frontend")
+    _, errors = inject_errors(items, n=1, seed=3, kinds=("drop_footprint",))
+    noise = [
+        Finding(rule_id="x.rule", severity=Severity.WARNING, message="?", refdes=["ZZ1"]),
+        Finding(rule_id="x.rule", severity=Severity.ERROR, message="?", refdes=["ZZ2"]),
+        Finding(rule_id="y.rule", severity=Severity.WARNING, message="?", refdes=["ZZ3"]),
+    ]
+    rep = detection_report(errors, noise)
+    assert rep.false_alarms_by_rule == {"x.rule": 2, "y.rule": 1}

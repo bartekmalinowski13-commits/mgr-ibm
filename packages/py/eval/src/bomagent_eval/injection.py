@@ -11,6 +11,7 @@ on the mutated BOM that match no injected error are false alarms.
 from __future__ import annotations
 
 import random
+import re
 from dataclasses import dataclass, field
 
 from bomagent_bom.model import BomItem, Finding, Severity
@@ -25,7 +26,27 @@ ERROR_KINDS: dict[str, tuple[str, frozenset[str]]] = {
     "drop_footprint": ("footprint", frozenset({"footprint.present"})),
     "drop_mpn": ("mpn", frozenset({"mpn.present"})),
 }
+#: Error classes a deterministic rule pack cannot see from the BOM alone (TH-06). They exist so
+#: variant B's validation is not graded only on what its own rules check; detecting them needs
+#: requirements, datasheets or lifecycle data, i.e. the LLM agents. No rule codes listed.
+BEYOND_RULES_KINDS: tuple[str, ...] = (
+    "wrong_plausible_mpn",
+    "wrong_tolerance",
+    "voltage_derating",
+    "obsolete_part",
+)
+_BEYOND: dict[str, tuple[str, frozenset[str]]] = {
+    "wrong_plausible_mpn": ("mpn", frozenset()),
+    "wrong_tolerance": ("value", frozenset()),
+    "voltage_derating": ("value", frozenset()),
+    "obsolete_part": ("lifecycle", frozenset()),
+}
+ERROR_KINDS.update(_BEYOND)
+#: the default mix stays the rule-covered kinds (repeatable pilots); opt in to the others
+RULE_COVERED_KINDS: tuple[str, ...] = tuple(k for k in ERROR_KINDS if k not in _BEYOND)
 DETECTED_BY = {k: codes for k, (_, codes) in ERROR_KINDS.items()}
+_TOLERANCE = re.compile(r"(?<![\w.])(\d+(?:\.\d+)?)\s?%")
+_VOLTAGE = re.compile(r"(?<![\w.])(\d+(?:\.\d+)?)\s?V\b")
 _SIZE_SWAP = {"0402": "0603", "0603": "0805", "0805": "0603", "1206": "0805", "0201": "0402"}
 _ACTIONABLE = {Severity.ERROR, Severity.WARNING}
 
@@ -50,6 +71,8 @@ class DetectionReport:
     false_alarms: int
     #: error kind -> (injected, detected)
     by_kind: dict[str, tuple[int, int]] = field(default_factory=dict)
+    #: rule id of the finding -> number of false alarms it raised
+    false_alarms_by_rule: dict[str, int] = field(default_factory=dict)
 
     @property
     def detection_rate(self) -> float:
@@ -58,6 +81,40 @@ class DetectionReport:
     @property
     def false_alarm_rate(self) -> float:
         return self.false_alarms / self.new_findings if self.new_findings else 0.0
+
+
+def rule_coverage() -> dict[str, bool]:
+    """Error kind -> does the deterministic rule pack have a rule for it (TH-06)."""
+    return {kind: bool(codes) for kind, (_, codes) in ERROR_KINDS.items()}
+
+
+def _loosen_tolerance(item: BomItem) -> BomItem | None:
+    """Value says 20 % (or 1 % if it said 20 % already) while the MPN/datasheet disagree."""
+    m = _TOLERANCE.search(item.value)
+    if m:
+        worse = "20" if float(m.group(1)) < 20 else "1"
+        value = item.value[: m.start(1)] + worse + item.value[m.end(1) :]
+    elif item.kind == "resistor" and item.value:
+        value = f"{item.value} 20%"
+    else:
+        return None
+    return item.model_copy(update={"value": value})
+
+
+def _reduce_voltage(item: BomItem) -> BomItem | None:
+    """Rating a quarter of the stated one (or 6.3 V when none) - under-derated for the rail."""
+    if item.kind != "capacitor" or not item.value:
+        return None
+    m = _VOLTAGE.search(item.value)
+    if m:
+        value = (
+            item.value[: m.start(1)]
+            + f"{max(float(m.group(1)) / 4, 1.0):g}"
+            + item.value[m.end(1) :]
+        )
+    else:
+        value = f"{item.value}/6.3V"
+    return item.model_copy(update={"value": value})
 
 
 def _swap_size(item: BomItem) -> BomItem | None:
@@ -72,12 +129,34 @@ def _swap_size(item: BomItem) -> BomItem | None:
     return item.model_copy(update={"footprint": fp, "package": new})
 
 
+def _mutate_beyond_rules(
+    kind: str, item: BomItem, items: list[BomItem], rng: random.Random
+) -> tuple[BomItem | None, str]:
+    if kind == "wrong_plausible_mpn" and item.mpn:
+        others = sorted({o.mpn for o in items if o.kind == item.kind and o.mpn} - {item.mpn})
+        if others:
+            other = rng.choice(others)
+            return item.model_copy(update={"mpn": other}), (
+                f"MPN {item.mpn} replaced by the valid but wrong {other}"
+            )
+    elif kind == "wrong_tolerance":
+        return _loosen_tolerance(item), "tolerance in the value changed"
+    elif kind == "voltage_derating":
+        return _reduce_voltage(item), "voltage rating too low for the application"
+    elif kind == "obsolete_part" and item.mpn and item.kind not in {"test_point", "mechanical"}:
+        return (
+            item.model_copy(update={"fields": {**item.fields, "lifecycle": "obsolete"}}),
+            "part marked obsolete (end of life)",
+        )
+    return None, ""
+
+
 def inject_errors(
     items: list[BomItem], *, n: int = 5, seed: int = 0, kinds: tuple[str, ...] | None = None
 ) -> tuple[list[BomItem], list[InjectedError]]:
     """Return a mutated copy of ``items`` with up to ``n`` errors (each on a distinct line)."""
     rng = random.Random(seed)  # noqa: S311 - reproducibility, not security
-    kinds = kinds or tuple(ERROR_KINDS)
+    kinds = kinds or RULE_COVERED_KINDS
     out = [i.model_copy(deep=True) for i in items]
     errors: list[InjectedError] = []
     lines = list(range(len(out)))
@@ -113,6 +192,8 @@ def inject_errors(
         elif kind == "drop_mpn" and item.mpn and item.kind not in {"test_point", "mechanical"}:
             mutated = item.model_copy(update={"mpn": "", "manufacturer": ""})
             detail = "MPN removed"
+        else:
+            mutated, detail = _mutate_beyond_rules(kind, item, items, rng)
         if mutated is None:
             continue
         out[idx] = mutated
@@ -141,12 +222,16 @@ def detection_report(
     known = {_key(f) for f in baseline or []}
     new = [f for f in findings if f.severity in _ACTIONABLE and _key(f) not in known]
     hits = [any(_matches(e, f) for f in new) for e in errors]
-    false_alarms = sum(1 for f in new if not any(_matches(e, f) for e in errors))
+    stray = [f for f in new if not any(_matches(e, f) for e in errors)]
+    false_alarms = len(stray)
+    by_rule: dict[str, int] = {}
+    for f in stray:
+        by_rule[f.rule_id] = by_rule.get(f.rule_id, 0) + 1
     by_kind: dict[str, tuple[int, int]] = {}
     for error, hit in zip(errors, hits, strict=True):
         injected, detected = by_kind.get(error.kind, (0, 0))
         by_kind[error.kind] = (injected + 1, detected + int(hit))
-    return DetectionReport(len(errors), sum(hits), len(new), false_alarms, by_kind)
+    return DetectionReport(len(errors), sum(hits), len(new), false_alarms, by_kind, by_rule)
 
 
 def detection_rate(

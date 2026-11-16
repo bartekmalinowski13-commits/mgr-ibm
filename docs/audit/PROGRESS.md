@@ -30,10 +30,10 @@ Scheduled task `audit-implementation-continue` (hourly, id `trig_0174gXcCFuTekwm
 | Task | Status | Branch | PR | Notes |
 |---|---|---|---|---|
 | TH-05 catalogue prices with date/source, manifest model ids, temperature/seed notes | merged (code, #31); prices/access needs owner | claude/audit-th-05 | #31 | real prices/model access from provider consoles = owner |
-| TH-02 Postgres retriever in the experiment, manifest fields | in PR (manifest part); `--retriever postgres` todo | claude/audit-th-02 | | this PR: manifest `retrieval` block (retriever, embedding, reranker, `kb_snapshot_id` content hash) + limitation note in METODYKA; postgres retriever needs a DB (CI-only tests) |
+| TH-02 Postgres retriever in the experiment, manifest fields | merged (manifest part, #32); `--retriever postgres` todo | claude/audit-th-02 | #32 | this PR: manifest `retrieval` block (retriever, embedding, reranker, `kb_snapshot_id` content hash) + limitation note in METODYKA; postgres retriever needs a DB (CI-only tests) |
 | TH-01 attempted-hallucination metric, METODYKA note, A-unguarded ablation | merged (metric + note, #29); ablation todo | claude/audit-th-01 | #29 | metric `attempted_mpn_hallucination_rate` in eval summary, experiment tables/figure, `docs/thesis/METODYKA.md`; A-unguarded ablation = follow-up |
 | TH-03 dataset ingestion with double verification | needs owner | | | data collection, licences, verification = owner; code side: SOURCE/verification templates, agreement metric |
-| TH-06 extra error classes in validation experiment | todo | | | |
+| TH-06 extra error classes in validation experiment | in PR (injector + reporting); config wiring now unblocked (#32 merged) | claude/audit-th-06 | | this PR: `BEYOND_RULES_KINDS` (wrong plausible MPN, wrong tolerance, voltage derating, obsolete part) that `core@1.0.0` cannot see, `rule_coverage()`, false alarms per rule; default mix unchanged; `injection.kinds` in experiment config + report tables = follow-up (touches `experiment.py`) |
 | TH-04 pre-registration, Holm, cluster bootstrap, effect sizes | todo | | | |
 | Run the matrix, chapter 7 figures | needs owner | | | needs real models + dataset |
 
