@@ -17,7 +17,6 @@ from bomagent_common.request_origin import (
         ("203.0.113.9", "203.0.113.9"),
         (" 203.0.113.9 ", "203.0.113.9"),
         ("2001:db8::1", "2001:db8::1"),
-        ("::ffff:203.0.113.9", "::ffff:203.0.113.9"),
         ("unknown", None),
         ("", None),
         (None, None),
@@ -32,6 +31,16 @@ from bomagent_common.request_origin import (
 )
 def test_parse_ip_accepts_only_a_single_valid_address(raw, expected):
     assert parse_ip(raw) == expected
+
+
+def test_parse_ip_keeps_ipv4_mapped_addresses_as_the_same_address():
+    # the text form differs between Python versions (3.12: ::ffff:cb00:7109, 3.13: dotted):
+    # both are valid for inet and denote the same address
+    import ipaddress
+
+    parsed = parse_ip("::ffff:203.0.113.9")
+    assert parsed is not None
+    assert ipaddress.ip_address(parsed) == ipaddress.ip_address("::ffff:203.0.113.9")
 
 
 def test_scope_sets_and_restores_the_address():
