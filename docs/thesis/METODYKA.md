@@ -62,3 +62,13 @@ pozycji). Metryka trafia do tabel i rysunków `bomagent experiment` (`KEY_METRIC
    żeby policzyć, ile faktycznie usuwa strażnik (rozdział 7 i argument produktowy).
 2. Raport pokrycia przez pakiet reguł rodzajów wstrzykniętych błędów (audyt TH-06/TH-10).
 3. Odtworzenie wyników na pgvector + prawdziwych osadzeniach zamiast `InMemoryRetriever` (TH-02).
+
+## Ograniczenie: wyszukiwanie w eksperymencie (TH-02)
+
+Eksperyment korzysta z `InMemoryRetriever` (hashowane embeddingi bez semantyki + leksykalny
+reranking), a produkcja z pgvector, embeddingów z bramki, FTS i RRF. Wyniki obu wariantów
+uzyskano więc przy słabszym wyszukiwaniu niż w produkcji; różnica A vs B jest porównywana przy tym
+samym wyszukiwaniu, ale bezwzględne wartości metryk mogą być zaniżone. `manifest.json` zapisuje
+rodzaj wyszukiwarki, model embeddingów i `kb_snapshot_id` (hash zawartości bazy wiedzy).
+Do zrobienia: opcja `--retriever postgres` (wymaga bazy; test w CI) oraz co najmniej jedna
+konfiguracja z prawdziwymi embeddingami, aby pokazać wrażliwość wyników.

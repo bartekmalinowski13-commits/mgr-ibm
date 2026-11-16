@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import asyncio
 import csv
+import hashlib
 import json
 import math
 import statistics
@@ -137,6 +138,21 @@ def _commit() -> str:
         return "unknown"
 
 
+def kb_snapshot(directory: Path) -> tuple[str, int]:
+    """Content hash and file count of the datasheets an in-memory run retrieves from.
+
+    Mirrors ``InMemoryRetriever.from_directory`` (same file filter), so two runs with the same
+    snapshot id saw exactly the same knowledge base."""
+    digest = hashlib.sha256()
+    count = 0
+    for path in sorted(directory.iterdir()):
+        if path.suffix.lower() not in {".md", ".txt", ".pdf"}:
+            continue
+        digest.update(path.name.encode("utf-8") + b"\0" + path.read_bytes() + b"\0")
+        count += 1
+    return f"sha256:{digest.hexdigest()}", count
+
+
 def _manifest(config: ExperimentConfig) -> dict[str, Any]:
     from bomagent_agents.prompts import load_prompt
     from bomagent_llm.catalog import load_catalog
@@ -144,6 +160,7 @@ def _manifest(config: ExperimentConfig) -> dict[str, Any]:
     from bomagent_rules.core_v1 import PACK_VERSION
 
     catalog = load_catalog()
+    snapshot_id, kb_files = kb_snapshot(config.kb_dir)
     return {
         "created_at": datetime.now(UTC).isoformat(),
         "commit": _commit(),
@@ -151,6 +168,14 @@ def _manifest(config: ExperimentConfig) -> dict[str, Any]:
         "prompts": {p: load_prompt(p).full_version for p in PROMPT_IDS},
         "rule_pack": {"id": "core", "version": PACK_VERSION},
         "models": {m: catalog.get(m).model_dump(mode="json") for m in config.models},
+        "retrieval": {
+            "retriever": "in-memory",
+            "embedding": "hashing (feature hashing, non-semantic)",
+            "reranker": "lexical",
+            "kb_dir": str(config.kb_dir),
+            "kb_snapshot_id": snapshot_id,
+            "kb_files": kb_files,
+        },
         "model_ids": {m: catalog.get(m).gateway_model for m in config.models},
         "sampling": {
             "temperature": DEFAULT_TEMPERATURE,

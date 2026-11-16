@@ -57,6 +57,13 @@ def test_matrix_runs_and_writes_reproducible_artifacts(tmp_path):
     assert manifest["sampling"]["temperature"] == 0.0
     assert manifest["sampling"]["seed"] == manifest["config"]["seed"]
     assert "not deterministic" in manifest["sampling"]["note"]
+    # TH-02: the retrieval stack and the exact knowledge-base content are recorded
+    retrieval = manifest["retrieval"]
+    assert retrieval["retriever"] == "in-memory"
+    assert retrieval["embedding"] == "hashing (feature hashing, non-semantic)"
+    assert retrieval["reranker"] == "lexical"
+    assert retrieval["kb_snapshot_id"].startswith("sha256:")
+    assert retrieval["kb_files"] >= 1
 
     report = (out / "report.md").read_text()
     for heading in ("Configuration", "Results per variant", "A vs B (paired)", "Repeatability"):
@@ -125,3 +132,17 @@ def test_cli_command(tmp_path):
     assert (out / "pilot" / "report.md").exists()
     bad = CliRunner().invoke(app, ["experiment", "run", str(_config(tmp_path, variants=["C"]))])
     assert bad.exit_code != 0
+
+
+def test_kb_snapshot_id_tracks_content(tmp_path):
+    from bomagent_cli.experiment import kb_snapshot
+
+    (tmp_path / "a.md").write_text("alpha", encoding="utf-8")
+    (tmp_path / "ignored.bin").write_bytes(b"\x00")
+    first = kb_snapshot(tmp_path)
+    assert first == kb_snapshot(tmp_path)  # stable
+    assert first[1] == 1  # only supported datasheet files count
+    (tmp_path / "a.md").write_text("alpha!", encoding="utf-8")
+    assert kb_snapshot(tmp_path)[0] != first[0]
+    (tmp_path / "b.txt").write_text("beta", encoding="utf-8")
+    assert kb_snapshot(tmp_path)[1] == 2
