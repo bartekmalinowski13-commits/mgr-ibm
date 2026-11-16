@@ -110,3 +110,102 @@ def test_the_parent_is_not_dumpable_so_the_child_cannot_read_its_proc_entries():
     harden_parent()
     libc = ctypes.CDLL(None, use_errno=True)
     assert libc.prctl(3, 0, 0, 0, 0) == 0  # PR_GET_DUMPABLE
+
+
+# ---------------------------------------------------------------- child hardening (SEC-01)
+
+_PROBE = r"""
+import ctypes, json, resource, socket, sys
+from bomagent_cad._sandbox_child import apply_hardening
+
+report = apply_hardening()
+libc = ctypes.CDLL(None, use_errno=True)
+out = {
+    "report": report,
+    "no_new_privs": libc.prctl(39, 0, 0, 0, 0),  # PR_GET_NO_NEW_PRIVS
+    "nofile": resource.getrlimit(resource.RLIMIT_NOFILE)[0],
+    "fsize": resource.getrlimit(resource.RLIMIT_FSIZE)[0],
+    "core": resource.getrlimit(resource.RLIMIT_CORE)[0],
+}
+port = int(sys.argv[1])
+try:
+    socket.create_connection(("127.0.0.1", port), timeout=2).close()
+    out["connected"] = True
+except OSError:
+    out["connected"] = False
+try:
+    with open("/tmp/sandbox-probe-should-not-exist", "wb") as f:
+        f.write(b"x" * 10)
+        f.flush()
+    out["wrote"] = True
+except OSError:
+    out["wrote"] = False
+import os
+if os.path.exists("/tmp/sandbox-probe-should-not-exist"):
+    os.unlink("/tmp/sandbox-probe-should-not-exist")
+print(json.dumps(out))
+"""
+
+
+def _probe() -> dict:
+    import json
+    import socket
+    import subprocess
+
+    with socket.socket() as listener:
+        listener.bind(("127.0.0.1", 0))
+        listener.listen(1)
+        proc = subprocess.run(
+            [sys.executable, "-I", "-c", _PROBE, str(listener.getsockname()[1])],
+            capture_output=True,
+            timeout=30,
+            check=True,
+        )
+    return json.loads(proc.stdout.splitlines()[-1])
+
+
+def test_child_cannot_gain_privileges_and_has_small_file_limits():
+    out = _probe()
+    assert out["no_new_privs"] == 1
+    assert out["report"]["no_new_privs"] is True
+    assert out["nofile"] <= 64
+    assert out["fsize"] == 0  # writes to regular files fail
+    assert out["core"] == 0
+    assert out["wrote"] is False
+
+
+def test_child_loses_the_network_when_the_kernel_allows_a_new_namespace():
+    out = _probe()
+    if not out["report"]["network_isolated"]:
+        pytest.skip("this environment forbids unshare(CLONE_NEWNET); the limit is best effort")
+    assert out["connected"] is False
+
+
+def test_hardening_failures_are_reported_not_raised(monkeypatch):
+    from bomagent_cad import _sandbox_child
+
+    limits: list[str] = []
+    # never apply the real limits to the test runner itself
+    monkeypatch.setattr(_sandbox_child, "_limit", lambda kind, value: limits.append(kind))
+    monkeypatch.setattr(_sandbox_child, "_prctl", lambda *a: -1)
+    monkeypatch.setattr(_sandbox_child, "_unshare_network", lambda: False)
+    report = _sandbox_child.apply_hardening()
+    assert report["no_new_privs"] is False
+    assert report["network_isolated"] is False
+    assert {"RLIMIT_CORE", "RLIMIT_NOFILE", "RLIMIT_FSIZE"} <= set(limits)
+
+
+def test_parent_reports_what_the_child_could_apply(caplog):
+    import logging
+
+    from bomagent_cad import sandbox
+
+    sandbox._reported.clear()
+    with caplog.at_level(logging.INFO, logger="bomagent_cad.sandbox"):
+        sandbox._report_hardening({"hardening": {"no_new_privs": True, "network_isolated": False}})
+        sandbox._report_hardening({"hardening": {"no_new_privs": True, "network_isolated": False}})
+        sandbox._report_hardening({"hardening": {"no_new_privs": True, "network_isolated": True}})
+        sandbox._report_hardening({"no": "hardening"})
+    messages = [r.getMessage() for r in caplog.records]
+    assert sum("not fully isolated" in m for m in messages) == 1  # once per outcome
+    assert sum("empty network namespace" in m for m in messages) == 1
