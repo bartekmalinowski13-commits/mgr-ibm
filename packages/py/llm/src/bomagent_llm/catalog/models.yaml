@@ -8,6 +8,7 @@
 #
 # license_class: closed | open-weight      residency: eu-region | eu-geo | local
 # Costs are EUR per 1M tokens and are placeholders until checked against the price list.
+# Switching a hosted entry on requires `price_source_url` + `price_checked_on` (a test enforces it).
 models:
   # ---------------------------------------------------------------- local / CI only
   - id: fake-closed

@@ -95,3 +95,33 @@ def test_override_can_never_enable_a_hosted_model(tmp_path, model_id):
 def test_override_with_an_unknown_id_fails(tmp_path):
     with pytest.raises(ValueError, match="unknown"):
         load_catalog(override=_override(tmp_path, "enable: [nope]"))
+
+
+def test_enabled_hosted_models_carry_dated_price_provenance():
+    """TH-05: a hosted model may only be switched on with a dated, sourced price."""
+    from bomagent_llm.catalog import load_catalog
+
+    for spec in load_catalog().models:
+        if spec.residency == "local" or not (spec.enabled or spec.verified):
+            continue
+        assert spec.price_source_url, f"{spec.id}: price_source_url missing"
+        assert spec.price_checked_on, f"{spec.id}: price_checked_on missing"
+
+
+def test_price_provenance_fields_are_validated():
+    import pytest
+    from pydantic import ValidationError
+
+    from bomagent_llm.catalog import ModelSpec
+
+    base = {
+        "id": "x",
+        "gateway_model": "x",
+        "provider": "fake",
+        "license_class": "closed",
+        "residency": "local",
+    }
+    ok = ModelSpec(**base, price_source_url="https://example.com/p", price_checked_on="2026-11-16")
+    assert ok.price_checked_on.isoformat() == "2026-11-16"
+    with pytest.raises(ValidationError):
+        ModelSpec(**base, price_checked_on="not-a-date")

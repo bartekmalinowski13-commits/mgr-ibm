@@ -49,6 +49,9 @@ class Message:
     content: str
 
 
+DEFAULT_TEMPERATURE = 0.0
+
+
 @dataclass
 class ChatRequest:
     prompt_id: str
@@ -57,7 +60,7 @@ class ChatRequest:
     messages: list[Message]
     schema_name: str
     json_schema: dict[str, Any]
-    temperature: float = 0.0
+    temperature: float = DEFAULT_TEMPERATURE
     max_tokens: int = 4096
     metadata: dict[str, str] = field(default_factory=dict)
 

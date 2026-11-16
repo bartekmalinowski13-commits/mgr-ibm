@@ -52,6 +52,11 @@ def test_matrix_runs_and_writes_reproducible_artifacts(tmp_path):
     assert manifest["rule_pack"] == {"id": "core", "version": "1.0.0"}
     assert set(manifest["prompts"]) >= {"mpn_select", "extract_group", "compose", "validate"}
     assert all("+" in v for v in manifest["prompts"].values())  # version+sha8
+    # TH-05: exact model ids and sampling settings are part of the manifest
+    assert manifest["model_ids"] == {"fake-closed": "fake-closed"}
+    assert manifest["sampling"]["temperature"] == 0.0
+    assert manifest["sampling"]["seed"] == manifest["config"]["seed"]
+    assert "not deterministic" in manifest["sampling"]["note"]
 
     report = (out / "report.md").read_text()
     for heading in ("Configuration", "Results per variant", "A vs B (paired)", "Repeatability"):
