@@ -181,11 +181,16 @@ def _llm(settings: Settings) -> tuple[ChatClient, EmbeddingClient]:
 
 
 def effective_settings(settings: Settings) -> Settings:
-    """The settings the API is built with: a worker process leaves the outbox relay and the
-    stuck-run reaper to the web process (they run there, several replicas may overlap)."""
+    """The settings the API is built with. A worker process leaves the outbox relay, the
+    stuck-run reaper and the audit anchors to the web process (they run there, several
+    replicas may overlap). Web and worker processes report as ``bomagent-allinone-<role>`` so
+    their traces and metrics can be told apart."""
+    if settings.role == "all":
+        return settings
+    update: dict[str, Any] = {"service_name": f"{settings.service_name}-{settings.role}"}
     if settings.role == "worker":
-        return settings.model_copy(update={"maintenance_interval_s": 0.0})
-    return settings
+        update["maintenance_interval_s"] = 0.0
+    return settings.model_copy(update=update)
 
 
 def create_app(

@@ -15,7 +15,7 @@ import pytest
 from pydantic import ValidationError
 
 from bomagent_agents.retrieval import InMemoryRetriever
-from bomagent_allinone.app import Settings, _llm, create_app, spa_csp
+from bomagent_allinone.app import QUEUES, Settings, _llm, create_app, spa_csp
 from bomagent_common.messaging import PostgresQueue
 from bomagent_common.storage import InMemoryObjectStore
 from bomagent_llm.chat import FakeChat, GatewayChat
@@ -464,6 +464,20 @@ def test_the_outbox_relay_and_reaper_belong_to_the_web_process():
     assert worker.maintenance_interval_s == 30  # the original is untouched
 
 
+def test_roles_report_under_their_own_service_name():
+    from bomagent_allinone.app import effective_settings
+
+    names = {
+        role: effective_settings(Settings(environment="test", role=role)).service_name
+        for role in ("all", "web", "worker")
+    }
+    assert names == {
+        "all": "bomagent-allinone",
+        "web": "bomagent-allinone-web",
+        "worker": "bomagent-allinone-worker",
+    }
+
+
 def test_an_unknown_role_is_refused():
     with pytest.raises(ValueError, match="role"):
         Settings(environment="test", role="everything")
@@ -495,7 +509,34 @@ async def test_worker_role_runs_consumers_serves_no_frontend_and_no_maintenance(
         store=InMemoryObjectStore(),
     )
     async with running(app) as client:
-        assert len(app.state.workers.tasks) == 4  # three consumers and the dead-letter purge
+        assert len(app.state.workers.tasks) == len(QUEUES) + 1  # consumers and the purge loop
         assert (await client.get("/config.json")).status_code == 404  # no SPA, no sign-in config
         ready = await client.get("/readyz")
         assert ready.json()["checks"]["workers"] is True
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize(("role", "expected_sweeps"), [("worker", False), ("web", True)])
+async def test_only_the_web_process_runs_the_maintenance_loop(
+    app_engine, platform_engine, monkeypatch, role, expected_sweeps
+):
+    import asyncio
+
+    from bomagent_api import maintenance
+
+    calls: list[int] = []
+
+    async def fake_sweep(*args, **kwargs):
+        calls.append(1)
+        return {"sent": 0, "reaped": 0, "purged": 0}
+
+    monkeypatch.setattr(maintenance, "sweep", fake_sweep)
+    app = create_app(
+        _settings(role=role, queue_wait_seconds=1, maintenance_interval_s=0.05),
+        engine=app_engine,
+        platform_engine=platform_engine,
+        store=InMemoryObjectStore(),
+    )
+    async with running(app):
+        await asyncio.sleep(0.4)
+    assert bool(calls) is expected_sweeps
