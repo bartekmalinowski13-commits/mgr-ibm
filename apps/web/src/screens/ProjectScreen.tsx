@@ -1,8 +1,16 @@
-import { Button, StatusBadge } from "@bomagent/ui";
+import {
+  Button,
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  Field,
+  Input,
+  StatusBadge,
+} from "@bomagent/ui";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { UploadCloud } from "lucide-react";
-import { type DragEvent, useRef, useState } from "react";
+import { Pencil, Trash2, UploadCloud } from "lucide-react";
+import { type DragEvent, type FormEvent, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { api, call, problemMessage, uploadFile } from "../lib/api";
 import { formatBytes } from "../lib/format";
@@ -27,6 +35,7 @@ export function ProjectScreen() {
   const input = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [renaming, setRenaming] = useState(false);
   const project = useQuery({
     queryKey: ["project", orgId, projectId],
     queryFn: () =>
@@ -43,15 +52,31 @@ export function ProjectScreen() {
   const runs = useRuns(projectId);
   usePageTitle(project.data?.name ?? t("projects.title"));
 
-  const removeSample = async () => {
-    if (!window.confirm(t("samples.confirmDelete"))) return;
+  const removeProject = async () => {
+    const sample = project.data?.is_sample;
+    if (!window.confirm(t(sample ? "samples.confirmDelete" : "projects.confirmDelete"))) return;
     try {
       await call(
         api.DELETE("/v1/projects/{project_id}", { params: { path: { project_id: projectId } } }),
       );
       await queryClient.invalidateQueries({ queryKey: ["projects"] });
-      toast(t("samples.deleted"));
+      toast(t(sample ? "samples.deleted" : "projects.deleted"));
       await navigate({ to: "/projects" });
+    } catch (err) {
+      toast(problemMessage(err), "error");
+    }
+  };
+
+  const removeFile = async (fileId: string, name: string) => {
+    if (!window.confirm(t("projects.confirmDeleteFile", { name }))) return;
+    try {
+      await call(
+        api.DELETE("/v1/projects/{project_id}/files/{file_id}", {
+          params: { path: { project_id: projectId, file_id: fileId } },
+        }),
+      );
+      await queryClient.invalidateQueries({ queryKey: ["files", orgId, projectId] });
+      toast(t("projects.fileDeleted"));
     } catch (err) {
       toast(problemMessage(err), "error");
     }
@@ -89,11 +114,31 @@ export function ProjectScreen() {
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-card border border-line bg-surface p-4">
           <p className="max-w-[70ch] text-muted">{t("samples.projectNote")}</p>
           {isAdmin ? (
-            <Button type="button" variant="danger" size="sm" onClick={() => void removeSample()}>
+            <Button type="button" variant="danger" size="sm" onClick={() => void removeProject()}>
               {t("samples.delete")}
             </Button>
           ) : null}
         </div>
+      ) : project.data ? (
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <Button type="button" variant="secondary" size="sm" onClick={() => setRenaming(true)}>
+            <Pencil size={16} aria-hidden /> {t("projects.rename")}
+          </Button>
+          {isAdmin ? (
+            <Button type="button" variant="danger" size="sm" onClick={() => void removeProject()}>
+              <Trash2 size={16} aria-hidden /> {t("projects.delete")}
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
+      {project.data && !project.data.is_sample ? (
+        <RenameDialog
+          open={renaming}
+          onOpenChange={setRenaming}
+          projectId={projectId}
+          name={project.data.name}
+          description={project.data.description}
+        />
       ) : null}
       <section aria-labelledby="files-title" className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -159,6 +204,16 @@ export function ProjectScreen() {
                   status={FILE_STATUS[f.status as keyof typeof FILE_STATUS] ?? "pending"}
                   label={t(`projects.fileStatus.${f.status}`)}
                 />
+                {project.data?.is_sample ? null : (
+                  <button
+                    type="button"
+                    onClick={() => void removeFile(f.id, f.name)}
+                    aria-label={t("projects.deleteFile", { name: f.name })}
+                    className="rounded-control p-1.5 text-muted hover:bg-paper hover:text-error focus-visible:outline-2 focus-visible:outline-focus"
+                  >
+                    <Trash2 size={16} aria-hidden />
+                  </button>
+                )}
               </li>
             ))}
           </ul>
@@ -190,5 +245,89 @@ export function ProjectScreen() {
         )}
       </section>
     </div>
+  );
+}
+
+function RenameDialog({
+  open,
+  onOpenChange,
+  projectId,
+  name,
+  description,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  projectId: string;
+  name: string;
+  description: string;
+}) {
+  const { t } = useTranslation();
+  const { orgId } = useSession();
+  const toast = useToast();
+  const queryClient = useQueryClient();
+  const [draft, setDraft] = useState({ name, description });
+  const [error, setError] = useState<string>();
+
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    setError(undefined);
+    try {
+      await call(
+        api.PATCH("/v1/projects/{project_id}", {
+          params: { path: { project_id: projectId } },
+          body: { name: draft.name.trim(), description: draft.description },
+        }),
+      );
+      await queryClient.invalidateQueries({ queryKey: ["project", orgId, projectId] });
+      await queryClient.invalidateQueries({ queryKey: ["projects"] });
+      toast(t("projects.renamed"));
+      onOpenChange(false);
+    } catch (err) {
+      setError(problemMessage(err));
+    }
+  };
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (next) setDraft({ name, description });
+        onOpenChange(next);
+      }}
+    >
+      <DialogContent title={t("projects.rename")} closeLabel={t("common.close")}>
+        <form onSubmit={submit}>
+          <Field label={t("projects.name")} required error={error}>
+            {(id, describedBy) => (
+              <Input
+                id={id}
+                required
+                maxLength={200}
+                value={draft.name}
+                aria-describedby={describedBy}
+                aria-invalid={!!error}
+                onChange={(e) => setDraft({ ...draft, name: e.target.value })}
+              />
+            )}
+          </Field>
+          <Field label={t("projects.description")}>
+            {(id) => (
+              <Input
+                id={id}
+                maxLength={4000}
+                value={draft.description}
+                onChange={(e) => setDraft({ ...draft, description: e.target.value })}
+              />
+            )}
+          </Field>
+          <DialogFooter>
+            <Button type="button" variant="secondary" onClick={() => onOpenChange(false)}>
+              {t("common.cancel")}
+            </Button>
+            <Button type="submit">{t("common.save")}</Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }

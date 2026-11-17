@@ -173,7 +173,15 @@
       "uploaded": "Sprawdzanie",
       "parsed": "Gotowy",
       "failed": "Odrzucony"
-    }
+    },
+    "rename": "Zmień nazwę projektu",
+    "renamed": "Zmieniono nazwę projektu",
+    "delete": "Usuń projekt",
+    "confirmDelete": "Usunąć ten projekt wraz z plikami, przebiegami i wersjami BOM? Tej operacji nie można cofnąć.",
+    "deleted": "Projekt usunięty",
+    "deleteFile": "Usuń plik {{name}}",
+    "confirmDeleteFile": "Usunąć {{name}}? Tej operacji nie można cofnąć.",
+    "fileDeleted": "Plik usunięty"
   },
   "newRun": {
     "title": "Nowy przebieg",
@@ -238,7 +246,15 @@
     "stepCalls_few": "{{count}} wywołania LLM",
     "stepCalls_many": "{{count}} wywołań LLM",
     "stepCalls_other": "{{count}} wywołania LLM",
-    "stepRule": "bez LLM"
+    "stepRule": "bez LLM",
+    "exportXlsx": "Eksportuj XLSX",
+    "exportedXlsx": "Wyeksportowano XLSX",
+    "cancel": "Anuluj przebieg",
+    "confirmCancel": "Anulować ten przebieg? Dotychczasowa praca zostanie odrzucona.",
+    "cancelled": "Przebieg anulowany",
+    "cancelledHelp": "Ten przebieg został anulowany. Możesz uruchomić go ponownie z tymi samymi ustawieniami.",
+    "rerun": "Uruchom ponownie",
+    "rerunStarted": "Uruchomiono nowy przebieg z tymi samymi ustawieniami"
   },
   "bom": {
     "title": "Zestawienie BOM",
@@ -379,13 +395,13 @@
     "no-bom": "Ten przebieg nie ma jeszcze BOM. Poczekaj na jego zakończenie.",
     "no-files": "Wgraj pliki projektu i poczekaj na ich sprawdzenie, zanim uruchomisz przebieg.",
     "not-a-member": "Nie jesteś członkiem tej organizacji.",
-    "not-deletable": "Tutaj można usuwać tylko projekty przykładowe.",
     "not-found": "Nie znaleziono elementu. Mógł zostać usunięty; odśwież stronę.",
     "org-required": "Wybierz organizację i spróbuj ponownie.",
     "owner-only": "Tylko właściciele mogą nadawać lub zmieniać rolę właściciela.",
     "project-too-large": "Projekt osiągnął limit plików lub rozmiaru. Usuń plik, zanim wgrasz kolejny.",
     "quota-exceeded": "Osiągnięto limit planu. Skontaktuj się z właścicielem organizacji, aby go zwiększyć.",
     "rate-limited": "Zbyt wiele żądań. Poczekaj chwilę i spróbuj ponownie.",
+    "run-not-cancellable": "Anulować można tylko przebieg oczekujący lub trwający.",
     "runtime-variant": "To środowisko nie obsługuje wybranego wariantu. Wybierz inny wariant.",
     "sample-read-only": "Projekty przykładowe są tylko do odczytu. Utwórz własny projekt, aby wgrać pliki.",
     "slug-taken": "Ten adres organizacji jest już zajęty. Wybierz inny.",
@@ -545,5 +561,17 @@
       }
     },
     "done": "Ukończone"
+  },
+  "history": {
+    "title": "Historia wersji",
+    "generated": "Wygenerowana przez agentów",
+    "lines": "{{count}} pozycji",
+    "line": "Pozycja {{line}}",
+    "from": "Porównaj",
+    "to": "z",
+    "pickTwo": "Wybierz dwie różne wersje, aby zobaczyć zmiany.",
+    "noChanges": "Brak różnic między tymi wersjami.",
+    "added": "Dodano pozycję {{line}}",
+    "removed": "Usunięto pozycję {{line}}"
   }
 }

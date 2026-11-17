@@ -1,9 +1,20 @@
+import { idempotencyKey } from "@bomagent/api-client";
 import { Button } from "@bomagent/ui";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Download } from "lucide-react";
+import { useNavigate } from "@tanstack/react-router";
+import { Ban, Download, RotateCw } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { api, call, downloadCsv, problemMessage, type RunProgress, streamRun } from "../lib/api";
+import {
+  api,
+  call,
+  downloadCsv,
+  downloadXlsx,
+  problemMessage,
+  type RunProgress,
+  saveBlob,
+  streamRun,
+} from "../lib/api";
 import { formatNumber } from "../lib/format";
 import { usePageTitle } from "../lib/layout";
 import {
@@ -21,8 +32,11 @@ import { LoadError, RunStatus, Skeleton } from "./common";
 import { ItemPanel } from "./ItemPanel";
 import { ReferencePanel } from "./ReferencePanel";
 import { RunTimeline } from "./RunTimeline";
+import { VersionHistory } from "./VersionHistory";
 
 const TERMINAL = new Set(["completed", "failed", "budget_exceeded"]);
+/** The API marks a cancelled run as failed with this error text. */
+const CANCELLED = "cancelled by user";
 
 export function RunScreen() {
   const { runId } = runRoute.useParams();
@@ -30,6 +44,7 @@ export function RunScreen() {
   const { orgId } = useSession();
   const toast = useToast();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const run = useQuery({
     queryKey: ["run", orgId, runId],
     queryFn: () => call(api.GET("/v1/runs/{run_id}", { params: { path: { run_id: runId } } })),
@@ -71,21 +86,44 @@ export function RunScreen() {
   if (run.isPending) return <Skeleton rows={4} />;
   if (run.isError) return <LoadError error={run.error} onRetry={() => void run.refetch()} />;
 
-  const exportCsv = async () => {
+  const exportBom = async (format: "csv" | "xlsx") => {
     try {
-      const blob = await downloadCsv(runId);
-      const a = document.createElement("a");
-      a.href = URL.createObjectURL(blob);
-      a.download = `bom-${runId.slice(0, 8)}.csv`;
-      document.body.append(a);
-      a.click();
-      a.remove();
-      setTimeout(() => URL.revokeObjectURL(a.href), 10_000);
-      toast(t("run.exported"));
+      const blob = await (format === "csv" ? downloadCsv(runId) : downloadXlsx(runId));
+      saveBlob(blob, `bom-${runId.slice(0, 8)}.${format}`);
+      toast(t(format === "csv" ? "run.exported" : "run.exportedXlsx"));
     } catch (err) {
       toast(problemMessage(err), "error");
     }
   };
+
+  const cancel = async () => {
+    if (!window.confirm(t("run.confirmCancel"))) return;
+    try {
+      await call(api.POST("/v1/runs/{run_id}/cancel", { params: { path: { run_id: runId } } }));
+      await queryClient.invalidateQueries({ queryKey: ["run", orgId, runId] });
+      await queryClient.invalidateQueries({ queryKey: ["runs"] });
+      toast(t("run.cancelled"));
+    } catch (err) {
+      toast(problemMessage(err), "error");
+    }
+  };
+
+  const rerun = async () => {
+    try {
+      const next = await call(
+        api.POST("/v1/runs/{run_id}/rerun", {
+          params: { path: { run_id: runId } },
+          headers: { "Idempotency-Key": idempotencyKey() },
+        }),
+      );
+      await queryClient.invalidateQueries({ queryKey: ["runs"] });
+      toast(t("run.rerunStarted"));
+      await navigate({ to: "/runs/$runId", params: { runId: next.id } });
+    } catch (err) {
+      toast(problemMessage(err), "error");
+    }
+  };
+  const cancelled = status === "failed" && run.data.error === CANCELLED;
 
   const counters = [
     { label: t("run.steps"), value: formatNumber(live?.steps ?? 0, lang), show: !finished },
@@ -114,16 +152,28 @@ export function RunScreen() {
           <RunStatus status={status ?? "queued"} />
           <span className="font-mono text-sm text-muted">{run.data.model_id}</span>
           <span className="font-mono text-sm text-muted">{run.data.runtime}</span>
-          {status === "completed" ? (
-            <Button
-              variant="secondary"
-              size="sm"
-              className="ml-auto"
-              onClick={() => void exportCsv()}
-            >
-              <Download size={16} aria-hidden /> {t("run.export")}
-            </Button>
-          ) : null}
+          <div className="ml-auto flex flex-wrap gap-2">
+            {status === "queued" || status === "running" ? (
+              <Button variant="danger" size="sm" onClick={() => void cancel()}>
+                <Ban size={16} aria-hidden /> {t("run.cancel")}
+              </Button>
+            ) : null}
+            {finished ? (
+              <Button variant="secondary" size="sm" onClick={() => void rerun()}>
+                <RotateCw size={16} aria-hidden /> {t("run.rerun")}
+              </Button>
+            ) : null}
+            {status === "completed" ? (
+              <>
+                <Button variant="secondary" size="sm" onClick={() => void exportBom("csv")}>
+                  <Download size={16} aria-hidden /> {t("run.export")}
+                </Button>
+                <Button variant="secondary" size="sm" onClick={() => void exportBom("xlsx")}>
+                  <Download size={16} aria-hidden /> {t("run.exportXlsx")}
+                </Button>
+              </>
+            ) : null}
+          </div>
         </div>
         <dl className="grid grid-cols-2 gap-4 sm:grid-cols-4">
           {counters.map((c) => (
@@ -135,7 +185,11 @@ export function RunScreen() {
         </dl>
         {status === "queued" ? <p className="text-muted">{t("run.waiting")}</p> : null}
         {finished && status !== "failed" ? <RunTimeline runId={runId} /> : null}
-        {status === "failed" ? (
+        {cancelled ? (
+          <p role="status" className="text-muted">
+            {t("run.cancelledHelp")}
+          </p>
+        ) : status === "failed" ? (
           <p role="alert" className="text-error">
             {t("run.failedHelp", { error: run.data.error ?? "" })}
           </p>
@@ -174,6 +228,9 @@ export function RunScreen() {
           <div className="flex flex-col gap-4 2xl:flex-row 2xl:items-start">
             <div className="min-w-0 flex-1">
               <BomTable bom={bom.data.bom} selected={selected} onSelect={setSelected} />
+              <div className="mt-6">
+                <VersionHistory runId={runId} current={bom.data.version} />
+              </div>
               <div className="mt-6">
                 <ReferencePanel runId={runId} />
               </div>

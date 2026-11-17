@@ -17,7 +17,14 @@ from bomagent_api.auth import OrgContext
 from bomagent_api.authz import require
 from bomagent_api.pagination import clamp, encode_cursor, page_clause
 from bomagent_api.plans import check_new_project, check_storage, plan_of
-from bomagent_api.schemas import FileInfo, Page, Project, ProjectCreate, problem_responses
+from bomagent_api.schemas import (
+    FileInfo,
+    Page,
+    Project,
+    ProjectCreate,
+    ProjectUpdate,
+    problem_responses,
+)
 from bomagent_cad.sandbox import MAX_PROJECT_BYTES, MAX_PROJECT_FILES
 from bomagent_common.audit import AuditEvent, emit_audit
 from bomagent_common.db import tenant_transaction
@@ -26,7 +33,7 @@ from bomagent_common.messaging import Message
 from bomagent_common.metering import record_usage
 from bomagent_common.outbox import deliver, enqueue
 from bomagent_common.problems import ProblemError
-from bomagent_common.storage import tenant_key
+from bomagent_common.storage import key_belongs_to, tenant_key
 
 router = APIRouter(
     prefix="/v1/projects",
@@ -152,11 +159,61 @@ async def read_project(request: Request, ctx: OrgContext, project_id: uuid.UUID)
         return Project(**await get_project(conn, project_id))
 
 
-@router.delete("/{project_id}", status_code=204, summary="Delete a sample project")
+@router.patch("/{project_id}", summary="Rename a project or change its description")
+async def update_project(
+    request: Request, ctx: OrgContext, project_id: uuid.UUID, body: ProjectUpdate
+) -> Project:
+    """Sample projects are platform-owned and read-only; everything else can be renamed."""
+    require(ctx, "project.create")
+    changes = body.model_dump(exclude_none=True)
+    if not changes:
+        raise ProblemError(422, "Unprocessable Entity", "nothing to change", slug="empty-patch")
+    async with tenant_transaction(request.app.state.engine) as conn:
+        row = (
+            await conn.execute(
+                text(
+                    "SELECT name, description, sample_key FROM projects.projects"
+                    " WHERE id = :i FOR UPDATE"
+                ),
+                {"i": project_id},
+            )
+        ).first()
+        if row is None:
+            raise ProblemError(404, "Not Found", "project not found", slug="not-found")
+        if row.sample_key is not None:
+            raise ProblemError(
+                409,
+                "Conflict",
+                "sample projects are read-only; create your own project",
+                slug="sample-read-only",
+            )
+        await conn.execute(
+            text(
+                "UPDATE projects.projects SET name = COALESCE(:n, name),"
+                " description = COALESCE(:d, description) WHERE id = :i"
+            ),
+            {"n": changes.get("name"), "d": changes.get("description"), "i": project_id},
+        )
+        before = {"name": row.name, "description": row.description}
+        project = Project(**await get_project(conn, project_id))
+        await emit_audit(
+            conn,
+            AuditEvent(
+                action="project.updated",
+                object_type="project",
+                object_id=str(project_id),
+                before={k: before[k] for k in changes},
+                after=changes,
+            ),
+        )
+    return project
+
+
+@router.delete("/{project_id}", status_code=204, summary="Delete a project")
 async def delete_project(request: Request, ctx: OrgContext, project_id: uuid.UUID) -> Response:
-    """Only the platform's sample projects (``[Sample] ...``) can be deleted - the API has no
-    general project deletion yet. Files, runs and BOM versions go with the project (cascade);
-    the stored objects are removed after the commit."""
+    """Deletes a project (own or sample). Files, runs and BOM versions go with the project
+    (cascade); the stored objects are removed after the commit, under the tenant prefix only.
+    Refused while a run of the project is queued or running (``file-in-use``)."""
     require(ctx, "project.delete")
     store = request.app.state.store
     async with tenant_transaction(request.app.state.engine) as conn:
@@ -168,13 +225,6 @@ async def delete_project(request: Request, ctx: OrgContext, project_id: uuid.UUI
         ).first()
         if row is None:
             raise ProblemError(404, "Not Found", "project not found", slug="not-found")
-        if row.sample_key is None:
-            raise ProblemError(
-                409,
-                "Conflict",
-                "only sample projects can be deleted",
-                slug="not-deletable",
-            )
         await refuse_if_run_active(conn, project_id, "deleting it")
         keys = list(
             (
@@ -227,12 +277,21 @@ async def delete_project(request: Request, ctx: OrgContext, project_id: uuid.UUI
     for run_id in run_ids:
         for artifact in ("bom.json", "trace.json"):
             keys.append(tenant_key(ctx.tenant_id, "runs", str(run_id), artifact))
-    for key in keys:  # the rows are gone: a failed cleanup must not turn a retry into a 404
+    await delete_objects(store, ctx.tenant_id, keys, project_id=str(project_id))
+    return Response(status_code=204)
+
+
+async def delete_objects(store: Any, tenant_id: uuid.UUID, keys: list[str], **context: str) -> None:
+    """Remove stored objects after the rows are gone: only keys under the tenant's own prefix
+    are touched, and a failed cleanup must not turn a retry into a 404."""
+    for key in keys:
+        if not key_belongs_to(tenant_id, key):
+            log.error("object_cleanup_refused_foreign_key", key=key, **context)
+            continue
         try:
             await store.delete(key)
         except Exception:
-            log.warning("project_object_cleanup_failed", project_id=str(project_id), key=key)
-    return Response(status_code=204)
+            log.warning("object_cleanup_failed", key=key, **context)
 
 
 FILE_COLS = "id, name, size_bytes, sha256, status, detected_format, summary, created_at"
@@ -251,6 +310,51 @@ async def list_files(request: Request, ctx: OrgContext, project_id: uuid.UUID) -
             {"p": project_id},
         )
         return [FileInfo(**dict(r._mapping)) for r in rows]
+
+
+@router.delete("/{project_id}/files/{file_id}", status_code=204, summary="Delete a design file")
+async def delete_file(
+    request: Request, ctx: OrgContext, project_id: uuid.UUID, file_id: uuid.UUID
+) -> Response:
+    """Removes the file and its stored object. Refused while a run of the project is queued or
+    running (``file-in-use``): the run holds the object keys. Sample projects are read-only."""
+    require(ctx, "file.upload")
+    async with tenant_transaction(request.app.state.engine) as conn:
+        refuse_sample_upload(await get_project(conn, project_id))
+        row = (
+            await conn.execute(
+                text(
+                    "SELECT name, object_key, sha256, size_bytes FROM projects.files"
+                    " WHERE id = :f AND project_id = :p FOR UPDATE"
+                ),
+                {"f": file_id, "p": project_id},
+            )
+        ).first()
+        if row is None:
+            raise ProblemError(404, "Not Found", "file not found", slug="not-found")
+        await refuse_if_run_active(conn, project_id, "deleting a file")
+        await conn.execute(text("DELETE FROM projects.files WHERE id = :f"), {"f": file_id})
+        # a queued ingest of this file has nothing left to parse
+        await conn.execute(
+            text(
+                "DELETE FROM app.outbox WHERE sent_at IS NULL"
+                " AND message->'payload'->>'file_id' = :f"
+            ),
+            {"f": str(file_id)},
+        )
+        await emit_audit(
+            conn,
+            AuditEvent(
+                action="file.deleted",
+                object_type="file",
+                object_id=str(file_id),
+                before={"name": row.name, "sha256": row.sha256, "size": row.size_bytes},
+            ),
+        )
+    await delete_objects(
+        request.app.state.store, ctx.tenant_id, [row.object_key], file_id=str(file_id)
+    )
+    return Response(status_code=204)
 
 
 UPLOAD_CHUNK = 1024 * 1024

@@ -10,8 +10,9 @@ regenerate with `just openapi`; a test fails when it drifts).
 | members | `GET /v1/members`, `PATCH/DELETE /v1/members/{sub}` (only owners touch the owner role; the last owner stays), `GET/POST /v1/invitations`, `DELETE /v1/invitations/{id}`, `POST /v1/invitations/accept` (secret token + verified matching e-mail) |
 | API keys | `GET/POST /v1/api-keys`, `POST /v1/api-keys/{id}/rotate`, `DELETE /v1/api-keys/{id}` (admins; scope engineer/reviewer/viewer; secret shown once, SHA-256 stored) |
 | projects | `GET/POST /v1/projects`, `GET /v1/projects/{id}`, `GET/POST /v1/projects/{id}/files` (multipart upload -> S3 tenant prefix -> `file.uploaded` for the sandboxed ingest-worker) |
-| runs | `POST /v1/runs` (variant A/B, model from the catalogue) -> `run.requested` for agent-worker; `GET /v1/runs`, `GET /v1/runs/{id}`, `GET /v1/runs/{id}/events` (SSE) |
-| BOM | `GET /v1/runs/{id}/bom`, `GET /v1/runs/{id}/bom.csv`, `PATCH /v1/runs/{id}/bom/items/{line}` (new immutable version, user provenance, MPN correction stored as tenant knowledge) |
+| projects (lifecycle) | `PATCH /v1/projects/{id}` rename (not samples), `DELETE /v1/projects/{id}`, `DELETE /v1/projects/{id}/files/{file_id}` (409 `file-in-use` while a run is queued/running; objects removed under the tenant prefix only; audit `project.updated`/`project.deleted`/`file.deleted`) |
+| runs | `POST /v1/runs` (variant A/B, model from the catalogue) -> `run.requested` for agent-worker; `GET /v1/runs`, `GET /v1/runs/{id}`, `GET /v1/runs/{id}/events` (SSE); `POST /v1/runs/{id}/cancel` (queued/running -> `failed`, error `cancelled by user`, audit `run.cancelled`); `POST /v1/runs/{id}/rerun` (same variant/runtime/model/requirements on the project's current parsed files) |
+| BOM | `GET /v1/runs/{id}/bom`, `GET /v1/runs/{id}/bom.csv`, `GET /v1/runs/{id}/bom.xlsx`, `GET /v1/runs/{id}/bom/versions` (history), `GET /v1/runs/{id}/bom/versions/{n}`, `GET /v1/runs/{id}/bom/diff?from_version=&to_version=`, `PATCH /v1/runs/{id}/bom/items/{line}` (new immutable version, user provenance, MPN correction stored as tenant knowledge) |
 | SSO | `GET/PUT/DELETE /v1/sso` (owners/admins: SAML 2.0 or OIDC identity provider federated in Cognito; OIDC client secret goes to Cognito only), `POST /v1/sso/domains`, `POST /v1/sso/domains/{domain}/verify` (DNS TXT `_bomagent-verify.<domain>`), `DELETE /v1/sso/domains/{domain}`, `GET /v1/sso/discover?email=` (public, sign-in screen). First sign-in through the provider with a verified-domain e-mail creates the membership (default role); `enforce` requires SSO for those domains (owners exempt). See `bomagent_api.sso` |
 | audit | `GET /v1/audit-events` (filters, cursor), `GET /v1/audit-events/verify` |
 
@@ -65,8 +66,8 @@ audit events `project.created` and `org.samples_seeded`.
   organisation; repeated or concurrent calls only add what is missing.
 - **Re-add:** `POST /v1/samples` (owner) adds missing samples to an existing organisation; the
   web app shows "Add sample projects" on Home and Projects while the organisation has none.
-- **Delete:** `DELETE /v1/projects/{id}` (owner/admin) works for sample projects only (409
-  `not-deletable` otherwise, 409 `file-in-use` while a run is active); files, runs, BOM
+- **Delete:** `DELETE /v1/projects/{id}` (owner/admin) works for any project (409
+  `file-in-use` while a run is active); files, runs, BOM
   versions, pending outbox rows and stored objects go with it (object cleanup is best effort,
   the answer is always 204); the audit event records the counts. Sample projects are
   read-only: uploads are refused (409 `sample-read-only`). The ingest-worker skips a message
