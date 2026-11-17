@@ -26,4 +26,13 @@ trace carry the resume record. Limits without a migration: no heartbeat column (
 the newest `runs.graph_checkpoints.created_at`), and the reaper still fails runs by
 `started_at` (reset on takeover).
 
-Tests: `uv run pytest services/agent-worker` (PostgreSQL).
+**Trace size cap (DATA-01/02):** the complete trace is always written to `trace.json` in
+object storage; the `runs.trace` JSONB column is capped at `BOMAGENT_RUN_TRACE_MAX_BYTES`
+(default 262144 = 256 KiB, `0` = off; also read by the all-in-one process). A larger trace is
+truncated deterministically by `trace_cap.cap_trace` when the run finishes: the first and last
+steps are kept, the middle is replaced by one `truncated` marker step
+(`detail.dropped`, `total`, `kept_head`, `kept_tail`), kept steps are never modified and
+`run.resumed` records are always kept. No migration. Limit: steps appended while the run is
+still `running` are not capped (bounded by the run timeout); the final write applies the cap.
+
+Tests: `uv run pytest services/agent-worker` (PostgreSQL); `tests/test_trace_cap.py` needs none.

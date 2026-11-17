@@ -32,6 +32,7 @@ from typing import Any
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
+from bomagent_agent_worker.trace_cap import DEFAULT_TRACE_MAX_BYTES, cap_trace
 from bomagent_agents import resume
 from bomagent_agents.checkpoint import TenantCheckpointSaver
 from bomagent_agents.contracts import ResumeRecord, RunConfig, RunInput, RunOutput, TraceStep
@@ -76,6 +77,8 @@ class RunWorker:
     #: its worker and is resumed on redelivery (must exceed the longest single step)
     resume_stale_after_s: float = 300.0
     max_resumes: int = 3
+    #: size cap of ``runs.trace`` (DATA-01/02); the full trace stays in ``trace.json``
+    trace_max_bytes: int = DEFAULT_TRACE_MAX_BYTES
 
     def _retriever(self, tenant_id: uuid.UUID, snapshot: str | None) -> Retriever:
         if self.retriever_factory is not None:
@@ -379,7 +382,12 @@ class RunWorker:
                 {
                     "s": result.status,
                     "u": result.usage.model_dump_json(),
-                    "t": json.dumps([s.model_dump(mode="json") for s in result.trace]),
+                    "t": json.dumps(
+                        [
+                            s.model_dump(mode="json")
+                            for s in cap_trace(result.trace, self.trace_max_bytes)
+                        ]
+                    ),
                     "k": config.kb_snapshot_id,
                     "i": run_id,
                 },

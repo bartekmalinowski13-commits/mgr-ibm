@@ -7,6 +7,7 @@ from collections.abc import AsyncIterator
 from fastapi import FastAPI
 
 from bomagent_agent_worker import __version__
+from bomagent_agent_worker.trace_cap import DEFAULT_TRACE_MAX_BYTES
 from bomagent_common.config import ServiceSettings
 from bomagent_common.db import make_engine, ping
 from bomagent_common.health import ReadinessCheck
@@ -30,6 +31,8 @@ class Settings(ServiceSettings):
     #: a running run idle for this long is resumed from its checkpoint on redelivery
     run_resume_stale_s: float = 300.0
     run_max_resumes: int = 3
+    #: size cap of the ``runs.trace`` column in bytes (0 = off); ``trace.json`` stays complete
+    run_trace_max_bytes: int = DEFAULT_TRACE_MAX_BYTES
 
 
 def build_handler(settings: Settings) -> Handler:
@@ -61,6 +64,7 @@ def build_handler(settings: Settings) -> Handler:
         allow_unregistered=settings.environment in {"local", "test"},
         resume_stale_after_s=settings.run_resume_stale_s,
         max_resumes=settings.run_max_resumes,
+        trace_max_bytes=settings.run_trace_max_bytes,
     )
     return worker.handle
 
