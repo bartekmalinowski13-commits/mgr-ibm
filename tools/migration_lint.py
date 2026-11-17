@@ -7,7 +7,10 @@ No database needed: revisions are parsed with ``ast``. Checks:
   it uses the list convention);
 * lock-time hazards in the upgrade SQL: ``SET NOT NULL``, ``ALTER COLUMN ... TYPE``,
   ``ADD COLUMN ... NOT NULL`` without ``DEFAULT``, ``LOCK TABLE``, ``TRUNCATE``,
-  ``DROP COLUMN``/``RENAME`` and ``CREATE INDEX`` on a table the same revision did not create.
+  ``DROP COLUMN``/``RENAME`` and ``CREATE INDEX`` on a table the same revision did not create;
+* expand/contract (OPS-04): ``DROP TABLE`` of a table the revision did not create, and any
+  ``DROP COLUMN``/``DROP TABLE`` revision that also does other changes (a contract step
+  must stand alone, see packages/py/db-migrations/README.md "Expand/contract policy").
 
 Existing revisions are frozen: findings that predate this lint are recorded in ``BASELINE``
 with the reason. New revisions get no free pass - add a baseline entry only with a reason
@@ -45,6 +48,8 @@ _RULES: list[tuple[str, re.Pattern[str]]] = [
     ("drop-column", re.compile(r"\bDROP\s+COLUMN\b", re.I)),
     ("rename", re.compile(r"\bRENAME\s+(COLUMN|TO)\b", re.I)),
 ]
+_DROP_COLUMN = re.compile(r"\bDROP\s+COLUMN\b", re.I)
+_DROP_TABLE = re.compile(r"\bDROP\s+TABLE\s+(?:IF\s+EXISTS\s+)?([\w.\"]+)", re.I)
 _ADD_COLUMN = re.compile(r"\bADD\s+COLUMN\b[^,;]*", re.I)
 _CREATE_TABLE = re.compile(r"\bCREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?([\w.\"]+)", re.I)
 _CREATE_INDEX = re.compile(
@@ -161,11 +166,24 @@ def lint_revisions(revisions: list[Revision]) -> list[Finding]:
         created = {
             m.group(1).strip('"').lower() for s in r.upgrade_sql for m in _CREATE_TABLE.finditer(s)
         }
+        stmts = [s for s in r.upgrade_sql if s.strip()]
+        drops = [s for s in stmts if _DROP_COLUMN.search(s) or _DROP_TABLE.search(s)]
+        if drops and len(stmts) > len(drops):
+            out.append(
+                Finding(
+                    r.revision,
+                    "contract-mixed",
+                    "DROP COLUMN/TABLE in a revision that also does other changes",
+                )
+            )
         for stmt in r.upgrade_sql:
             flat = " ".join(stmt.split())
             for rule, pat in _RULES:
                 if pat.search(stmt):
                     out.append(Finding(r.revision, rule, flat[:100]))
+            for m in _DROP_TABLE.finditer(stmt):
+                if m.group(1).strip('"').lower() not in created:
+                    out.append(Finding(r.revision, "drop-table", m.group(1)))
             for m in _ADD_COLUMN.finditer(stmt):
                 col = m.group(0)
                 if re.search(r"\bNOT\s+NULL\b", col, re.I) and not re.search(

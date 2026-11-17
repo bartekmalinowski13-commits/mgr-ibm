@@ -112,3 +112,27 @@ def test_file_name_must_start_with_the_revision(tmp_path: Path) -> None:
 def test_main_exit_code(capsys: pytest.CaptureFixture[str]) -> None:
     assert ml.main() == 0
     assert "0 finding(s)" in capsys.readouterr().out
+
+
+def test_drop_table_of_an_existing_table_is_flagged(tmp_path: Path) -> None:
+    _write(tmp_path, "0001", None, "CREATE TABLE a.t (id int)", "DROP TABLE a.t")
+    _write(tmp_path, "0002", "0001", "DROP TABLE a.t", "CREATE TABLE a.t (id int)")
+    assert "drop-table" in _rules(tmp_path)
+
+
+def test_a_contract_revision_must_stand_alone(tmp_path: Path) -> None:
+    _write(tmp_path, "0001", None, "CREATE TABLE a.t (id int, old int)", "DROP TABLE a.t")
+    _write(
+        tmp_path,
+        "0002",
+        "0001",
+        'ALTER TABLE a.t ADD COLUMN new int""", """ALTER TABLE a.t DROP COLUMN old',
+        "SELECT 1",
+    )
+    assert "contract-mixed" in _rules(tmp_path)
+
+
+def test_a_lone_drop_column_is_not_mixed(tmp_path: Path) -> None:
+    _write(tmp_path, "0001", None, "CREATE TABLE a.t (id int, old int)", "DROP TABLE a.t")
+    _write(tmp_path, "0002", "0001", "ALTER TABLE a.t DROP COLUMN old", "SELECT 1")
+    assert "contract-mixed" not in _rules(tmp_path)

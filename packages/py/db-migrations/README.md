@@ -61,6 +61,34 @@ Use `bomagent_migrations.rls.tenant_table_rls("schema.table")` and add isolation
 `tests/isolation/`. The catalogue test `test_every_tenant_table_has_forced_rls` fails if a
 table with `tenant_id` lacks forced RLS.
 
+## Expand/contract policy (OPS-04)
+
+A release must be safe to roll back to the previous image (see
+`docs/platform/runbooks/rollback.md`), and during a rolling deploy two app versions run
+against one schema. Therefore every schema change that removes or reshapes something is
+split over **at least two releases**:
+
+1. **Expand** (release N): add the new column/table/index (nullable or with a `DEFAULT`),
+   deploy code that writes both old and new and reads the new with a fallback. Backfill in
+   batches, never in one locking statement.
+2. **Migrate**: verify in production that nothing reads or writes the old shape.
+3. **Contract** (release N+1 or later): a revision that only drops the old column/table
+   (or sets `NOT NULL`, changes a type, renames). No code of the previous release may
+   depend on what it removes, because rolling back one release must still work.
+
+Rules enforced by `tools/migration_lint.py` (part of `just lint`/CI):
+
+- `DROP COLUMN`, `DROP TABLE` of an existing table, `RENAME`, `SET NOT NULL`,
+  `ALTER COLUMN ... TYPE` fail the lint unless recorded in `BASELINE` with a reason
+  (reviewed; for a deliberate contract step).
+- `contract-mixed`: a revision containing a `DROP COLUMN`/`DROP TABLE` must contain nothing
+  else, so a contract step never ships in the same release as the expand it depends on.
+- Every revision keeps a real `downgrade()`; a contract step's downgrade re-creates the
+  structure (data loss is documented in the revision docstring).
+
+Reviewers check these in the PR; the migration runs as Fly's `release_command` before the
+new machines take traffic, so a failing migration aborts the release.
+
 ## Testing
 
 `uv run pytest tests/isolation packages/py/platform-common -m integration`
