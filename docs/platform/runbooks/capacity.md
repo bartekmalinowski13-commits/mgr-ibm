@@ -22,6 +22,14 @@ starting points.
 - Queue depth and age and dead rows (`app.queue_messages`); runs per day and failure rate.
 - LLM spend versus the key budget and the provider quota.
 
+## Row growth caps
+
+- `runs.runs.trace`: capped at the application level by `BOMAGENT_RUN_TRACE_MAX_BYTES` (default
+  262144 bytes, `0` = off). On a finished run an oversized trace keeps its first and last steps and
+  one `truncated` marker step with the dropped count; the complete trace stays in
+  `tenants/{tenant}/runs/{run_id}/trace.json`. No migration or RLS change (audit DATA-01/02). Rows
+  written before the cap are not rewritten.
+
 ## Scaling actions
 
 1. More machines: `fly scale count 2`. Per-IP limits are in memory per replica (effective limit = rule x replicas, DECISIONS_LOG SEC-03), so check ARCH-02/03 first.

@@ -80,8 +80,9 @@ async def test_memberships_lookup_returns_only_the_users_own(
     app_engine, platform_engine, make_tenant
 ):
     a, b = await make_tenant(), await make_tenant()
-    async with platform_transaction(platform_engine) as conn:
-        for tenant, sub in ((a, "alice"), (b, "bob"), (b, "alice")):
+    for tenant, sub in ((a, "alice"), (b, "bob"), (b, "alice")):
+        # the platform role cannot insert memberships any more (SEC-15)
+        async with tenant_transaction(app_engine, tenant.tenant_id) as conn:
             await conn.execute(
                 text(
                     "INSERT INTO tenancy.memberships (tenant_id, user_sub, email, roles)"
