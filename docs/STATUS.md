@@ -269,3 +269,9 @@ domain) and the assumptions awaiting acceptance (`docs/DECISIONS_LOG.md`, last c
   the new version history made a Playwright selector ambiguous (fixed in the PR).
 - Open for the owner: #28, #37 (`deploy/*`), #55 (draft; downgrade round-trip test that exposes the
   broken SSO downgrade). In progress: ARCH-06 (KB snapshot per run).
+
+## 2026-11-17 - audit implementation: final report
+
+- See the "Final report" at the top of `docs/audit/PROGRESS.md`. Merged: ARCH-06 (#69), ARCH-04
+  (#70, partial). Open for the owner: #28, #37, #55 (draft), #71 (MFA), #72 (migrations bundle),
+  #73 (SSO hardening). Not started: SEC-02.
