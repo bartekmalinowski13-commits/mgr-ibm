@@ -212,3 +212,32 @@ async def test_sweep_expires_idempotency_keys_after_a_day(app_engine, platform_e
     assert result["expired_keys"] >= 2
     assert await keys(tenant.tenant_id) == {"fresh-key-12345"}
     assert await keys(other.tenant_id) == set()
+
+
+async def test_sweep_expires_old_rate_windows_of_every_tenant(
+    app_engine, platform_engine, make_tenant
+):
+    """DATA-01: windows of subjects that never return are removed after an hour."""
+    tenant, other = await make_tenant(), await make_tenant()
+
+    async def put(tenant_id: uuid.UUID, subject: str, age: str) -> None:
+        async with tenant_transaction(app_engine, tenant_id) as conn:
+            await conn.execute(
+                text(
+                    "INSERT INTO app.rate_windows (tenant_id, subject, window_start, hits)"
+                    " VALUES (:t, :s, now() - CAST(:a AS interval), 3)"
+                ),
+                {"t": tenant_id, "s": subject, "a": age},
+            )
+
+    async def subjects(tenant_id: uuid.UUID) -> set[str]:
+        async with tenant_transaction(app_engine, tenant_id) as conn:
+            return set((await conn.execute(text("SELECT subject FROM app.rate_windows"))).scalars())
+
+    await put(tenant.tenant_id, "gone-user", "3 hours")
+    await put(tenant.tenant_id, "active-user", "10 seconds")
+    await put(other.tenant_id, "other-gone", "2 days")
+    result = await sweep(app_engine, platform_engine, {}, run_timeout_s=3600)
+    assert result["expired_windows"] >= 2
+    assert await subjects(tenant.tenant_id) == {"active-user"}
+    assert await subjects(other.tenant_id) == set()

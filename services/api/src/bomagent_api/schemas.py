@@ -351,6 +351,8 @@ class DevToken(_M):
     email_verified: bool = True
     #: local/test: sign in "through" an organisation's identity provider
     identity_provider: str | None = None
+    #: local/test: sign in with a second factor (adds ``aal: aal2``, as Supabase does)
+    mfa: bool = False
 
 
 class Token(_M):

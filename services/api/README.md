@@ -32,6 +32,13 @@ regenerate with `just openapi`; a test fails when it drifts).
   (`tenancy.memberships`), never trusted from the token. Non-member -> 403; objects of
   other organisations are invisible (RLS) -> 404.
 - **RBAC:** `authz.POLICIES` (Cedar-style table: action -> roles owner/admin/engineer/reviewer/viewer).
+- **Step-up MFA (SEC-06, off by default):** `BOMAGENT_MFA_ENFORCED=true` makes `authz.MFA_ACTIONS`
+  (member manage/invite, API key management, SSO management, organisation update) need a
+  token that proves a second factor - top-level `aal` of `aal2`/`aal3` (Supabase after a TOTP
+  challenge) or an RFC 8176 `amr` string in `BOMAGENT_OIDC_MFA_AMR_VALUES` (default `["mfa"]`;
+  Cognito needs a pre-token-generation trigger to emit it). Otherwise 403 `mfa-required`
+  and an `auth.mfa_required` audit event. `user_metadata` claims are never read; API keys
+  are not subject to it. Enable it only after the admins have enrolled a factor.
 - **Errors:** RFC 9457 `application/problem+json`; **idempotency:** `Idempotency-Key` on
   creating POSTs; **pagination:** opaque cursors; security headers on every response.
 - Every mutation writes an audit event in the same transaction.

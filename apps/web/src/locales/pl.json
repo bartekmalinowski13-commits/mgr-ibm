@@ -392,6 +392,7 @@
     "invalid-token": "Sesja wygasła. Zaloguj się ponownie.",
     "invitation-pending": "Zaproszenie dla tej osoby już oczekuje.",
     "last-owner": "Organizacja musi mieć co najmniej jednego właściciela.",
+    "mfa-required": "Ta czynność wymaga uwierzytelniania wieloskładnikowego. Zaloguj się z drugim składnikiem (aplikacja uwierzytelniająca) i spróbuj ponownie.",
     "missing-token": "Nie jesteś zalogowany. Zaloguj się i spróbuj ponownie.",
     "model-not-allowed": "Ten model nie jest dozwolony w Twoim planie. Wybierz inny model.",
     "no-bom": "Ten przebieg nie ma jeszcze BOM. Poczekaj na jego zakończenie.",

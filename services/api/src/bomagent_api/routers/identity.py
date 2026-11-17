@@ -71,19 +71,15 @@ async def create_organization(
     ctx = TenantContext(tenant_id=org_id, actor_id=principal.sub, roles=frozenset({"owner"}))
     try:
         async with platform_transaction(request.app.state.platform_engine) as conn:
+            # one SECURITY DEFINER function creates the tenant and its first owner (SEC-15):
+            # the platform role itself can no longer insert tenants or memberships
             await conn.execute(
-                text("INSERT INTO tenancy.tenants (id, slug, name) VALUES (:i, :s, :n)"),
-                {"i": org_id, "s": body.slug, "n": body.name},
-            )
-            await conn.execute(
-                text(
-                    "INSERT INTO tenancy.memberships (tenant_id, user_sub, email,"
-                    " display_name, roles) VALUES (:t, :s, :e, :d,"
-                    " ARRAY['owner'])"
-                ),
+                text("SELECT tenancy.create_organization(:i, :s, :n, :sub, :e, :d)"),
                 {
-                    "t": org_id,
-                    "s": principal.sub,
+                    "i": org_id,
+                    "s": body.slug,
+                    "n": body.name,
+                    "sub": principal.sub,
                     "e": principal.email.lower(),
                     "d": principal.name,
                 },
@@ -147,5 +143,6 @@ async def dev_token(request: Request, body: DevToken) -> Token:
             body.name,
             email_verified=body.email_verified,
             identity_provider=body.identity_provider,
+            extra_claims={"aal": "aal2"} if body.mfa else None,
         )
     )

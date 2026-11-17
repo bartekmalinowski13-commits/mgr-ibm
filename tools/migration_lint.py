@@ -35,6 +35,9 @@ BASELINE: dict[tuple[str, str], str] = {
     ("0011", "index-on-existing-table"): (
         "already applied; replaces app.outbox indexes (pilot-scale table, small build lock)"
     ),
+    ("0016", "index-on-existing-table"): (
+        "built CONCURRENTLY inside autocommit_block (no write lock); DATA-01 indexes"
+    ),
     ("0014", "index-on-existing-table"): (
         "already applied; partial unique index on projects.projects (pilot-scale table)"
     ),
