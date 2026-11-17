@@ -46,7 +46,8 @@ async def list_events(
         where += " AND actor_id = :a"
         params["a"] = actor_id
     cols = "seq, occurred_at, actor_type, actor_id, action, object_type, object_id, before, after"
-    # ``where`` is built from constant clauses only; values are bound parameters
+    # S608: ``cols`` is a fixed list and ``where`` is assembled from constant clauses above
+    # (identifiers from a fixed whitelist, never user input); every value is a bound parameter
     sql = f"SELECT {cols} FROM audit.events WHERE true{where} ORDER BY seq DESC LIMIT :lim"  # noqa: S608
     async with tenant_transaction(request.app.state.engine) as conn:
         rows = [dict(r._mapping) for r in await conn.execute(text(sql), params)]
