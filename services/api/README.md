@@ -85,3 +85,10 @@ uv run pytest services/api                 # flow, roles, tenant boundaries, Ope
 uv run pytest services/api/tests/test_samples.py   # sample pack + seeding (PostgreSQL for the seeding tests)
 uv run pytest -m contract services/api     # Schemathesis fuzzing against the contract
 ```
+
+## Organisation export (SEC-14)
+
+`POST /v1/organizations/{id}/export` (owner/admin, signed-in users only, 5 per 24 h, idempotency key
+supported) starts an async job; `GET .../export/{job_id}` shows its state and `.../download` returns a
+5-minute signed link. Every step is audited (`org.export.requested/completed/failed/downloaded`).
+Other organisation ids answer 404. Tests: `services/api/tests/test_org_export.py` (needs PostgreSQL).
