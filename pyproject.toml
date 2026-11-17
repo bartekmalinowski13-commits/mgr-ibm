@@ -185,6 +185,22 @@ layers = [
 ]
 
 [[tool.importlinter.contracts]]
+name = "API layers: routers > services > repositories (ARCH-04)"
+type = "layers"
+layers = [
+    "bomagent_api.routers",
+    "bomagent_api.services",
+    "bomagent_api.repositories",
+]
+
+[[tool.importlinter.contracts]]
+name = "API routers reach the database only through services"
+type = "forbidden"
+source_modules = ["bomagent_api.routers"]
+forbidden_modules = ["bomagent_api.repositories"]
+allow_indirect_imports = true
+
+[[tool.importlinter.contracts]]
 name = "Domain model is pure (no infrastructure)"
 type = "forbidden"
 source_modules = ["bomagent_bom", "bomagent_rules", "bomagent_cad", "bomagent_eval"]

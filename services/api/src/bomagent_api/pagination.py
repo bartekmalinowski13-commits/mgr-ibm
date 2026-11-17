@@ -8,6 +8,8 @@ import uuid
 from datetime import datetime
 from typing import Any
 
+from sqlalchemy import ColumnElement, tuple_
+
 from bomagent_common.problems import ProblemError
 
 MAX_LIMIT = 100
@@ -40,3 +42,13 @@ def page_clause(cursor: str | None, params: dict[str, Any], alias: str = "") -> 
 
 def clamp(limit: int) -> int:
     return max(1, min(MAX_LIMIT, limit))
+
+
+def page_filter(
+    cursor: str | None, created_at: ColumnElement[Any], row_id: ColumnElement[Any]
+) -> ColumnElement[bool] | None:
+    """Core counterpart of ``page_clause``: the keyset predicate for ``cursor`` (or None)."""
+    decoded = decode_cursor(cursor)
+    if decoded is None:
+        return None
+    return tuple_(created_at, row_id) < tuple_(*decoded)

@@ -80,12 +80,44 @@ audit events `project.created` and `org.samples_seeded`.
   staging/prod). Off also disables `POST /v1/samples` (404). The test suite pins it to `false`
   (root `conftest.py`) except in `tests/test_samples.py`.
 
+## Structure (ARCH-04)
+
+```
+routers/        HTTP only: auth + RBAC (`require`), request parsing and size limits, response
+                shaping, status codes. No SQL text, no business rules.
+services/       use cases: the transaction (`tenant_transaction`), business rules (quota,
+                state checks, 404/409), audit event and outbox message of one use case, plus
+                post-commit delivery. Take explicit collaborators (engine, object store,
+                queues, KB, catalogue, mailer) - never a `Request`.
+repositories/   the SQL: SQLAlchemy Core statements over the `Table` definitions in
+                `repositories/tables.py` (query metadata only; migrations own the schema),
+                `text()` where a Table would be contrived (advisory locks, jsonb functions,
+                `app.outbox`). Take an open tenant-scoped connection, hold no rules.
+```
+
+- Done for **projects, runs (BOM versions, evaluation, export), members/invitations and the
+  knowledge-base document list** (`services/{projects,runs,members,kb}.py`,
+  `repositories/{projects,runs,members,kb}.py`, shared `services/outbox.py`).
+  Not yet moved (they still carry their SQL): `routers/{api_keys,audit,identity,sso,samples,
+  exports}.py`; their remaining f-string statements are justified next to each `noqa: S608`
+  (fixed column lists and constant predicates, values always bound).
+- The dependency direction is enforced by import-linter (`just lint`): layers contract
+  `routers > services > repositories` plus a rule that routers never import repositories.
+  Routers do not import from each other; shared code lives in services.
+- Limits that tests tune at run time (`MAX_PROJECT_FILES`, `MAX_PROJECT_BYTES`,
+  `SSE_RECHECK_S`) are read in the router and passed to the service.
+- Row-level security is untouched: every repository call runs on a connection opened by
+  `tenant_transaction`, so tenant isolation does not depend on a repository remembering a filter.
+
 ## Testing
 ```bash
 uv run pytest services/api                 # flow, roles, tenant boundaries, OpenAPI drift
 uv run pytest services/api/tests/test_samples.py   # sample pack + seeding (PostgreSQL for the seeding tests)
 uv run pytest -m contract services/api     # Schemathesis fuzzing against the contract
+uv run lint-imports                        # routers > services > repositories
 ```
+New SQL goes into a repository, a new rule or audit/outbox step into a service; the router
+stays a thin adapter and is covered by the HTTP-level tests above.
 
 ## Organisation export (SEC-14)
 

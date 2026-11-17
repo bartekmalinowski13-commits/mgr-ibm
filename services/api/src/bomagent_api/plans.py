@@ -48,6 +48,8 @@ async def plan_of(conn: AsyncConnection, *, lock: bool = False) -> Plan:
     """``lock`` serialises quota checks of one tenant until the transaction ends."""
     name = (
         await conn.execute(
+            # S608: the only appended fragment is one of two string literals chosen by the
+            # ``lock`` flag; nothing derived from a request reaches the statement
             text(
                 "SELECT plan FROM tenancy.tenants WHERE id = app.current_tenant_id()"  # noqa: S608
                 + (" FOR NO KEY UPDATE" if lock else "")
