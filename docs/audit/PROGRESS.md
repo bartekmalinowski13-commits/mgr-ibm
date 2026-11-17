@@ -2,15 +2,16 @@
 
 ## Final report (2026-11-17)
 
-**Merged by me (squash, CI green):** #18-#27, #29-#36, #38-#52, #62, #64-#70 (about 55 PRs; the list in the table below has the item behind each). All audit items that did not need the owner are merged at least in their code part.
+**Merged by me (squash, CI green):** #18-#27, #29-#36, #38-#52, #62, #64-#70, #75 (about 56 PRs; the list in the table below has the item behind each). All audit items that did not need the owner are merged at least in their code part.
 
 **Open PRs waiting for the owner (not merged on purpose):**
 - #28 Fly process groups, Grafana dashboards, alert rules (`deploy/*`).
 - #37 gateway refuses to start on a non-EU environment (`deploy/*`; image start not run here).
 - #55 draft: downgrade round-trip test, fails today because the SSO revision's `downgrade()` is broken (needs a migration fix).
+- #76 ARCH-04 rest (SQL out of api_keys/audit/identity/samples/exports routers): CI green except CodeQL `py/weak-sensitive-data-hashing` on `auth.py:296` (SHA-256 of a random API key, lookup by hash by design; false positive, flow only looks new because the call moved). Owner: dismiss the alert, then merge.
 - #71 SEC-06 step-up MFA (`auth.py`/`authz.py`), #72 migrations bundle SEC-15/SEC-07/DATA-01/02 (SECURITY DEFINER onboarding, indexes), #73 SEC-05 SSO hardening + SEC-03 part 2 (`sso.py`; web and API deploy together). #71 and #73 both touch `auth.py`/`app.py`: expect a small conflict on the second merge.
 
-**Not started:** SEC-02 (BFF session + CSP; wait for #71/#73), ARCH-03 LISTEN/NOTIFY, `runs.trace` cap, SQL still in six routers (ARCH-04), OPS-01 error tracking (new dependency, decide first).
+**Not started:** SEC-02 (BFF session + CSP; wait for #71/#73), ARCH-03 LISTEN/NOTIFY, OPS-01 error tracking (new dependency, decide first).
 
 **Owner to-do list, in priority order**
 1. Review and merge #37 and #28, then `fly deploy` and check `fly status` (one `web`, one `worker`). Nothing from this audit is deployed: I never deploy (CLAUDE.md rule 6).
@@ -110,7 +111,7 @@ Scheduled task `audit-implementation-continue` (hourly, id `trig_0174gXcCFuTekwm
 | OPS-03 bomagent-ops CLI | merged (skeleton, #42) | claude/audit-doc-04-ops-03-07 | #42 | `bomagent-ops env|queries` read-only; requeue/purge need RLS + audit |
 | OPS-07 CI cost / path filters | merged (docs-only fast path, #42) | claude/audit-doc-04-ops-03-07 | #42 | job-level skip of heavy jobs on docs-only PRs; confirm on the next docs-only PR; caching/nightly matrix todo |
 | OPS-08 migration lint + downgrade test | merged (migration lint, #50); round-trip test in draft PR #55, needs owner | claude/audit-ops-08-downgrade | #50, #55 | round-trip test found a real defect: downgrade of `tenancy.sso_domains` fails (policy dependency) - migration fix = owner |
-| DATA-01 / DATA-02 indexes, TTL sweeps, re-index doc | in PR #72 (indexes, TTL), trace cap not done | claude/audit-migrations-bundle | #72 | concurrent indexes on runs/files, rate_windows TTL sweep, growth doc; `runs.trace` size cap documented only |
+| DATA-01 / DATA-02 indexes, TTL sweeps, re-index doc | in PR #72 (indexes, TTL), trace cap merged (#75, app level, BOMAGENT_RUN_TRACE_MAX_BYTES) | claude/audit-migrations-bundle | #72 | concurrent indexes on runs/files, rate_windows TTL sweep, growth doc; `runs.trace` size cap documented only |
 | QA-03 property tests | merged (#44) | claude/audit-qa-02-03 | #44 | Hypothesis tests for values, designators, grouping, CSV round trips; mutmut not added |
 | UX-04 BOM table sort/filter/virtualise | merged (#51); column resize todo | claude/audit-ux-04-07 | #51 | sort/filter/virtualise/sticky/visibility/Copy CSV |
 | UX-05 localised error messages | merged (#43) | claude/audit-ux-05-06-08 | #43 | 34 slugs localised PL+EN; dynamic numbers (quota) now generic |

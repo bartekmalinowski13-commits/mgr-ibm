@@ -275,3 +275,8 @@ domain) and the assumptions awaiting acceptance (`docs/DECISIONS_LOG.md`, last c
 - See the "Final report" at the top of `docs/audit/PROGRESS.md`. Merged: ARCH-06 (#69), ARCH-04
   (#70, partial). Open for the owner: #28, #37, #55 (draft), #71 (MFA), #72 (migrations bundle),
   #73 (SSO hardening). Not started: SEC-02.
+
+## 2026-11-17 - audit follow-ups
+
+- Merged: `runs.trace` size cap (#75, app level, `BOMAGENT_RUN_TRACE_MAX_BYTES`, default 256 KiB, 0 = off; full trace stays in object storage).
+- Open for the owner: #76 ARCH-04 remainder (only the CodeQL false positive on `auth.py:296` blocks it).
