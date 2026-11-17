@@ -2,7 +2,7 @@
 
 ## Final report (2026-11-17)
 
-**Merged by me (squash, CI green):** #18-#27, #29, #31-#36, #38-#52, #62, #64-#70 (about 55 PRs; the list in the table below has the item behind each). All audit items that did not need the owner are merged at least in their code part.
+**Merged by me (squash, CI green):** #18-#27, #29-#36, #38-#52, #62, #64-#70 (about 55 PRs; the list in the table below has the item behind each). All audit items that did not need the owner are merged at least in their code part.
 
 **Open PRs waiting for the owner (not merged on purpose):**
 - #28 Fly process groups, Grafana dashboards, alert rules (`deploy/*`).
