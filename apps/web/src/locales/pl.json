@@ -232,6 +232,7 @@
     "llmCalls": "Wywołania LLM",
     "tokens": "Tokeny",
     "cost": "Koszt",
+    "kbSnapshot": "Migawka KB",
     "time": "Czas",
     "waiting": "Przebieg czeka na wolnego agenta.",
     "failedHelp": "Przebieg się nie udał: {{error}}. Sprawdź pliki projektu i uruchom go ponownie.",

@@ -117,6 +117,7 @@ class Run(_M):
     created_at: datetime
     started_at: datetime | None
     finished_at: datetime | None
+    kb_snapshot_id: str | None = None  # knowledge base the run is pinned to (ADR-0008)
 
 
 class BomEnvelope(_M):

@@ -30,6 +30,14 @@ def test_xlsx_export_is_a_workbook_with_the_csv_table_and_no_formulas():
     assert "illustrative" in sheet
 
 
+def test_xlsx_export_carries_the_kb_snapshot_id():
+    bom = BomVersion(design_name="t", items=[BomItem(line=1, refdes=["R1"], quantity=1)])
+    with zipfile.ZipFile(io.BytesIO(to_xlsx(bom, kb_snapshot_id="kbs_abc"))) as zf:
+        sheet = zf.read("xl/worksheets/sheet1.xml").decode()
+    assert "KB snapshot" in sheet
+    assert "kbs_abc" in sheet
+
+
 def test_xlsx_export_strips_characters_xml_cannot_hold():
     bom = BomVersion(
         design_name="t", items=[BomItem(line=1, refdes=["R1"], quantity=1, value="a\x00b\x07c")]

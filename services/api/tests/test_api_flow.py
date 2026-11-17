@@ -169,6 +169,13 @@ async def test_full_flow_and_tenant_boundaries(env, tmp_path):
     assert "Demo" not in csv.text.splitlines()[0]
     assert bom["demo"] is False
 
+    # ARCH-06: the run is pinned to a tenant KB snapshot, shown in the API and the export
+    run_row = (await c.get(f"/v1/runs/{run_id}", headers=alice)).json()
+    assert run_row["kb_snapshot_id"].startswith("kbs_")
+    assert csv.headers["x-kb-snapshot-id"] == run_row["kb_snapshot_id"]
+    assert csv.text.splitlines()[0].split(",")[-1] == "KB snapshot"
+    assert csv.text.splitlines()[1].endswith(run_row["kb_snapshot_id"])
+
     # demo deployments (fake model) mark every export as illustrative
     env.app.state.demo = True
     demo_bom = (await c.get(f"/v1/runs/{run_id}/bom", headers=alice)).json()

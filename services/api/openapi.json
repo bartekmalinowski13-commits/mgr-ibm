@@ -2332,6 +2332,17 @@
             "title": "Id",
             "type": "string"
           },
+          "kb_snapshot_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kb Snapshot Id"
+          },
           "model_id": {
             "title": "Model Id",
             "type": "string"
@@ -9326,7 +9337,7 @@
     },
     "/v1/runs/{run_id}/rerun": {
       "post": {
-        "description": "Starts a new run with the variant, runtime, model and requirements of ``run_id`` on\nthe project's current parsed files (the run's own file snapshot is not kept; ARCH-06).\nThe model must still be allowed and the usual run quota applies.",
+        "description": "Starts a new run with the variant, runtime, model and requirements of ``run_id`` on\nthe project's current parsed files (the run's own file snapshot is not kept) and a fresh\nknowledge-base snapshot (the same id as the original's when the KB is unchanged; ARCH-06).\nThe model must still be allowed and the usual run quota applies.",
         "operationId": "rerun_v1_runs__run_id__rerun_post",
         "parameters": [
           {

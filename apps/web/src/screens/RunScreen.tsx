@@ -152,6 +152,14 @@ export function RunScreen() {
           <RunStatus status={status ?? "queued"} />
           <span className="font-mono text-sm text-muted">{run.data.model_id}</span>
           <span className="font-mono text-sm text-muted">{run.data.runtime}</span>
+          {run.data.kb_snapshot_id ? (
+            <span
+              className="font-mono text-sm text-muted"
+              title={`${t("run.kbSnapshot")}: ${run.data.kb_snapshot_id}`}
+            >
+              {t("run.kbSnapshot")} {run.data.kb_snapshot_id.slice(0, 12)}
+            </span>
+          ) : null}
           <div className="ml-auto flex flex-wrap gap-2">
             {status === "queued" || status === "running" ? (
               <Button variant="danger" size="sm" onClick={() => void cancel()}>

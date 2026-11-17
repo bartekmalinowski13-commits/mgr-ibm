@@ -109,6 +109,19 @@ def test_csv_export_demo_adds_a_watermark_column_only_when_asked():
     assert demo[1][:-1] == plain[1]
 
 
+def test_csv_export_adds_the_kb_snapshot_column_only_when_given():
+    bom = BomVersion(design_name="t", items=[BomItem(line=1, refdes=["R1"], quantity=1)])
+    plain = list(csv.reader(io.StringIO(to_csv(bom))))
+    pinned = list(csv.reader(io.StringIO(to_csv(bom, kb_snapshot_id="kbs_abc"))))
+    both = list(csv.reader(io.StringIO(to_csv(bom, demo=True, kb_snapshot_id="kbs_abc"))))
+    assert "KB snapshot" not in plain[0]
+    assert pinned[0][-1] == "KB snapshot"
+    assert pinned[1][-1] == "kbs_abc"
+    assert pinned[1][:-1] == plain[1]
+    assert both[0][-2:] == ["KB snapshot", "Demo"]
+    assert both[1][-2] == "kbs_abc"
+
+
 def test_json_export_roundtrip():
     bom = BomVersion(design_name="t", items=[BomItem(line=1, refdes=["U1"], quantity=1)])
     again = BomVersion.model_validate_json(to_json(bom))
