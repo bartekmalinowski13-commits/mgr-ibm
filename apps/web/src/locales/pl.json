@@ -362,6 +362,8 @@
     "domain-taken": "Inna organizacja zweryfikowała już tę domenę.",
     "email-not-verified": "Zweryfikuj adres e-mail, aby kontynuować.",
     "empty-patch": "Nie ma czego zmieniać: edytuj co najmniej jedno pole.",
+    "expired": "Ten link do pobrania wygasł. Zamów eksport ponownie.",
+    "export-not-ready": "Eksport jest jeszcze przygotowywany. Spróbuj za chwilę.",
     "file-in-use": "Przebieg tego projektu jest w kolejce lub trwa. Poczekaj na jego koniec i spróbuj ponownie.",
     "file-too-large": "Plik jest za duży. Wgraj mniejszy.",
     "forbidden-action": "Twoja rola nie pozwala na tę czynność. Poproś właściciela organizacji o dostęp.",
