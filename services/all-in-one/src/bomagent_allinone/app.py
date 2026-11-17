@@ -30,6 +30,7 @@ from pydantic import Field, model_validator
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from bomagent_agent_worker.handler import RunWorker
+from bomagent_agent_worker.trace_cap import DEFAULT_TRACE_MAX_BYTES
 from bomagent_agents.fake_responder import heuristic_responder
 from bomagent_agents.retrieval import Retriever
 from bomagent_api.app import Settings as ApiSettings
@@ -87,6 +88,8 @@ class Settings(ApiSettings):
     start_workers: bool = True
     queue_wait_seconds: int = 5
     db_pool_size: int = 5  # app role; the platform role uses 2 (mind the pooler's limits)
+    #: size cap of the ``runs.trace`` column in bytes (0 = off), DATA-01/02
+    run_trace_max_bytes: int = DEFAULT_TRACE_MAX_BYTES
     dead_letter_retention_s: float = 14 * 24 * 3600.0
     use_docling: bool = False
     #: allow the deterministic fake LLM provider when no gateway is configured. ``None``
@@ -238,6 +241,7 @@ def create_app(
             kb=kb,
             retriever_factory=retriever_factory,
             allow_unregistered=local,
+            trace_max_bytes=settings.run_trace_max_bytes,
         ).handle,
         "kb": KbIndexer(
             kb=kb,
