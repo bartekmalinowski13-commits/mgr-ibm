@@ -186,8 +186,9 @@ DOWNGRADE = [
     "DROP SCHEMA projects CASCADE",
     "DROP POLICY member_tenants ON tenancy.tenants",
     "DROP FUNCTION tenancy.memberships_of(text)",
-    "DROP FUNCTION app.current_user_sub()",
+    # the table first: its policies (member_self, ...) call app.current_user_sub() (OPS-08)
     "DROP TABLE tenancy.memberships",
+    "DROP FUNCTION app.current_user_sub()",
 ]
 
 

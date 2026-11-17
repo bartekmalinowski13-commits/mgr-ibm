@@ -95,8 +95,10 @@ UPGRADE = [
 ]
 
 DOWNGRADE = [
-    "DROP TABLE tenancy.sso_domains",
+    # sso_connections first: its policy ``sso_connection_by_domain`` reads sso_domains, so
+    # PostgreSQL refuses to drop sso_domains while that policy exists (OPS-08)
     "DROP TABLE tenancy.sso_connections",
+    "DROP TABLE tenancy.sso_domains",
     "DROP FUNCTION app.current_sso_provider()",
     "DROP FUNCTION app.current_sso_domain()",
 ]
