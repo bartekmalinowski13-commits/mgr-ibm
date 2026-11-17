@@ -13,7 +13,7 @@ from bomagent_agent_worker.handler import RunWorker
 from bomagent_agents.fake_responder import heuristic_responder
 from bomagent_agents.retrieval import InMemoryRetriever
 from bomagent_api.app import Settings, create_app
-from bomagent_common.db import platform_transaction
+from bomagent_common.db import tenant_transaction
 from bomagent_common.messaging import InMemoryQueue, process_one
 from bomagent_common.storage import InMemoryObjectStore
 from bomagent_ingest.handler import IngestWorker
@@ -244,7 +244,7 @@ async def test_full_flow_and_tenant_boundaries(env, tmp_path):
     ).status_code == 404
 
 
-async def test_auth_errors_and_roles(env, platform_engine):
+async def test_auth_errors_and_roles(env):
     s = uuid.uuid4().hex[:6]
     owner = await env.org(await env.login(f"own-{s}"), f"org-{s}")
     c = env.client
@@ -260,7 +260,9 @@ async def test_auth_errors_and_roles(env, platform_engine):
     assert dup.status_code == 409
 
     viewer_sub = f"view-{s}"
-    async with platform_transaction(platform_engine) as conn:
+    # memberships are written by the application role in the tenant's context (SEC-15: the
+    # platform role has no access to this table)
+    async with tenant_transaction(env.app.state.engine, uuid.UUID(owner["X-Org-Id"])) as conn:
         await conn.execute(
             text(
                 "INSERT INTO tenancy.memberships (tenant_id, user_sub, email,"
@@ -332,7 +334,7 @@ async def test_concurrent_idempotent_posts_and_bom_edits(env):
     assert len({r.json()["id"] for r in created}) == 1
     # the same key from another member is that member's own key
     bob = await env.login(f"bob-{s}")
-    async with platform_transaction(env.app.state.platform_engine) as conn:
+    async with tenant_transaction(env.app.state.engine, uuid.UUID(alice["X-Org-Id"])) as conn:
         await conn.execute(
             text(
                 "INSERT INTO tenancy.memberships (tenant_id, user_sub, email, roles)"
