@@ -7,7 +7,6 @@ import uuid
 
 import httpx
 import pytest
-from sqlalchemy import text
 
 from bomagent_api.app import Settings, create_app
 from bomagent_common.storage import InMemoryObjectStore
@@ -82,17 +81,10 @@ async def test_denial_is_audited_and_forged_claims_do_not_help(app_engine, platf
     plain = await login(c, f"o-{s}")
     scope = await org(c, plain, f"m-{s}")
     assert (await c.post("/v1/api-keys", headers=plain | scope, json=KEY)).status_code == 403
-    async with platform_engine.begin() as conn:
-        n = (
-            await conn.execute(
-                text(
-                    "SELECT count(*) FROM audit.events WHERE action = 'auth.mfa_required'"
-                    " AND tenant_id = :t"
-                ),
-                {"t": uuid.UUID(scope["X-Org-Id"])},
-            )
-        ).scalar_one()
-    assert n == 1
+    # the audit log is tenant-scoped (RLS): read it through the API as the same user with MFA
+    proven = await login(c, f"o-{s}", mfa=True)
+    events = (await c.get("/v1/audit-events?limit=100", headers=proven | scope)).json()["items"]
+    assert len([e for e in events if e["action"] == "auth.mfa_required"]) == 1
     # tokens with aal1 / an unrelated amr / user-editable metadata are still refused
     for extra in (
         {"aal": "aal1"},
