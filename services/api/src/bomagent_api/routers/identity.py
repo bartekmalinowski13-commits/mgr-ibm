@@ -2,18 +2,11 @@
 
 from __future__ import annotations
 
-import asyncio
-import uuid
-from typing import Any
-
 from fastapi import APIRouter, Request
-from sqlalchemy import text
-from sqlalchemy.exc import IntegrityError
 
 from bomagent_api.auth import CurrentPrincipal, OrgContext, memberships, require_verified_email
 from bomagent_api.authz import require
-from bomagent_api.plans import MAX_OWNED_ORGANIZATIONS, quota_exceeded, usage_report
-from bomagent_api.samples.seeding import seed_samples
+from bomagent_api.plans import MAX_OWNED_ORGANIZATIONS, quota_exceeded
 from bomagent_api.schemas import (
     DevToken,
     Me,
@@ -24,14 +17,9 @@ from bomagent_api.schemas import (
     UsageReport,
     problem_responses,
 )
-from bomagent_common.audit import AuditEvent, emit_audit
-from bomagent_common.db import platform_transaction, tenant_transaction
-from bomagent_common.logging import get_logger
+from bomagent_api.services import organizations as service
 from bomagent_common.problems import ProblemError
-from bomagent_common.tenancy import TenantContext
 
-log = get_logger(__name__)
-_BACKGROUND: set[asyncio.Task[Any]] = set()  # keeps shielded seeding tasks alive
 router = APIRouter(
     prefix="/v1",
     tags=["identity"],
@@ -67,66 +55,24 @@ async def create_organization(
     owned = [m for m in await memberships(request, principal) if "owner" in m["roles"]]
     if len(owned) >= MAX_OWNED_ORGANIZATIONS:
         raise quota_exceeded(f"a user can own at most {MAX_OWNED_ORGANIZATIONS} organisations")
-    org_id = uuid.uuid4()
-    ctx = TenantContext(tenant_id=org_id, actor_id=principal.sub, roles=frozenset({"owner"}))
-    try:
-        async with platform_transaction(request.app.state.platform_engine) as conn:
-            # one SECURITY DEFINER function creates the tenant and its first owner (SEC-15):
-            # the platform role itself can no longer insert tenants or memberships
-            await conn.execute(
-                text("SELECT tenancy.create_organization(:i, :s, :n, :sub, :e, :d)"),
-                {
-                    "i": org_id,
-                    "s": body.slug,
-                    "n": body.name,
-                    "sub": principal.sub,
-                    "e": principal.email.lower(),
-                    "d": principal.name,
-                },
-            )
-            await conn.execute(
-                text("SELECT set_config('app.tenant_id', :t, true)"), {"t": str(org_id)}
-            )
-            await emit_audit(
-                conn,
-                AuditEvent(
-                    action="org.created",
-                    object_type="organization",
-                    object_id=str(org_id),
-                    after={"slug": body.slug, "name": body.name},
-                ),
-                ctx,
-            )
-    except IntegrityError as exc:
-        raise ProblemError(
-            409, "Conflict", "organisation slug already taken", slug="slug-taken"
-        ) from exc
-    if request.app.state.samples_enabled:
-        # best effort: organisation creation never fails because of the samples, and a
-        # client disconnect does not cancel a half-done seeding (POST /v1/samples fills gaps)
-        task = asyncio.create_task(
-            seed_samples(
-                ctx,
-                engine=request.app.state.engine,
-                store=request.app.state.store,
-                queues=request.app.state.queues,
-                trigger="org_created",
-            )
-        )
-        _BACKGROUND.add(task)
-        task.add_done_callback(_BACKGROUND.discard)
-        try:
-            await asyncio.shield(task)
-        except Exception:
-            log.exception("samples_seed_failed", tenant_id=str(org_id))
-    return Organization(id=org_id, slug=body.slug, name=body.name, plan="pilot")
+    state = request.app.state
+    return await service.create_organization(
+        platform_engine=state.platform_engine,
+        engine=state.engine,
+        store=state.store,
+        queues=state.queues,
+        samples_enabled=state.samples_enabled,
+        sub=principal.sub,
+        email=principal.email,
+        name=principal.name,
+        body=body,
+    )
 
 
 @router.get("/usage", summary="Usage this month and the plan's limits")
 async def usage(request: Request, ctx: OrgContext) -> UsageReport:
     require(ctx, "usage.read")
-    async with tenant_transaction(request.app.state.engine) as conn:
-        return UsageReport(**await usage_report(conn))
+    return await service.usage(request.app.state.engine)
 
 
 @router.post(

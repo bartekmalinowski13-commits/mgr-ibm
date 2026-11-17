@@ -2,21 +2,13 @@
 
 from __future__ import annotations
 
-from typing import Any
-
 from fastapi import APIRouter, Request
-from sqlalchemy import text
 
 from bomagent_api.auth import OrgContext
 from bomagent_api.authz import require
-from bomagent_api.pagination import clamp
 from bomagent_api.schemas import AuditEventOut, ChainStatus, Page, problem_responses
-from bomagent_common.audit import ChainAnchor, verify_chain
-from bomagent_common.audit_anchor import load_anchors
-from bomagent_common.db import tenant_transaction
-from bomagent_common.logging import get_logger
+from bomagent_api.services import audit as service
 
-log = get_logger(__name__)
 router = APIRouter(
     prefix="/v1/audit-events",
     tags=["audit"],
@@ -34,27 +26,12 @@ async def list_events(
     actor_id: str | None = None,
 ) -> Page[AuditEventOut]:
     require(ctx, "audit.read")
-    params: dict[str, Any] = {"lim": clamp(limit) + 1}
-    where = ""
-    if cursor:
-        where += " AND seq < :c"
-        params["c"] = int(cursor) if cursor.isdigit() else 0
-    if object_type:
-        where += " AND object_type = :ot"
-        params["ot"] = object_type
-    if actor_id:
-        where += " AND actor_id = :a"
-        params["a"] = actor_id
-    cols = "seq, occurred_at, actor_type, actor_id, action, object_type, object_id, before, after"
-    # S608: ``cols`` is a fixed list and ``where`` is assembled from constant clauses above
-    # (identifiers from a fixed whitelist, never user input); every value is a bound parameter
-    sql = f"SELECT {cols} FROM audit.events WHERE true{where} ORDER BY seq DESC LIMIT :lim"  # noqa: S608
-    async with tenant_transaction(request.app.state.engine) as conn:
-        rows = [dict(r._mapping) for r in await conn.execute(text(sql), params)]
-    more = len(rows) > clamp(limit)
-    rows = rows[: clamp(limit)]
-    return Page[AuditEventOut](
-        items=[AuditEventOut(**r) for r in rows], next_cursor=str(rows[-1]["seq"]) if more else None
+    return await service.list_events(
+        request.app.state.engine,
+        cursor=cursor,
+        limit=limit,
+        object_type=object_type,
+        actor_id=actor_id,
     )
 
 
@@ -62,21 +39,4 @@ async def list_events(
 async def verify(request: Request, ctx: OrgContext) -> ChainStatus:
     require(ctx, "audit.read")
     sink = getattr(request.app.state, "anchor_sink", None)
-    anchors: list[ChainAnchor] | None = None
-    anchors_error = False
-    if sink is not None:
-        try:
-            anchors = await load_anchors(sink, ctx.tenant_id)
-        except Exception:
-            # the chain is still checked; the answer says that the anchors could not be
-            log.exception("audit_anchors_unavailable", tenant_id=str(ctx.tenant_id))
-            anchors_error = True
-    async with tenant_transaction(request.app.state.engine) as conn:
-        result = await verify_chain(conn, ctx.tenant_id, anchors)
-    return ChainStatus(
-        ok=result.ok,
-        checked=result.checked,
-        first_broken_seq=result.first_broken_seq,
-        anchors_checked=len(anchors or []),
-        anchors_error=anchors_error,
-    )
+    return await service.verify(request.app.state.engine, sink, ctx.tenant_id)
