@@ -15,8 +15,8 @@ from sqlalchemy.ext.asyncio import AsyncConnection
 from bomagent_api.auth import API_KEY_PREFIX, OrgContext, api_key_hash
 from bomagent_api.authz import require
 from bomagent_api.pagination import clamp, encode_cursor, page_clause
-from bomagent_api.routers.members import canonical
 from bomagent_api.schemas import ApiKey, ApiKeyCreate, ApiKeyCreated, Page, problem_responses
+from bomagent_api.services.members import canonical
 from bomagent_common.audit import AuditEvent, emit_audit
 from bomagent_common.db import tenant_transaction
 from bomagent_common.problems import ProblemError
@@ -41,6 +41,7 @@ async def _insert(
     key = API_KEY_PREFIX + secrets.token_urlsafe(32)
     row = (
         await conn.execute(
+            # S608: ``COLS`` is a module constant (a fixed column list); values are bound
             text(
                 "INSERT INTO tenancy.api_keys (id, tenant_id, name, prefix, key_hash, roles,"  # noqa: S608
                 " created_by, expires_at) VALUES (:i, app.current_tenant_id(), :n, :p, :h,"
@@ -66,6 +67,8 @@ async def list_keys(
 ) -> Page[ApiKey]:
     require(ctx, "apikey.manage")
     params: dict[str, Any] = {"lim": clamp(limit) + 1}
+    # S608: ``COLS`` and ``ACTIVE`` are module constants (fixed column list and predicate);
+    # the cursor and limit are bound parameters
     sql = (
         f"SELECT {COLS} FROM tenancy.api_keys WHERE tenant_id = app.current_tenant_id()"  # noqa: S608
         f" AND {ACTIVE}{page_clause(cursor, params)} ORDER BY created_at DESC, id DESC LIMIT :lim"
@@ -102,6 +105,7 @@ async def create_key(request: Request, ctx: OrgContext, body: ApiKeyCreate) -> A
 async def _revoke(conn: AsyncConnection, key_id: uuid.UUID) -> Any:
     row = (
         await conn.execute(
+            # S608: ``ACTIVE`` is a module constant predicate; the key id is bound
             text(
                 "UPDATE tenancy.api_keys SET revoked_at = now() WHERE id = :i"  # noqa: S608
                 f" AND tenant_id = app.current_tenant_id() AND {ACTIVE}"
