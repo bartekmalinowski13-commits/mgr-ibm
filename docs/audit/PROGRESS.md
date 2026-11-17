@@ -1,5 +1,13 @@
 # Audit implementation progress
 
+## Update 2026-11-17 (evening): audit PRs merged at the owner's request
+
+The owner asked to merge everything that does not depend on their configuration. Merged (squash, CI green unless noted): #72 (migrations 0015/0016, access-token hook SQL), #71 (step-up MFA, off by default), #73 (SSO hardening; web and API are one image, so they deploy together), #76 (ARCH-04 rest; CodeQL `py/weak-sensitive-data-hashing` on `auth.py` is a false positive: the input is a 256-bit random API key, so the alert still has to be dismissed in the GitHub UI), #79 (replaces draft #55: fixes the broken `downgrade()` of revisions 0010 and 0003 and adds the round-trip test), #78 (Mistral Large enabled in the catalogue), #15 and five minor dependency bumps (#53, #54, #60, #61, #63).
+
+**Still held on purpose:** #37 (gateway entrypoint) and #28 (Fly process groups, dashboards): both change what `fly deploy` does and neither could be started here, so merge them after the first real-model deploy works, not in the same step. Dependabot majors (#2, #3, #4, #57, #58, #59: TypeScript 7, react-table 9, @types/node 26, valkey 9, clickhouse 26, litellm) are untouched; #57, #59, #4 and #2 fail CI.
+
+**Nothing is deployed.** The next `fly deploy` applies migrations 0015 and 0016 as the release command; the rollback is `alembic downgrade 0014`, now covered by a test.
+
 ## Final report (2026-11-17)
 
 **Merged by me (squash, CI green):** #18-#27, #29-#36, #38-#52, #62, #64-#70, #75 (about 56 PRs; the list in the table below has the item behind each). All audit items that did not need the owner are merged at least in their code part.
@@ -69,8 +77,8 @@ Scheduled task `audit-implementation-continue` (hourly, id `trig_0174gXcCFuTekwm
 | Task | Status | Branch | PR | Notes |
 |---|---|---|---|---|
 | SEC-02 BFF session + CSP tightening | not started (needs owner) |  |  | BFF session + CSP touches auth.py and apps/web session handling that #71/#73 also change; start after those are decided |
-| SEC-15 onboarding SECURITY DEFINER function | in PR #72, needs owner (migration, RLS) | claude/audit-migrations-bundle | #72 | revision 0015: SECURITY DEFINER `tenancy.create_organization`; platform role loses INSERT on tenants and all access to memberships; isolation test + downgrade round trip for 0015/0016 |
-| SEC-06 MFA (aal2 / amr checks) | in PR #71, needs owner (auth.py/authz.py) | claude/audit-sec-06 | #71 | step-up MFA behind `BOMAGENT_MFA_ENFORCED` (off by default), 403 `mfa-required`, top-level aal/amr only; owner enrols TOTP in Supabase then turns it on; web step-up UI and Cognito not done |
+| SEC-15 onboarding SECURITY DEFINER function | merged (#72) | claude/audit-migrations-bundle | #72 | revision 0015: SECURITY DEFINER `tenancy.create_organization`; platform role loses INSERT on tenants and all access to memberships; isolation test + downgrade round trip for 0015/0016 |
+| SEC-06 MFA (aal2 / amr checks) | merged (#71); enabling = owner | claude/audit-sec-06 | #71 | step-up MFA behind `BOMAGENT_MFA_ENFORCED` (off by default), 403 `mfa-required`, top-level aal/amr only; owner enrols TOTP in Supabase then turns it on; web step-up UI and Cognito not done |
 | SEC-14 export / delete / retention / sub-processors | partial (export + legal docs, #67); delete/retention/MFA = owner | claude/audit-sec-14 | #67 | `POST /v1/organizations/{id}/export` (async ZIP, signed link, rate limited, audited, tenant-isolation test), SUBPROCESSORS.md, DPA_CHECKLIST.md; not done: org hard delete, retention sweeps, export file expiry, in-app legal link |
 | UX-02 e-mail invitations | merged (backend, #48); web landing + resend todo | claude/audit-ux-02 | #48 | mailer protocol (log default, SMTP via env, TLS always), invitation e-mail PL+EN, audited; owner: mail provider, SPF/DKIM, env vars. Note: `LogMailer.sent` is unbounded when SMTP is off |
 | UX-03 lifecycle actions (delete, cancel, history, XLSX) | merged (#66) | claude/audit-ux-03 | #66 | project rename/delete, file delete, run cancel/re-run, BOM version history + diff, XLSX; cancelled run stored as `failed` ("cancelled by user") until a migration adds a status |
@@ -89,7 +97,7 @@ Scheduled task `audit-implementation-continue` (hourly, id `trig_0174gXcCFuTekwm
 | ARCH-03 LISTEN/NOTIFY, indexes, outbox relay query | partial (runs index in #72) | claude/audit-migrations-bundle | #72 | LISTEN/NOTIFY and the outbox relay query not done (behaviour risk) |
 | ARCH-04 service layer | merged (#70, partial) | claude/audit-arch-04 | #70 | services + repositories for projects, runs, members, KB; import-linter contract routers > services > repositories; left: api_keys, audit, identity, sso, samples, exports routers and plans/idempotency SQL. No independent review pass was done on this refactor (covered by the DB tests in CI) |
 | ARCH-05 resume from checkpoints | merged (#52, no migration); heartbeat/reaper = owner | claude/audit-arch-05 | #52 | resume from checkpoint for A and B, recorded in run record/trace/audit; `heartbeat_at` column and per-plan timeout need a migration |
-| SEC-05 SSO hardening | in PR #73, needs owner (sso.py) | claude/audit-sec-05 | #73 | discovery as POST (SEC-03 part 2: web and API must be deployed together), free-mail blocklist, 8 h auth_time limit, error redaction, nonce check; not done: Cognito reconcile, TXT re-verification (migration), API key lifetime cap |
+| SEC-05 SSO hardening | merged (#73) | claude/audit-sec-05 | #73 | discovery as POST (SEC-03 part 2: web and API must be deployed together), free-mail blocklist, 8 h auth_time limit, error redaction, nonce check; not done: Cognito reconcile, TXT re-verification (migration), API key lifetime cap |
 | AWS dev/staging/prod via the pipeline | needs owner | | | deployment is a human step |
 | QA-04 E2E breadth, QA-05 DAST | merged (mobile spec, #50) | claude/audit-ops-08-09-qa-04-05 | #50 | phone-viewport E2E; QA-05 ZAP baseline workflow (manual/scheduled) merged; not run locally |
 | OPS-09 k6 scenarios, capacity note | merged (k6 + placeholder note, #50) | claude/audit-ops-08-09-qa-04-05 | #50 | `tests/load/bomagent.js`, capacity-k6 runbook; numbers are placeholders until measured |
@@ -99,7 +107,7 @@ Scheduled task `audit-implementation-continue` (hourly, id `trig_0174gXcCFuTekwm
 
 | Task | Status | Branch | PR | Notes |
 |---|---|---|---|---|
-| SEC-07 Supabase custom access token hook | in PR #72, needs owner (Supabase dashboard) | claude/audit-migrations-bundle | #72 | hook SQL for the Supabase `postgres` database + runbook; owner enables the hook, then sets `BOMAGENT_OIDC_EMAIL_VERIFIED_CLAIM=email_verified` |
+| SEC-07 Supabase custom access token hook | merged (#72); activation = owner (Supabase dashboard) | claude/audit-migrations-bundle | #72 | hook SQL for the Supabase `postgres` database + runbook; owner enables the hook, then sets `BOMAGENT_OIDC_EMAIL_VERIFIED_CLAIM=email_verified` |
 | SEC-11 docs/openapi off outside dev | merged (#38) | claude/audit-sec-11 | #38 | `Settings.docs_enabled` (local/test/dev only); contract stays in `services/api/openapi.json`; a docs-site page (Redocly/Scalar) is a follow-up |
 | SEC-12 injection corpus, canary, free-text sanitising | merged (#41); remainder todo | claude/audit-sec-12 | #41 | detector fix (irregular whitespace), 16+12 corpus with a 5 % success-rate gate, `clean_free_text`; left: wire the cleaner into storage, injection success rate in `bomagent experiment`, canary in prompt, LLM classifier |
 | SEC-16/17 low items (CODEOWNERS, SECURITY.md, idempotency TTL, parser error leak test) | merged (SEC-17, #39); SEC-16, auth.py comment, branch protection = owner | claude/audit-sec-17 | #39 | SECURITY.md, CODEOWNERS, idempotency TTL sweep, parser error text test |
@@ -110,8 +118,8 @@ Scheduled task `audit-implementation-continue` (hourly, id `trig_0174gXcCFuTekwm
 | ARCH-10 symlink removal, CHANGELOG, tags | partial (#47: CHANGELOG) | claude/audit-arch-09-10 | #47 | CHANGELOG done; `evals/samples` symlink kept (nightly workflow and test depend on it); tags = owner |
 | OPS-03 bomagent-ops CLI | merged (skeleton, #42) | claude/audit-doc-04-ops-03-07 | #42 | `bomagent-ops env|queries` read-only; requeue/purge need RLS + audit |
 | OPS-07 CI cost / path filters | merged (docs-only fast path, #42) | claude/audit-doc-04-ops-03-07 | #42 | job-level skip of heavy jobs on docs-only PRs; confirm on the next docs-only PR; caching/nightly matrix todo |
-| OPS-08 migration lint + downgrade test | merged (migration lint, #50); round-trip test in draft PR #55, needs owner | claude/audit-ops-08-downgrade | #50, #55 | round-trip test found a real defect: downgrade of `tenancy.sso_domains` fails (policy dependency) - migration fix = owner |
-| DATA-01 / DATA-02 indexes, TTL sweeps, re-index doc | in PR #72 (indexes, TTL), trace cap merged (#75, app level, BOMAGENT_RUN_TRACE_MAX_BYTES) | claude/audit-migrations-bundle | #72 | concurrent indexes on runs/files, rate_windows TTL sweep, growth doc; `runs.trace` size cap documented only |
+| OPS-08 migration lint + downgrade test | merged (migration lint, #50); round-trip test and the downgrade fixes merged (#79, replaces draft #55) | claude/audit-ops-08-downgrade | #50, #55 | round-trip test found a real defect: downgrade of `tenancy.sso_domains` fails (policy dependency) - migration fix = owner |
+| DATA-01 / DATA-02 indexes, TTL sweeps, re-index doc | merged (#72: indexes, TTL), trace cap merged (#75, app level, BOMAGENT_RUN_TRACE_MAX_BYTES) | claude/audit-migrations-bundle | #72 | concurrent indexes on runs/files, rate_windows TTL sweep, growth doc; `runs.trace` size cap documented only |
 | QA-03 property tests | merged (#44) | claude/audit-qa-02-03 | #44 | Hypothesis tests for values, designators, grouping, CSV round trips; mutmut not added |
 | UX-04 BOM table sort/filter/virtualise | merged (#51); column resize todo | claude/audit-ux-04-07 | #51 | sort/filter/virtualise/sticky/visibility/Copy CSV |
 | UX-05 localised error messages | merged (#43) | claude/audit-ux-05-06-08 | #43 | 34 slugs localised PL+EN; dynamic numbers (quota) now generic |
