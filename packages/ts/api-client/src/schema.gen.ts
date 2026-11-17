@@ -687,7 +687,8 @@ export interface paths {
         /**
          * Run again with the same settings
          * @description Starts a new run with the variant, runtime, model and requirements of ``run_id`` on
-         *     the project's current parsed files (the run's own file snapshot is not kept; ARCH-06).
+         *     the project's current parsed files (the run's own file snapshot is not kept) and a fresh
+         *     knowledge-base snapshot (the same id as the original's when the KB is unchanged; ARCH-06).
          *     The model must still be allowed and the usual run quota applies.
          */
         post: operations["rerun_v1_runs__run_id__rerun_post"];
@@ -1749,6 +1750,8 @@ export interface components {
              * Format: uuid
              */
             id: string;
+            /** Kb Snapshot Id */
+            kb_snapshot_id?: string | null;
             /** Model Id */
             model_id: string;
             /**

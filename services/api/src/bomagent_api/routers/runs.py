@@ -60,7 +60,7 @@ models_router = APIRouter(
 )
 RUN_COLS = (
     "id, project_id, variant, runtime, model_id, status, usage, error, created_by,"
-    " created_at, started_at, finished_at"
+    " created_at, started_at, finished_at, kb_snapshot_id"
 )
 TERMINAL = {"completed", "failed", "budget_exceeded"}
 DEFAULT_RUNTIME = {"A": "langgraph_a", "B": "langgraph_b"}
@@ -122,12 +122,15 @@ async def start_run(
             slug="no-files",
         )
     rid = uuid.uuid4()
+    # ADR-0008 / R10: pin the run to the tenant's knowledge base as it is now. The snapshot id
+    # is a hash of the active documents, so an unchanged KB reuses the existing row.
+    kb_snapshot_id = await request.app.state.kb.snapshot(conn)
     await conn.execute(
         text(
             "INSERT INTO runs.runs (id, tenant_id, project_id, variant,"
-            " runtime, model_id, requirements, created_by) VALUES (:i,"
+            " runtime, model_id, requirements, kb_snapshot_id, created_by) VALUES (:i,"
             " app.current_tenant_id(), :p, :v, :rt, :m, CAST(:rq AS jsonb),"
-            " :u)"
+            " :k, :u)"
         ),
         {
             "i": rid,
@@ -136,6 +139,7 @@ async def start_run(
             "rt": runtime,
             "m": model_id,
             "rq": json.dumps(requirements),
+            "k": kb_snapshot_id,
             "u": ctx.actor_id,
         },
     )
@@ -146,7 +150,13 @@ async def start_run(
             action="run.created",
             object_type="run",
             object_id=str(rid),
-            after={"variant": variant, "runtime": runtime, "model": model_id} | (audit_extra or {}),
+            after={
+                "variant": variant,
+                "runtime": runtime,
+                "model": model_id,
+                "kb_snapshot_id": kb_snapshot_id,
+            }
+            | (audit_extra or {}),
         ),
     )
     outbox_id = await enqueue(
@@ -162,6 +172,7 @@ async def start_run(
                 "model_id": model_id,
                 "object_keys": list(keys),
                 "requirements": requirements,
+                "kb_snapshot_id": kb_snapshot_id,
             },
         ),
     )
@@ -222,7 +233,8 @@ async def rerun(
     idempotency_key: Annotated[str | None, Header()] = None,
 ) -> Run:
     """Starts a new run with the variant, runtime, model and requirements of ``run_id`` on
-    the project's current parsed files (the run's own file snapshot is not kept; ARCH-06).
+    the project's current parsed files (the run's own file snapshot is not kept) and a fresh
+    knowledge-base snapshot (the same id as the original's when the KB is unchanged; ARCH-06).
     The model must still be allowed and the usual run quota applies."""
     require(ctx, "run.create")
     payload = {"rerun_of": str(run_id)}
@@ -521,6 +533,15 @@ async def evaluate_bom(
     )
 
 
+def _export_headers(
+    run_id: uuid.UUID, version: int, ext: str, kb_snapshot_id: str | None
+) -> dict[str, str]:
+    headers = {"Content-Disposition": f'attachment; filename="bom-{run_id}-v{version}.{ext}"'}
+    if kb_snapshot_id:
+        headers["X-KB-Snapshot-Id"] = kb_snapshot_id
+    return headers
+
+
 @router.get(
     "/{run_id}/bom.csv", summary="Export the latest BOM as CSV", response_class=PlainTextResponse
 )
@@ -528,19 +549,20 @@ async def export_bom(request: Request, ctx: OrgContext, run_id: uuid.UUID) -> Pl
     require(ctx, "bom.export")
     async with tenant_transaction(request.app.state.engine) as conn:
         _, version, bom = await latest_bom(conn, run_id)
+        snapshot = (await get_run(conn, run_id))["kb_snapshot_id"]
         await emit_audit(
             conn,
             AuditEvent(
                 action="bom.exported",
                 object_type="run",
                 object_id=str(run_id),
-                after={"version": version},
+                after={"version": version, "kb_snapshot_id": snapshot},
             ),
         )
     return PlainTextResponse(
-        to_csv(bom, demo=_is_demo(request)),
+        to_csv(bom, demo=_is_demo(request), kb_snapshot_id=snapshot),
         media_type="text/csv",
-        headers={"Content-Disposition": f'attachment; filename="bom-{run_id}-v{version}.csv"'},
+        headers=_export_headers(run_id, version, "csv", snapshot),
     )
 
 
@@ -557,19 +579,20 @@ async def export_bom_xlsx(request: Request, ctx: OrgContext, run_id: uuid.UUID) 
     require(ctx, "bom.export")
     async with tenant_transaction(request.app.state.engine) as conn:
         _, version, bom = await latest_bom(conn, run_id)
+        snapshot = (await get_run(conn, run_id))["kb_snapshot_id"]
         await emit_audit(
             conn,
             AuditEvent(
                 action="bom.exported",
                 object_type="run",
                 object_id=str(run_id),
-                after={"version": version, "format": "xlsx"},
+                after={"version": version, "format": "xlsx", "kb_snapshot_id": snapshot},
             ),
         )
     return Response(
-        to_xlsx(bom, demo=_is_demo(request)),
+        to_xlsx(bom, demo=_is_demo(request), kb_snapshot_id=snapshot),
         media_type=XLSX_TYPE,
-        headers={"Content-Disposition": f'attachment; filename="bom-{run_id}-v{version}.xlsx"'},
+        headers=_export_headers(run_id, version, "xlsx", snapshot),
     )
 
 

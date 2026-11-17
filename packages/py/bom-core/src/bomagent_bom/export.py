@@ -23,6 +23,7 @@ CSV_COLUMNS = (
     "DNP",
     "Decided by",
 )
+KB_COLUMN = "KB snapshot"
 DEMO_COLUMN = "Demo"
 DEMO_NOTICE = "illustrative: deterministic demo model"
 _FORMULA_PREFIXES = ("=", "+", "-", "@", "\t", "\r")
@@ -34,11 +35,27 @@ def _cell(value: object) -> str:
     return "'" + text if text.startswith(_FORMULA_PREFIXES) else text
 
 
-def to_csv(bom: BomVersion, *, compact_refdes: bool = False, demo: bool = False) -> str:
-    """``demo`` appends a ``Demo`` column to every row: the BOM came from the fake model."""
+def _header(demo: bool, kb_snapshot_id: str | None) -> tuple[str, ...]:
+    kb = (KB_COLUMN,) if kb_snapshot_id else ()
+    return (*CSV_COLUMNS, *kb, *((DEMO_COLUMN,) if demo else ()))
+
+
+def _tail(demo: bool, kb_snapshot_id: str | None) -> list[str]:
+    return [*([kb_snapshot_id] if kb_snapshot_id else []), *([DEMO_NOTICE] if demo else [])]
+
+
+def to_csv(
+    bom: BomVersion,
+    *,
+    compact_refdes: bool = False,
+    demo: bool = False,
+    kb_snapshot_id: str | None = None,
+) -> str:
+    """``demo`` appends a ``Demo`` column to every row: the BOM came from the fake model.
+    ``kb_snapshot_id`` appends a ``KB snapshot`` column (the knowledge base the run used)."""
     buf = io.StringIO()
     writer = csv.writer(buf, lineterminator="\n")
-    writer.writerow((*CSV_COLUMNS, DEMO_COLUMN) if demo else CSV_COLUMNS)
+    writer.writerow(_header(demo, kb_snapshot_id))
     for item in bom.items:
         decided = sorted({p.kind.value for p in item.provenance.values()})
         row = [
@@ -57,7 +74,7 @@ def to_csv(bom: BomVersion, *, compact_refdes: bool = False, demo: bool = False)
                 "+".join(decided),
             )
         ]
-        writer.writerow([*row, DEMO_NOTICE] if demo else row)
+        writer.writerow([*row, *_tail(demo, kb_snapshot_id)])
     return buf.getvalue()
 
 
@@ -84,13 +101,19 @@ _XML = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
 _SHEET_CT = "application/vnd.openxmlformats-officedocument.spreadsheetml"
 
 
-def to_xlsx(bom: BomVersion, *, compact_refdes: bool = False, demo: bool = False) -> bytes:
+def to_xlsx(
+    bom: BomVersion,
+    *,
+    compact_refdes: bool = False,
+    demo: bool = False,
+    kb_snapshot_id: str | None = None,
+) -> bytes:
     """Same table as :func:`to_csv` as a minimal XLSX workbook (stdlib only).
 
     Text cells are written as inline strings and numbers as numbers - never as formulas -
     so cell content cannot be evaluated by the spreadsheet application.
     """
-    header = (*CSV_COLUMNS, DEMO_COLUMN) if demo else CSV_COLUMNS
+    header = _header(demo, kb_snapshot_id)
     rows: list[list[object]] = [list(header)]
     for item in bom.items:
         decided = sorted({p.kind.value for p in item.provenance.values()})
@@ -107,7 +130,7 @@ def to_xlsx(bom: BomVersion, *, compact_refdes: bool = False, demo: bool = False
             "DNP" if item.dnp else "",
             "+".join(decided),
         ]
-        rows.append([*row, DEMO_NOTICE] if demo else row)
+        rows.append([*row, *_tail(demo, kb_snapshot_id)])
     sheet_rows = []
     for r, values in enumerate(rows, start=1):
         cells = []

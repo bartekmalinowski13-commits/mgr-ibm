@@ -232,6 +232,14 @@ async def test_rerun_uses_the_same_settings_and_is_idempotent(env) -> None:
     assert replay.json()["id"] == new["id"]
     queued = await env.queues["runs"].receive(max_messages=10)
     assert any(m.message.payload["run_id"] == new["id"] for m in queued)
+    # ARCH-06: an unchanged knowledge base is reused, so both runs share one snapshot
+    assert first["kb_snapshot_id"]
+    assert new["kb_snapshot_id"] == first["kb_snapshot_id"]
+    assert any(
+        m.message.payload["run_id"] == new["id"]
+        and m.message.payload["kb_snapshot_id"] == new["kb_snapshot_id"]
+        for m in queued
+    )
     assert (await env.c.post(f"/v1/runs/{uuid.uuid4()}/rerun", headers=h)).status_code == 404
 
 

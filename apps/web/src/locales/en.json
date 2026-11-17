@@ -232,6 +232,7 @@
     "llmCalls": "LLM calls",
     "tokens": "Tokens",
     "cost": "Cost",
+    "kbSnapshot": "KB snapshot",
     "time": "Time",
     "waiting": "The run is waiting for a free agent.",
     "failedHelp": "The run failed: {{error}}. Check the project files and start it again.",
