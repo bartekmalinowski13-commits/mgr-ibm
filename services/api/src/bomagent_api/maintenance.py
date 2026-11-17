@@ -30,6 +30,7 @@ from bomagent_common.tenancy import TenantContext
 log = get_logger(__name__)
 OUTBOX_GRACE_S = 30.0  # requests deliver their own messages first
 ANCHOR_TIMEOUT_S = 15.0
+RATE_WINDOW_TTL_S = 3600.0  # windows are one minute long; an hour is far past any retry
 IDEMPOTENCY_TTL_S = 24 * 3600.0  # a retry after a day is a new request (SEC-17)
 _anchored: dict[uuid.UUID, date] = {}  # tenant -> day its anchor was written (this process)
 
@@ -87,6 +88,23 @@ async def expire_idempotency_keys(
     return int(result.rowcount or 0)
 
 
+async def expire_rate_windows(
+    engine: AsyncEngine, tenant_id: uuid.UUID, ttl_s: float = RATE_WINDOW_TTL_S
+) -> int:
+    """Rate-limit counters are one-minute windows; a request only cleans up its own subject's
+    old windows, so those of subjects that never come back (removed members, rotated API keys)
+    would stay for ever (DATA-01). Tenant context, so RLS limits it to the tenant."""
+    async with tenant_transaction(engine, tenant_id) as conn:
+        result = await conn.execute(
+            text(
+                "DELETE FROM app.rate_windows"
+                " WHERE window_start < now() - make_interval(secs => :t)"
+            ),
+            {"t": ttl_s},
+        )
+    return int(result.rowcount or 0)
+
+
 async def sweep(
     engine: AsyncEngine,
     platform_engine: AsyncEngine,
@@ -98,7 +116,7 @@ async def sweep(
 ) -> dict[str, int]:
     async with platform_transaction(platform_engine) as conn:
         tenants = (await conn.execute(text("SELECT id FROM tenancy.tenants"))).scalars().all()
-    totals = {"sent": 0, "reaped": 0, "purged": 0, "expired_keys": 0}
+    totals = {"sent": 0, "reaped": 0, "purged": 0, "expired_keys": 0, "expired_windows": 0}
     now = datetime.now(UTC)
     today = now.date()
     anchoring = anchor_sink is not None
@@ -118,6 +136,7 @@ async def sweep(
         totals["purged"] += await cleanup_sent(engine, tenant_id)
         totals["reaped"] += await reap_stuck_runs(engine, tenant_id, run_timeout_s)
         totals["expired_keys"] += await expire_idempotency_keys(engine, tenant_id)
+        totals["expired_windows"] += await expire_rate_windows(engine, tenant_id)
     if any(totals.values()):
         log.info("maintenance_sweep", **totals)
     return totals
