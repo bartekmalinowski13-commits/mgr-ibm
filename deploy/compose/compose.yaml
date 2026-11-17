@@ -121,7 +121,7 @@ services:
   # ---------------------------------------------------------------- observability
   otel-lgtm:
     # Grafana + Tempo + Loki + Prometheus + OTel Collector in one image (local only)
-    image: grafana/otel-lgtm:0.40.0
+    image: grafana/otel-lgtm:0.41.0
     ports:
       - "127.0.0.1:3000:3000" # Grafana
       - "127.0.0.1:4317:4317" # OTLP gRPC
