@@ -3,7 +3,7 @@
 * **Domains** - an organisation proves it controls an e-mail domain with a DNS TXT record
   ``_bomagent-verify.<domain>`` = token; a verified domain belongs to one organisation.
 * **Connection** - one identity provider per organisation, created in Cognito under a
-  provider name derived from the organisation id. The OIDC client secret is passed to
+  random provider name (stored with the connection). The OIDC client secret is passed to
   Cognito only, never stored by us.
 * **Discovery** - the sign-in screen asks for the e-mail first; a verified domain with
   an active connection sends the user straight to their identity provider.
@@ -21,7 +21,9 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import re
 import secrets
+import time
 import uuid
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
@@ -40,9 +42,31 @@ SAML_EMAIL = "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress
 SAML_NAME = "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name"
 
 
-def provider_name_for(tenant_id: uuid.UUID) -> str:
-    """Cognito identity provider name (<= 32 chars), stable per organisation."""
-    return f"org-{tenant_id.hex[:24]}"
+def new_provider_name() -> str:
+    """Cognito identity provider name (<= 32 chars): random, so it reveals nothing about the
+    organisation and cannot be guessed. Chosen once per connection and kept in
+    ``tenancy.sso_connections.provider_name`` (connections created before keep their old name)."""
+    return f"org-{secrets.token_hex(12)}"
+
+
+#: public mailbox providers: nobody "owns" these domains, so they can never be claimed for SSO
+#: (SEC-05). DNS ownership would fail anyway; this stops the attempt and the discovery oracle.
+FREE_MAIL_DOMAINS = frozenset(
+    {
+        "gmail.com", "googlemail.com", "outlook.com", "hotmail.com", "live.com", "msn.com",
+        "yahoo.com", "ymail.com", "icloud.com", "me.com", "mac.com", "aol.com", "proton.me",
+        "protonmail.com", "pm.me", "gmx.com", "gmx.net", "gmx.de", "web.de", "mail.com",
+        "zoho.com", "yandex.com", "yandex.ru", "mail.ru", "wp.pl", "o2.pl", "onet.pl",
+        "onet.eu", "interia.pl", "interia.eu", "poczta.fm", "op.pl", "tlen.pl", "gazeta.pl",
+        "seznam.cz", "centrum.cz", "free.fr", "orange.fr", "laposte.net", "t-online.de",
+        "libero.it", "tiscali.it", "qq.com", "163.com", "126.com",
+    }
+)  # fmt: skip
+
+
+def is_free_mail(domain: str) -> bool:
+    d = domain.strip().lower().rstrip(".")
+    return d in FREE_MAIL_DOMAINS or any(d.endswith("." + f) for f in FREE_MAIL_DOMAINS)
 
 
 def email_domain(email: str) -> str | None:
@@ -182,14 +206,23 @@ async def provider_change_lock(engine: AsyncEngine) -> AsyncIterator[None]:
         yield
 
 
+_INTERNAL_IDS = re.compile(
+    r"arn:aws[a-z-]*:[^\s'\"]+"  # ARNs
+    r"|\b[a-z]{2}-[a-z]+-\d_[A-Za-z0-9]+\b"  # Cognito user pool ids
+    r"|\b\d{12}\b"  # AWS account ids
+    r"|\b[0-9a-z]{26}\b"  # app client ids
+)
+
+
 def safe_error(exc: Exception, secret: str | None) -> str:
-    """Broker failure for the admin: error code and message, never the client secret."""
+    """Broker failure for the admin: error code and message, never the client secret and
+    never our own infrastructure identifiers (ARNs, account, pool and client ids)."""
     response = getattr(exc, "response", None)
     code = response.get("Error", {}).get("Code") if isinstance(response, dict) else None
     message = f"{code or type(exc).__name__}: {exc}"
     if secret:
         message = message.replace(secret, "***")
-    return message[:500]
+    return _INTERNAL_IDS.sub("<redacted>", message)[:500]
 
 
 # ------------------------------------------------------------------ DNS
@@ -222,10 +255,11 @@ class StaticTxtResolver:
 
 
 # ------------------------------------------------------------------ lookups
-async def discover(engine: AsyncEngine, email: str) -> str | None:
-    """Provider name for the e-mail's verified domain with an active connection."""
-    domain = email_domain(email)
-    if domain is None:
+async def discover(engine: AsyncEngine, domain: str) -> str | None:
+    """Provider name for a verified domain with an active connection. Only the domain is
+    asked for (never the e-mail address) and it is normalised here."""
+    domain = domain.strip().lower().rstrip(".")
+    if not domain or is_free_mail(domain):
         return None
     async with engine.begin() as conn:
         await conn.execute(text("SELECT set_config('app.sso_domain', :d, true)"), {"d": domain})
@@ -296,8 +330,16 @@ async def require_sso_if_enforced(
     email: str,
     provider: str | None,
     roles: Any,
+    *,
+    auth_time: int | None = None,
+    max_auth_age_s: int = 0,
 ) -> None:
     """403 ``sso-required`` for members from enforced domains signing in another way.
+
+    A member who did sign in through the provider must have authenticated there within
+    ``max_auth_age_s`` (token claim ``auth_time``; refresh tokens keep the original value):
+    otherwise 401 ``reauth-required``, so a user removed at the customer's identity provider
+    loses access within that window instead of at refresh-token expiry (SEC-05). ``0`` = off.
 
     The domain comes from the token **and** from the membership stored on our side: a
     member cannot step out of enforcement by changing the e-mail of their password
@@ -325,10 +367,20 @@ async def require_sso_if_enforced(
                 {"d": domains},
             )
         ).first()
-    if row is not None and provider != row.provider_name:
+    if row is None:
+        return
+    if provider != row.provider_name:
         raise ProblemError(
             403,
             "Forbidden",
             "this organisation requires single sign-on for your e-mail domain",
             slug="sso-required",
+        )
+    # fail closed: a token without ``auth_time`` cannot prove a recent sign-in
+    if max_auth_age_s > 0 and (auth_time is None or time.time() - auth_time > max_auth_age_s):
+        raise ProblemError(
+            401,
+            "Unauthorized",
+            "sign in again through your identity provider",
+            slug="reauth-required",
         )

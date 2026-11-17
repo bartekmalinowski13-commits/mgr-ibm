@@ -90,9 +90,9 @@ async def test_domain_verification_federation_and_discovery(client, app):
     provider = conn["provider_name"]
     assert provider in app.state.identity_providers.providers
 
-    found = (await c.get("/v1/sso/discover", params={"email": f"Ann@{domain.upper()}"})).json()
+    found = (await c.post("/v1/sso/discover", json={"domain": domain.upper()})).json()
     assert found == {"sso": True, "provider": provider}
-    other = (await c.get("/v1/sso/discover", params={"email": "x@elsewhere.example"})).json()
+    other = (await c.post("/v1/sso/discover", json={"domain": "elsewhere.example"})).json()
     assert other == {"sso": False, "provider": None}
 
     audit = (await c.get("/v1/audit-events", headers=admin)).json()["items"]
@@ -225,7 +225,7 @@ async def test_rules_for_admins_domains_and_providers(client, app):
     assert after["status"] == "failed"
     assert after["enforce"] is False
     app.state.identity_providers.fail_with = None
-    assert (await c.get("/v1/sso/discover", params={"email": f"x@{domain}"})).json()["sso"] is False
+    assert (await c.post("/v1/sso/discover", json={"domain": domain})).json()["sso"] is False
 
     # OIDC needs the client secret on creation; it is never returned
     no_secret = await c.put(

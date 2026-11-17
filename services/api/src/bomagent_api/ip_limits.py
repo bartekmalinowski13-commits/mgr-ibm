@@ -61,7 +61,7 @@ class Rule:
 
 #: checked in order; every matching rule must allow the request
 DEFAULT_RULES: tuple[Rule, ...] = (
-    Rule("sso-discover", per_minute=60, burst=30, method="GET", path="/v1/sso/discover"),
+    Rule("sso-discover", per_minute=60, burst=30, method="POST", path="/v1/sso/discover"),
     Rule("invitation-accept", per_minute=10, burst=5, method="POST", path="/v1/invitations/accept"),
     Rule("organization-create", per_minute=10, burst=5, method="POST", path="/v1/organizations"),
     Rule("me", per_minute=300, burst=100, method="GET", path="/v1/me"),

@@ -89,5 +89,6 @@ async def dev_token(request: Request, body: DevToken) -> Token:
             body.name,
             email_verified=body.email_verified,
             identity_provider=body.identity_provider,
+            extra_claims={"aal": "aal2"} if body.mfa else None,
         )
     )

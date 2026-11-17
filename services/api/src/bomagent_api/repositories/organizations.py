@@ -18,18 +18,19 @@ async def create_with_owner(
     owner_email: str,
     owner_name: str,
 ) -> None:
-    """Create the tenant and its first owner, then scope the connection to the new tenant
-    (platform role: the application role cannot create tenants)."""
+    """Create the tenant and its first owner, then scope the connection to the new tenant.
+
+    One SECURITY DEFINER function does both inserts (SEC-15): the platform role itself can no
+    longer insert tenants or memberships."""
     await conn.execute(
-        text("INSERT INTO tenancy.tenants (id, slug, name) VALUES (:i, :s, :n)"),
-        {"i": org_id, "s": slug, "n": name},
-    )
-    await conn.execute(
-        text(
-            "INSERT INTO tenancy.memberships (tenant_id, user_sub, email,"
-            " display_name, roles) VALUES (:t, :s, :e, :d,"
-            " ARRAY['owner'])"
-        ),
-        {"t": org_id, "s": owner_sub, "e": owner_email.lower(), "d": owner_name},
+        text("SELECT tenancy.create_organization(:i, :s, :n, :sub, :e, :d)"),
+        {
+            "i": org_id,
+            "s": slug,
+            "n": name,
+            "sub": owner_sub,
+            "e": owner_email.lower(),
+            "d": owner_name,
+        },
     )
     await conn.execute(text("SELECT set_config('app.tenant_id', :t, true)"), {"t": str(org_id)})

@@ -12,7 +12,7 @@ import pytest
 from sqlalchemy import create_engine, make_url, text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from bomagent_common.db import make_engine, platform_transaction
+from bomagent_common.db import make_engine
 from bomagent_common.tenancy import TenantContext
 from bomagent_migrations import APP_ROLE, PLATFORM_ROLE, prepare_database, upgrade
 
@@ -100,6 +100,14 @@ async def app_engine(db_urls: DbUrls) -> AsyncIterator[AsyncEngine]:
 
 
 @pytest.fixture(scope="session")
+async def migrator_engine(db_urls: DbUrls) -> AsyncIterator[AsyncEngine]:
+    """The owner role; only used to seed tenants (the platform role cannot insert them)."""
+    engine = make_engine(db_urls.migrator)
+    yield engine
+    await engine.dispose()
+
+
+@pytest.fixture(scope="session")
 async def platform_engine(db_urls: DbUrls) -> AsyncIterator[AsyncEngine]:
     engine = make_engine(db_urls.platform)
     yield engine
@@ -110,7 +118,7 @@ MakeTenant = Callable[..., Awaitable[TenantContext]]
 
 
 async def create_tenant(
-    platform_engine: AsyncEngine,
+    migrator_engine: AsyncEngine,
     slug: str | None = None,
     *,
     roles: frozenset[str] = frozenset({"owner"}),
@@ -118,7 +126,10 @@ async def create_tenant(
 ) -> TenantContext:
     tid = uuid.uuid4()
     slug = slug or f"t-{tid.hex[:12]}"
-    async with platform_transaction(platform_engine) as conn:
+    # the platform role cannot insert tenants (SEC-15); the owner may, in the new tenant's
+    # context, which is the only INSERT its ``migrator_create_organization`` policy allows
+    async with migrator_engine.begin() as conn:
+        await conn.execute(text("SELECT set_config('app.tenant_id', :t, true)"), {"t": str(tid)})
         await conn.execute(
             text("INSERT INTO tenancy.tenants (id, slug, name) VALUES (:id, :slug, :name)"),
             {"id": tid, "slug": slug, "name": slug},
@@ -127,8 +138,8 @@ async def create_tenant(
 
 
 @pytest.fixture
-def make_tenant(platform_engine: AsyncEngine) -> MakeTenant:
+def make_tenant(migrator_engine: AsyncEngine) -> MakeTenant:
     async def _make(slug: str | None = None, **kw: object) -> TenantContext:
-        return await create_tenant(platform_engine, slug, **kw)  # type: ignore[arg-type]
+        return await create_tenant(migrator_engine, slug, **kw)  # type: ignore[arg-type]
 
     return _make

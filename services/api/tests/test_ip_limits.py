@@ -121,7 +121,7 @@ def _app(
     install_problem_handlers(app)
     install_ip_limits(app, enabled=enabled, header=header, rules=rules, clock=clock or Clock())
 
-    @app.get("/v1/sso/discover")
+    @app.post("/v1/sso/discover")
     async def discover() -> dict[str, bool]:
         return {"sso": False}
 
@@ -145,7 +145,7 @@ def _client(app: FastAPI) -> httpx.AsyncClient:
 
 
 RULES = (
-    Rule("sso-discover", per_minute=60, burst=3, method="GET", path="/v1/sso/discover"),
+    Rule("sso-discover", per_minute=60, burst=3, method="POST", path="/v1/sso/discover"),
     Rule("invitation-accept", per_minute=60, burst=2, method="POST", path="/v1/invitations/accept"),
     Rule("anonymous", per_minute=60, burst=4, anonymous_only=True, path_prefix="/v1/"),
 )
@@ -154,9 +154,9 @@ RULES = (
 async def test_strict_rule_returns_429_problem_json_with_retry_after():
     async with _client(_app(RULES)) as c:
         h = {"Fly-Client-IP": "203.0.113.9"}
-        codes = [(await c.get("/v1/sso/discover", headers=h)).status_code for _ in range(4)]
+        codes = [(await c.post("/v1/sso/discover", headers=h)).status_code for _ in range(4)]
         assert codes == [200, 200, 200, 429]
-        blocked = await c.get("/v1/sso/discover", headers=h)
+        blocked = await c.post("/v1/sso/discover", headers=h)
     assert blocked.headers["content-type"].startswith("application/problem+json")
     assert blocked.headers["retry-after"] == "1"
     body = blocked.json()
@@ -167,17 +167,17 @@ async def test_strict_rule_returns_429_problem_json_with_retry_after():
 async def test_limits_are_per_address_and_xff_cannot_dodge_them():
     async with _client(_app(RULES)) as c:
         for n in range(3):
-            r = await c.get(
+            r = await c.post(
                 "/v1/sso/discover",
                 headers={"Fly-Client-IP": "203.0.113.9", "X-Forwarded-For": f"9.9.9.{n}"},
             )
             assert r.status_code == 200
-        dodged = await c.get(
+        dodged = await c.post(
             "/v1/sso/discover",
             headers={"Fly-Client-IP": "203.0.113.9", "X-Forwarded-For": "1.2.3.4"},
         )
         assert dodged.status_code == 429
-        other = await c.get("/v1/sso/discover", headers={"Fly-Client-IP": "203.0.113.10"})
+        other = await c.post("/v1/sso/discover", headers={"Fly-Client-IP": "203.0.113.10"})
         assert other.status_code == 200
 
 
@@ -191,7 +191,7 @@ async def test_method_matters_and_buckets_are_independent():
             200,
             429,
         ]
-        assert (await c.get("/v1/sso/discover", headers=h)).status_code == 200
+        assert (await c.post("/v1/sso/discover", headers=h)).status_code == 200
 
 
 async def test_anonymous_bucket_does_not_apply_to_authenticated_requests():
@@ -209,10 +209,10 @@ async def test_tokens_return_with_time_and_health_checks_are_never_limited():
     async with _client(_app(RULES, clock=clock)) as c:
         h = {"Fly-Client-IP": "203.0.113.9"}
         for _ in range(3):
-            await c.get("/v1/sso/discover", headers=h)
-        assert (await c.get("/v1/sso/discover", headers=h)).status_code == 429
+            await c.post("/v1/sso/discover", headers=h)
+        assert (await c.post("/v1/sso/discover", headers=h)).status_code == 429
         clock.now += 1
-        assert (await c.get("/v1/sso/discover", headers=h)).status_code == 200
+        assert (await c.post("/v1/sso/discover", headers=h)).status_code == 200
         for _ in range(50):
             assert (await c.get("/healthz", headers=h)).status_code == 200
 
@@ -220,7 +220,7 @@ async def test_tokens_return_with_time_and_health_checks_are_never_limited():
 async def test_disabled_limiter_lets_everything_through():
     async with _client(_app(RULES, enabled=False)) as c:
         for _ in range(20):
-            assert (await c.get("/v1/sso/discover")).status_code == 200
+            assert (await c.post("/v1/sso/discover")).status_code == 200
 
 
 @pytest.mark.parametrize("rule", DEFAULT_RULES, ids=lambda r: r.name)

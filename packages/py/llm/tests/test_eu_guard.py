@@ -52,9 +52,13 @@ def test_shipped_catalogue_is_clean_even_with_everything_enabled():
     assert config["model_list"], "the fixture must actually render models"
 
 
+# hosted entries a human verified for the pilot (EU endpoint pinned)
+PILOT_ENABLED = {"mistral-large-eu"}
+
+
 def test_shipped_catalogue_enables_only_local_entries():
     enabled = [m.id for m in load_catalog().models if m.enabled]
-    assert all(m.startswith("fake-") for m in enabled)
+    assert all(m.startswith("fake-") or m in PILOT_ENABLED for m in enabled)
 
 
 @pytest.mark.parametrize(

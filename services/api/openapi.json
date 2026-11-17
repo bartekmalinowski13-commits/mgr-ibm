@@ -2726,6 +2726,24 @@
         "title": "SsoDiscovery",
         "type": "object"
       },
+      "SsoDiscoveryIn": {
+        "additionalProperties": false,
+        "description": "Only the e-mail domain leaves the browser, never the address (SEC-03/05).",
+        "properties": {
+          "domain": {
+            "maxLength": 253,
+            "minLength": 4,
+            "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$",
+            "title": "Domain",
+            "type": "string"
+          }
+        },
+        "required": [
+          "domain"
+        ],
+        "title": "SsoDiscoveryIn",
+        "type": "object"
+      },
       "SsoDomain": {
         "additionalProperties": false,
         "properties": {
@@ -10182,22 +10200,19 @@
       }
     },
     "/v1/sso/discover": {
-      "get": {
-        "description": "No authentication: the sign-in screen asks before any token exists. Reveals only\nwhether a domain uses SSO and an opaque provider name.",
-        "operationId": "discover_sso_v1_sso_discover_get",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "email",
-            "required": true,
-            "schema": {
-              "maxLength": 320,
-              "minLength": 3,
-              "title": "Email",
-              "type": "string"
+      "post": {
+        "description": "No authentication: the sign-in screen asks before any token exists. The client sends\nthe **domain only** (the address never leaves the browser, nothing lands in URL logs).\nReveals only whether a domain uses SSO and an opaque provider name; every answer takes\nat least ``DISCOVERY_MIN_S`` so the timing says nothing either. Limited per IP.",
+        "operationId": "discover_sso_v1_sso_discover_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SsoDiscoveryIn"
+              }
             }
-          }
-        ],
+          },
+          "required": true
+        },
         "responses": {
           "200": {
             "content": {
@@ -10243,7 +10258,7 @@
             "description": "Problem details (RFC 9457)"
           }
         },
-        "summary": "Identity provider for an e-mail address (sign-in)",
+        "summary": "Identity provider for an e-mail domain (sign-in)",
         "tags": [
           "sso"
         ]

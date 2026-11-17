@@ -46,8 +46,41 @@ class Principal:
     email: str
     name: str
     email_verified: bool = False
+    #: ``auth_time`` claim (epoch seconds of the original sign-in at the IdP), when present
+    auth_time: int | None = None
     #: Cognito federation: the identity provider the user signed in through
     identity_provider: str | None = None
+    #: the token proves a second factor (SEC-06): ``aal`` >= aal2 or an ``amr`` value from
+    #: the configured set, read from top-level (IdP-signed) claims only
+    mfa: bool = False
+
+
+#: authentication assurance levels that mean "two factors" (Supabase ``aal2``; NIST ``aal3``)
+MFA_AAL_VALUES = frozenset({"aal2", "aal3"})
+#: default RFC 8176 ``amr`` values accepted as multi-factor. ``otp`` alone is NOT in it:
+#: Supabase uses it for e-mail one-time codes, which are a single factor.
+DEFAULT_MFA_AMR_VALUES: tuple[str, ...] = ("mfa",)
+
+
+def mfa_from_claims(
+    claims: Mapping[str, Any], amr_values: Sequence[str] = DEFAULT_MFA_AMR_VALUES
+) -> bool:
+    """Whether the (already signature-verified) claims prove a second factor.
+
+    Supabase: top-level ``aal`` is ``aal2`` after a TOTP/phone/WebAuthn challenge (its ``amr``
+    is a list of ``{method, timestamp}`` objects and is not trusted on its own, because
+    ``otp`` there can mean an e-mail code). Cognito / generic OIDC: ``amr`` as a list of
+    RFC 8176 strings (``mfa``, ...; Cognito needs a pre-token-generation trigger to add it).
+    Only top-level claims are read - ``user_metadata`` is editable by the user and ignored.
+    Anything absent or of an unexpected shape is "no MFA" (fail closed).
+    """
+    aal = claims.get("aal")
+    if isinstance(aal, str) and aal in MFA_AAL_VALUES:
+        return True
+    amr = claims.get("amr")
+    if isinstance(amr, list):
+        return any(isinstance(v, str) and v in amr_values for v in amr)
+    return False
 
 
 def claim(claims: Mapping[str, Any], path: str) -> Any:
@@ -85,6 +118,7 @@ class TokenVerifier:
         email_claim: str = "email",
         email_verified_claim: str = "email_verified",
         name_claims: Sequence[str] = ("name",),
+        mfa_amr_values: Sequence[str] = DEFAULT_MFA_AMR_VALUES,
     ) -> None:
         self.issuer, self.audience = issuer, audience
         self._jwk_client = PyJWKClient(jwks_url, cache_keys=True) if jwks_url else None
@@ -93,6 +127,7 @@ class TokenVerifier:
         self.email_claim = email_claim
         self.email_verified_claim = email_verified_claim
         self.name_claims = tuple(name_claims)
+        self.mfa_amr_values = tuple(mfa_amr_values)
 
     @classmethod
     def from_settings(cls, settings: OidcSettings) -> TokenVerifier:
@@ -104,6 +139,7 @@ class TokenVerifier:
             email_claim=settings.oidc_email_claim,
             email_verified_claim=settings.oidc_email_verified_claim,
             name_claims=settings.oidc_name_claims,
+            mfa_amr_values=settings.oidc_mfa_amr_values,
         )
 
     def verify(self, token: str) -> Principal:
@@ -133,7 +169,9 @@ class TokenVerifier:
             name=next((str(n) for n in names if isinstance(n, str) and n), ""),
             # OIDC: boolean; some IdPs (older Cognito) send the string "true"
             email_verified=claim(claims, self.email_verified_claim) in (True, "true"),
+            auth_time=_auth_time(claims.get("auth_time")),
             identity_provider=_identity_provider(claims.get("identities")),
+            mfa=mfa_from_claims(claims, self.mfa_amr_values),
         )
 
 
@@ -145,6 +183,14 @@ class OidcSettings(Protocol):
     oidc_email_claim: str
     oidc_email_verified_claim: str
     oidc_name_claims: list[str]
+    oidc_mfa_amr_values: list[str]
+
+
+def _auth_time(value: Any) -> int | None:
+    """``auth_time`` as epoch seconds; booleans, strings and negatives are not a time."""
+    if isinstance(value, bool) or not isinstance(value, int | float) or value < 0:
+        return None
+    return int(value)
 
 
 def _identity_provider(identities: Any) -> str | None:
@@ -177,6 +223,7 @@ class LocalIdp:
         *,
         email_verified: bool = True,
         identity_provider: str | None = None,
+        extra_claims: Mapping[str, Any] | None = None,
     ) -> str:
         now = int(time.time())
         claims: dict[str, Any] = {
@@ -186,11 +233,13 @@ class LocalIdp:
             "email": email,
             "name": name,
             "email_verified": email_verified,
+            "auth_time": now,
             "iat": now,
             "exp": now + ttl_s,
         }
         if identity_provider:  # as Cognito sets it for federated users
             claims["identities"] = [{"providerName": identity_provider, "providerType": "SAML"}]
+        claims.update(extra_claims or {})  # local/test: e.g. ``aal`` / ``amr`` shapes
         return jwt.encode(
             claims,
             self._key,
@@ -394,6 +443,8 @@ async def org_context(
         principal.email,
         principal.identity_provider,
         member["roles"],
+        auth_time=principal.auth_time,
+        max_auth_age_s=request.app.state.sso_max_auth_age_s,
     )
     ctx = TenantContext(
         tenant_id=org_id,
@@ -401,6 +452,9 @@ async def org_context(
         actor_type="user",
         roles=frozenset(member["roles"]),
         request_id=request.headers.get("x-request-id"),
+        # SEC-06: ``None`` = step-up not enforced (default); otherwise whether the token
+        # proves a second factor, which ``authz.require`` checks for sensitive actions
+        mfa=principal.mfa if getattr(request.app.state, "mfa_enforced", False) else None,
     )
     await _rate_limit(request, ctx)
     with tenant_scope(ctx):

@@ -48,8 +48,18 @@ without context, so "no context" means "no rows".
 
 ## Platform-role exceptions
 
-The platform role sees tenant rows only through explicit, named policies:
-`platform_onboarding` (`tenancy.tenants`, `tenancy.memberships`), `kb_global_write`
+Since 0015 (SEC-15) the platform role can no longer insert into `tenancy.tenants` or touch
+`tenancy.memberships` at all: onboarding goes through the `SECURITY DEFINER` function
+`tenancy.create_organization(...)` (owned by the migrator, `search_path` pinned, EXECUTE only
+for `bomagent_platform`), which creates a tenant and its first owner atomically. The owner is
+subject to `FORCE ROW LEVEL SECURITY`, so the migrator has the narrow INSERT-only policies
+`migrator_create_organization`; nobody connects as the migrator at run time. The platform role
+keeps `platform_tenants_read` / `platform_tenants_update` on `tenancy.tenants` (maintenance
+lists tenants, plan changes). Test helpers seed tenants through the migrator, never the
+platform role (`bomagent_testing.fixtures.create_tenant`).
+
+The platform role sees other tenant rows only through explicit, named policies:
+`platform_tenants_read`/`platform_tenants_update` (`tenancy.tenants`), `kb_global_write`
 (global corpus only) and, since 0013, `queue_consumer_*` on `app.queue_messages` (the
 PostgreSQL queue of the Supabase pilot): SELECT/DELETE and UPDATE of the delivery columns
 only (`visible_at`, `receive_count`, `receipt`, `dead_at`), no INSERT. The app role may
@@ -88,6 +98,36 @@ Rules enforced by `tools/migration_lint.py` (part of `just lint`/CI):
 
 Reviewers check these in the PR; the migration runs as Fly's `release_command` before the
 new machines take traffic, so a failing migration aborts the release.
+
+## Indexes on live tables
+
+Build indexes on existing tables `CONCURRENTLY` inside `op.get_context().autocommit_block()`
+(see `0016`): no write lock, but not allowed in a transaction block. Drop a leftover INVALID
+index of the same name first (`DROP INDEX CONCURRENTLY IF EXISTS`), then create it. The
+migration lint reports `index-on-existing-table`; record it in `tools/migration_lint.py`
+`BASELINE` with the reason ("CONCURRENTLY"). Small tables created in the same revision need
+neither.
+
+## Growth and retention (DATA-01)
+
+| Table | Growth | Bound |
+|---|---|---|
+| `app.idempotency_keys` | one row per idempotent request | 24 h TTL, maintenance sweep (`expire_idempotency_keys`) |
+| `app.rate_windows` | one row per subject and minute (UNLOGGED) | own subject cleaned on first hit of a window; 1 h TTL sweep for the rest (`expire_rate_windows`) |
+| `app.outbox` | one row per event | `sent` rows purged by the sweep (`cleanup_sent`); `dead` rows kept for ops (OPS-03) |
+| `app.queue_messages` | one row per message (pilot queue) | consumed rows are deleted; `dead_at` rows kept for ops (OPS-03), alert on count |
+| `runs.graph_checkpoints/graph_writes` | per step of a running graph | deleted when the run ends; cascade with the run |
+| `audit.events` | append-only | never deleted (hash chain); archived by anchors |
+| `runs.runs.trace` | one JSON element per graph step, rewritten by `trace = trace \|\| ...` | see below |
+| `bom.versions.content` | one immutable version per edit | by plan quota (not enforced yet) |
+
+`runs.runs.trace`: the complete trace is written to the object store (`trace.json`) when the
+run ends, so the database copy is a convenience for the run page and the SSE stream. Approach
+for the cap (not implemented, needs a product decision because the run page reads this copy):
+(1) keep at most the last N steps (e.g. 200) in the row for running runs and replace the
+column by a pointer to `trace.json` after the run has been terminal for 30 days (a contract
+step, two releases); (2) until then the growth is bounded by the graph's step budget
+(`Budget` in the agent runtime), i.e. by plan limits, not by user input.
 
 ## Testing
 
