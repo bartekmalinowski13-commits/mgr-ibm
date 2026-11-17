@@ -170,7 +170,7 @@ services:
     ports: ["127.0.0.1:3001:3000"]
 
   langfuse-worker:
-    image: langfuse/langfuse-worker:4.77.0
+    image: langfuse/langfuse-worker:4.80.0
     profiles: ["langfuse"]
     depends_on: *langfuse-deps
     environment: *langfuse-env
