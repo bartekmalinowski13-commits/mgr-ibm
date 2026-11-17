@@ -351,6 +351,8 @@ class DevToken(_M):
     email_verified: bool = True
     #: local/test: sign in "through" an organisation's identity provider
     identity_provider: str | None = None
+    #: local/test: sign in with a second factor (adds ``aal: aal2``, as Supabase does)
+    mfa: bool = False
 
 
 class Token(_M):
@@ -422,6 +424,17 @@ class SsoDomain(_M):
 class SsoSettings(_M):
     connection: SsoConnection | None
     domains: list[SsoDomain]
+
+
+class SsoDiscoveryIn(_M):
+    """Only the e-mail domain leaves the browser, never the address (SEC-03/05)."""
+
+    domain: str = Field(min_length=4, max_length=253, pattern=DOMAIN_PATTERN)
+
+    @field_validator("domain", mode="before")
+    @classmethod
+    def _normalise(cls, value: object) -> object:
+        return value.strip().lower().rstrip(".") if isinstance(value, str) else value
 
 
 class SsoDiscovery(_M):

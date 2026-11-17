@@ -373,6 +373,7 @@
   },
   "errors": {
     "already-member": "This person is already a member of the organisation.",
+    "domain-not-allowed": "Public mailbox domains (such as gmail.com) cannot be used for single sign-on. Use your company's own domain.",
     "domain-not-verified": "The DNS TXT record was not found yet. DNS changes can take a while; try again later.",
     "domain-taken": "Another organisation has already verified this domain.",
     "email-not-verified": "Verify your e-mail address to continue.",
@@ -389,6 +390,7 @@
     "invalid-token": "Your session has expired. Sign in again.",
     "invitation-pending": "A pending invitation for this person already exists.",
     "last-owner": "An organisation must keep at least one owner.",
+    "mfa-required": "This action needs multi-factor authentication. Sign in with your second factor (authenticator app) and try again.",
     "missing-token": "You are not signed in. Sign in and try again.",
     "model-not-allowed": "This model is not allowed on your plan. Choose another model.",
     "no-bom": "There is no BOM for this run yet. Wait until the run finishes.",
@@ -400,6 +402,7 @@
     "project-too-large": "The project has reached its file or size limit. Remove a file before uploading another.",
     "quota-exceeded": "Your plan limit has been reached. Contact an organisation owner to raise it.",
     "rate-limited": "Too many requests. Wait a moment and try again.",
+    "reauth-required": "Your sign-in has expired. Sign in again through your organisation's identity provider.",
     "run-not-cancellable": "Only a queued or running run can be cancelled.",
     "runtime-variant": "This runtime does not support the chosen variant. Choose another variant.",
     "sample-read-only": "Sample projects are read-only. Create your own project to upload files.",

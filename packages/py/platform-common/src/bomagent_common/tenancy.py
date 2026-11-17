@@ -31,6 +31,10 @@ class TenantContext:
     actor_type: str = "user"  # user | service | api_key | system
     roles: frozenset[str] = field(default_factory=frozenset)
     request_id: str | None = None
+    #: second-factor state of the caller's token (SEC-06). ``None`` = step-up is not
+    #: enforced for this context (setting off, API keys, system actors); ``False`` = enforced
+    #: but the token lacks an MFA proof; ``True`` = proven.
+    mfa: bool | None = None
 
     def has_role(self, *roles: str) -> bool:
         return bool(self.roles.intersection(roles))

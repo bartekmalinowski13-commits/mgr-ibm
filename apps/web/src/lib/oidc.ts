@@ -13,6 +13,7 @@ export type AuthConfig =
 
 const VERIFIER = "bomagent.pkce.verifier";
 const STATE = "bomagent.pkce.state";
+const NONCE = "bomagent.pkce.nonce";
 
 /** What answers the runs: `demo` = the deterministic fake model (BOMs are illustrative). */
 export type RuntimeInfo = { mode: "demo" | "live"; llm?: string; embeddings?: string };
@@ -69,6 +70,7 @@ export function authorizeUrl(
   challenge: string,
   state: string,
   identityProvider?: string,
+  nonce?: string,
 ): string {
   const params = new URLSearchParams({
     response_type: "code",
@@ -81,10 +83,12 @@ export function authorizeUrl(
   });
   // Cognito skips its own page and goes to the organisation's SAML / OIDC provider
   if (identityProvider) params.set("identity_provider", identityProvider);
+  // binds the ID token to this browser session (token-injection defence)
+  if (nonce) params.set("nonce", nonce);
   return `${cfg.domain}/oauth2/authorize?${params}`;
 }
 
-export function decodeIdToken(token: string): { sub: string; email: string; name: string } {
+function idTokenClaims(token: string): Record<string, unknown> {
   const part = token.split(".")[1] ?? "";
   const json = atob(
     part
@@ -92,9 +96,19 @@ export function decodeIdToken(token: string): { sub: string; email: string; name
       .replace(/_/g, "/")
       .padEnd(Math.ceil(part.length / 4) * 4, "="),
   );
-  const claims = JSON.parse(
+  return JSON.parse(
     new TextDecoder().decode(Uint8Array.from(json, (c) => c.charCodeAt(0))),
   ) as Record<string, unknown>;
+}
+
+/** The `nonce` claim of an ID token ("" when absent). The API verifies the signature. */
+export function idTokenNonce(token: string): string {
+  const nonce = idTokenClaims(token).nonce;
+  return typeof nonce === "string" ? nonce : "";
+}
+
+export function decodeIdToken(token: string): { sub: string; email: string; name: string } {
+  const claims = idTokenClaims(token);
   return {
     sub: String(claims.sub ?? ""),
     email: String(claims.email ?? ""),
@@ -109,9 +123,25 @@ export class RateLimitedError extends Error {
   }
 }
 
-/** Identity provider of the e-mail's organisation, if it uses single sign-on. */
+/** The domain after the last "@" when it looks like one; the address itself never leaves. */
+export function emailDomain(email: string): string | undefined {
+  const trimmed = email.trim();
+  const domain = trimmed.slice(trimmed.lastIndexOf("@") + 1).toLowerCase();
+  return trimmed.includes("@") && /^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(domain) ? domain : undefined;
+}
+
+/**
+ * Identity provider of the e-mail's organisation, if it uses single sign-on. Only the domain
+ * is sent (POST body, not the URL): the address stays in the browser.
+ */
 export async function discoverSso(email: string): Promise<string | undefined> {
-  const resp = await fetch(`/v1/sso/discover?${new URLSearchParams({ email })}`);
+  const domain = emailDomain(email);
+  if (!domain) return undefined;
+  const resp = await fetch("/v1/sso/discover", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ domain }),
+  });
   if (resp.status === 429) {
     throw new RateLimitedError(Number(resp.headers.get("Retry-After")) || 60);
   }
@@ -126,20 +156,29 @@ export async function startLogin(
 ): Promise<void> {
   const verifier = randomString(48);
   const state = randomString(16);
+  const nonce = randomString(16);
   sessionStorage.setItem(VERIFIER, verifier);
   sessionStorage.setItem(STATE, state);
-  window.location.assign(authorizeUrl(cfg, await pkceChallenge(verifier), state, identityProvider));
+  sessionStorage.setItem(NONCE, nonce);
+  window.location.assign(
+    authorizeUrl(cfg, await pkceChallenge(verifier), state, identityProvider, nonce),
+  );
 }
 
-/** Exchanges the authorization code for tokens; rejects a mismatched state (CSRF). */
+/**
+ * Exchanges the authorization code for tokens; rejects a mismatched state (CSRF) and an ID
+ * token whose nonce is not the one this browser sent.
+ */
 export async function completeLogin(
   cfg: Extract<AuthConfig, { mode: "oidc" }>,
   search: URLSearchParams,
 ): Promise<Session> {
   const verifier = sessionStorage.getItem(VERIFIER);
   const expected = sessionStorage.getItem(STATE);
+  const nonce = sessionStorage.getItem(NONCE);
   sessionStorage.removeItem(VERIFIER);
   sessionStorage.removeItem(STATE);
+  sessionStorage.removeItem(NONCE);
   const code = search.get("code");
   if (!code || !verifier || !expected || search.get("state") !== expected) {
     throw new Error("sign-in response is invalid or expired");
@@ -157,6 +196,9 @@ export async function completeLogin(
   });
   if (!resp.ok) throw new Error(`token exchange failed (${resp.status})`);
   const { id_token: token } = (await resp.json()) as { id_token: string };
+  if (!nonce || idTokenNonce(token) !== nonce) {
+    throw new Error("sign-in response is invalid or expired");
+  }
   return { token, ...decodeIdToken(token) };
 }
 
