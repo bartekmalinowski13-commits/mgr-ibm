@@ -389,6 +389,7 @@
     "invalid-token": "Your session has expired. Sign in again.",
     "invitation-pending": "A pending invitation for this person already exists.",
     "last-owner": "An organisation must keep at least one owner.",
+    "mfa-required": "This action needs multi-factor authentication. Sign in with your second factor (authenticator app) and try again.",
     "missing-token": "You are not signed in. Sign in and try again.",
     "model-not-allowed": "This model is not allowed on your plan. Choose another model.",
     "no-bom": "There is no BOM for this run yet. Wait until the run finishes.",
