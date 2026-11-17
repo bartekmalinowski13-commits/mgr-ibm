@@ -143,6 +143,10 @@ class Settings(ServiceSettings):
     cognito_user_pool_id: str | None = None
     cognito_client_id: str | None = None
     cognito_domain: str | None = None
+    #: members of an enforced SSO domain must have signed in at the identity provider within
+    #: this many seconds (``auth_time`` claim; SEC-05: removed IdP users lose access within
+    #: it instead of at refresh-token expiry). 0 = off. Owners (break-glass) are exempt.
+    sso_max_auth_age_s: int = Field(default=8 * 3600, ge=0)
     files_bucket: str = "bomagent-local-files"
     ingest_queue_url: str | None = None
     runs_queue_url: str | None = None
@@ -234,6 +238,16 @@ def _configure_mail(app: FastAPI, settings: Settings, mailer: Mailer | None) -> 
     )
 
 
+def _install_flags(app: FastAPI, settings: Settings) -> None:
+    """Per-process switches read from ``app.state`` by routers and dependencies."""
+    app.state.cognito_domain = settings.cognito_domain
+    app.state.cognito_user_pool_id = settings.cognito_user_pool_id
+    app.state.samples_enabled = settings.samples_enabled
+    app.state.sse_interval_s = settings.sse_interval_s
+    app.state.sse_timeout_s = settings.sse_timeout_s
+    app.state.sso_max_auth_age_s = settings.sso_max_auth_age_s
+
+
 def create_app(
     settings: Settings | None = None,
     *,
@@ -310,11 +324,7 @@ def create_app(
     else:
         app.state.identity_providers = InMemoryIdentityProviders()
         app.state.txt_resolver = StaticTxtResolver()
-    app.state.cognito_domain = settings.cognito_domain
-    app.state.cognito_user_pool_id = settings.cognito_user_pool_id
-    app.state.samples_enabled = settings.samples_enabled
-    app.state.sse_interval_s = settings.sse_interval_s
-    app.state.sse_timeout_s = settings.sse_timeout_s
+    _install_flags(app, settings)
     if settings.auth_mode == "local":
         idp = LocalIdp(settings.oidc_audience)
         app.state.local_idp = idp
