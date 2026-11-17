@@ -4,6 +4,13 @@
 
 _Updated by Claude Code after every milestone (see `docs/prompts/CLAUDE_CODE_MASTER_PROMPT.md` §5)._
 
+## 2026-11-17 - audit PRs merged, Mistral enabled in the catalogue
+
+- Merged on request of the owner: migrations 0015 (SECURITY DEFINER `tenancy.create_organization`, the platform role loses direct INSERT on tenants and memberships) and 0016 (concurrent indexes), the Supabase access-token hook SQL and runbook, step-up MFA (`BOMAGENT_MFA_ENFORCED`, off by default), SSO hardening (discovery as POST: the web app and API ship in one image and must be deployed together), the rest of the ARCH-04 service/repository layers, and the downgrade round-trip test with the fixes it needed (revisions 0010 and 0003).
+- `mistral-large-eu` is `enabled` and `verified` (EU endpoint `api.eu.mistral.ai`). The pilot still runs on the fake model until the gateway is deployed and `BOMAGENT_ALLOW_FAKE_LLM` is removed (`docs/platform/runbooks/llm-gateway-pilot.md`).
+- Open on purpose: #37 (gateway EU check at start) and #28 (Fly process groups), both `deploy/*`; see `docs/audit/PROGRESS.md`.
+- Nothing is deployed: the next `fly deploy` runs the new migrations as its release command.
+
 ## 2026-11-16 - audit implementation (docs/audit/PROGRESS.md)
 
 - **UX-01 demo mode visible:** `/config.json` carries `mode` (`demo`|`live`), `llm`, `embeddings`;
