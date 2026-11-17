@@ -20,8 +20,8 @@ from bomagent_api import idempotency
 from bomagent_api.auth import OrgContext
 from bomagent_api.authz import ADMIN
 from bomagent_api.plans import quota_exceeded
-from bomagent_api.routers.projects import deliver_now
 from bomagent_api.schemas import ExportDownload, ExportJob, problem_responses
+from bomagent_api.services.outbox import deliver_now
 from bomagent_common.audit import AuditEvent, emit_audit
 from bomagent_common.db import tenant_transaction
 from bomagent_common.messaging import Message
@@ -115,7 +115,7 @@ async def start_export(
         await idempotency.store(
             conn, idempotency_key, body, 202, job.model_dump(mode="json"), route=route
         )
-    await deliver_now(request, ctx.tenant_id, outbox_id)
+    await deliver_now(request.app.state.engine, request.app.state.queues, ctx.tenant_id, outbox_id)
     return job
 
 
