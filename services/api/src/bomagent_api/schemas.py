@@ -426,6 +426,17 @@ class SsoSettings(_M):
     domains: list[SsoDomain]
 
 
+class SsoDiscoveryIn(_M):
+    """Only the e-mail domain leaves the browser, never the address (SEC-03/05)."""
+
+    domain: str = Field(min_length=4, max_length=253, pattern=DOMAIN_PATTERN)
+
+    @field_validator("domain", mode="before")
+    @classmethod
+    def _normalise(cls, value: object) -> object:
+        return value.strip().lower().rstrip(".") if isinstance(value, str) else value
+
+
 class SsoDiscovery(_M):
     sso: bool
     provider: str | None = None

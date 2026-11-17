@@ -770,14 +770,16 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * Identity provider for an e-mail address (sign-in)
-         * @description No authentication: the sign-in screen asks before any token exists. Reveals only
-         *     whether a domain uses SSO and an opaque provider name.
-         */
-        get: operations["discover_sso_v1_sso_discover_get"];
+        get?: never;
         put?: never;
-        post?: never;
+        /**
+         * Identity provider for an e-mail domain (sign-in)
+         * @description No authentication: the sign-in screen asks before any token exists. The client sends
+         *     the **domain only** (the address never leaves the browser, nothing lands in URL logs).
+         *     Reveals only whether a domain uses SSO and an opaque provider name; every answer takes
+         *     at least ``DISCOVERY_MIN_S`` so the timing says nothing either. Limited per IP.
+         */
+        post: operations["discover_sso_v1_sso_discover_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1883,6 +1885,14 @@ export interface components {
             provider?: string | null;
             /** Sso */
             sso: boolean;
+        };
+        /**
+         * SsoDiscoveryIn
+         * @description Only the e-mail domain leaves the browser, never the address (SEC-03/05).
+         */
+        SsoDiscoveryIn: {
+            /** Domain */
+            domain: string;
         };
         /** SsoDomain */
         SsoDomain: {
@@ -6831,16 +6841,18 @@ export interface operations {
             };
         };
     };
-    discover_sso_v1_sso_discover_get: {
+    discover_sso_v1_sso_discover_post: {
         parameters: {
-            query: {
-                email: string;
-            };
+            query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SsoDiscoveryIn"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {

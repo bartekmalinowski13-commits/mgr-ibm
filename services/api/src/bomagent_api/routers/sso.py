@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import asyncio
+import time
 from typing import Any
 
-from fastapi import APIRouter, Query, Request, Response
+from fastapi import APIRouter, Request, Response
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 
@@ -14,6 +16,7 @@ from bomagent_api.schemas import (
     SsoConnection,
     SsoConnectionIn,
     SsoDiscovery,
+    SsoDiscoveryIn,
     SsoDomain,
     SsoDomainIn,
     SsoSettings,
@@ -24,9 +27,10 @@ from bomagent_api.sso import (
     Connection,
     StaticTxtResolver,
     discover,
+    is_free_mail,
+    new_provider_name,
     new_token,
     provider_change_lock,
-    provider_name_for,
     safe_error,
 )
 from bomagent_common.audit import AuditEvent, emit_audit
@@ -37,6 +41,8 @@ router = APIRouter(
     prefix="/v1/sso", tags=["sso"], responses=problem_responses(400, 401, 403, 404, 409, 422, 429)
 )
 public = APIRouter(prefix="/v1/sso", tags=["sso"], responses=problem_responses(400, 422, 429))
+#: discovery answers take at least this long whatever the outcome (no timing oracle)
+DISCOVERY_MIN_S = 0.05
 COLS = (
     "protocol, provider_name, metadata_url, oidc_issuer, oidc_client_id, default_role,"
     " enforce, status, error"
@@ -99,7 +105,6 @@ async def put_sso(request: Request, ctx: OrgContext, body: SsoConnectionIn) -> S
             422, "Unprocessable Content", "oidc_issuer and oidc_client_id are required for OIDC"
         )
     engine = request.app.state.engine
-    name = provider_name_for(ctx.tenant_id)
     async with tenant_transaction(engine) as conn:
         before = (
             await conn.execute(text(f"SELECT {COLS} FROM tenancy.sso_connections"))  # noqa: S608
@@ -115,6 +120,8 @@ async def put_sso(request: Request, ctx: OrgContext, body: SsoConnectionIn) -> S
         and (before is None or before.protocol != "oidc" or before.oidc_issuer != body.oidc_issuer)
     ):
         raise ProblemError(422, "Unprocessable Content", "oidc_client_secret is required")
+    # random name chosen once; an existing connection keeps the name it has in Cognito
+    name = before.provider_name if before is not None else new_provider_name()
     connection = Connection(
         protocol=body.protocol,
         provider_name=name,
@@ -139,7 +146,7 @@ async def put_sso(request: Request, ctx: OrgContext, body: SsoConnectionIn) -> S
     # whatever Cognito now holds is recorded and audited, even when the request is refused
     enforce = body.enforce and status == "active"
     async with tenant_transaction(engine) as conn:
-        await conn.execute(
+        stored = await conn.scalar(
             text(
                 "INSERT INTO tenancy.sso_connections (tenant_id, protocol, provider_name,"
                 " metadata_url, oidc_issuer, oidc_client_id, default_role, enforce, status,"
@@ -147,6 +154,7 @@ async def put_sso(request: Request, ctx: OrgContext, body: SsoConnectionIn) -> S
                 " :e, :s, :err, :u) ON CONFLICT (tenant_id) DO UPDATE SET protocol = :p,"
                 " metadata_url = :m, oidc_issuer = :i, oidc_client_id = :c, default_role = :r,"
                 " enforce = :e, status = :s, error = :err, updated_at = now()"
+                " RETURNING provider_name"
             ),
             {
                 "p": connection.protocol,
@@ -179,6 +187,9 @@ async def put_sso(request: Request, ctx: OrgContext, body: SsoConnectionIn) -> S
                 },
             ),
         )
+    if stored != name:  # lost a race with a concurrent first PUT: drop our orphaned provider
+        async with provider_change_lock(engine):
+            await request.app.state.identity_providers.remove(name)
     if body.enforce and not enforce:
         raise not_ready
     return await _settings(request)
@@ -187,7 +198,10 @@ async def put_sso(request: Request, ctx: OrgContext, body: SsoConnectionIn) -> S
 @router.delete("", status_code=204, summary="Remove the identity provider")
 async def delete_sso(request: Request, ctx: OrgContext) -> Response:
     require(ctx, "sso.manage")
-    name = provider_name_for(ctx.tenant_id)
+    async with tenant_transaction(request.app.state.engine) as conn:
+        name = await conn.scalar(text("SELECT provider_name FROM tenancy.sso_connections"))
+    if name is None:
+        raise ProblemError(404, "Not Found", "no identity provider configured")
     async with provider_change_lock(request.app.state.engine):
         await request.app.state.identity_providers.remove(name)
     async with tenant_transaction(request.app.state.engine) as conn:
@@ -205,6 +219,7 @@ async def add_domain(request: Request, ctx: OrgContext, body: SsoDomainIn) -> Ss
     """Idempotent: adding a domain again returns the same verification record."""
     require(ctx, "sso.manage")
     domain = body.domain.lower()
+    _refuse_free_mail(domain)
     async with tenant_transaction(request.app.state.engine) as conn:
         row = (
             await conn.execute(
@@ -230,6 +245,16 @@ async def add_domain(request: Request, ctx: OrgContext, body: SsoDomainIn) -> Ss
     )
 
 
+def _refuse_free_mail(domain: str) -> None:
+    if is_free_mail(domain):
+        raise ProblemError(
+            422,
+            "Unprocessable Content",
+            "public mailbox domains cannot be used for single sign-on",
+            slug="domain-not-allowed",
+        )
+
+
 async def _domain(conn: Any, domain: str) -> Any:
     row = (
         await conn.execute(
@@ -246,6 +271,7 @@ async def _domain(conn: Any, domain: str) -> Any:
 async def verify_domain(request: Request, ctx: OrgContext, domain: str) -> SsoDomain:
     require(ctx, "sso.manage")
     domain = domain.lower()
+    _refuse_free_mail(domain)  # also rows that exist from before the blocklist
     engine = request.app.state.engine
     async with tenant_transaction(engine) as conn:
         row = await _domain(conn, domain)
@@ -305,13 +331,15 @@ async def delete_domain(request: Request, ctx: OrgContext, domain: str) -> Respo
     return Response(status_code=204)
 
 
-@public.get("/discover", summary="Identity provider for an e-mail address (sign-in)")
-async def discover_sso(
-    request: Request, email: str = Query(min_length=3, max_length=320)
-) -> SsoDiscovery:
-    """No authentication: the sign-in screen asks before any token exists. Reveals only
-    whether a domain uses SSO and an opaque provider name."""
-    provider = await discover(request.app.state.engine, email)
+@public.post("/discover", summary="Identity provider for an e-mail domain (sign-in)")
+async def discover_sso(request: Request, body: SsoDiscoveryIn) -> SsoDiscovery:
+    """No authentication: the sign-in screen asks before any token exists. The client sends
+    the **domain only** (the address never leaves the browser, nothing lands in URL logs).
+    Reveals only whether a domain uses SSO and an opaque provider name; every answer takes
+    at least ``DISCOVERY_MIN_S`` so the timing says nothing either. Limited per IP."""
+    started = time.monotonic()
+    provider = await discover(request.app.state.engine, body.domain)
+    await asyncio.sleep(max(0.0, DISCOVERY_MIN_S - (time.monotonic() - started)))
     return SsoDiscovery(sso=provider is not None, provider=provider)
 
 

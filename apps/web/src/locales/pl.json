@@ -375,6 +375,7 @@
   },
   "errors": {
     "already-member": "Ta osoba jest już członkiem organizacji.",
+    "domain-not-allowed": "Publicznych domen pocztowych (np. gmail.com) nie można używać do logowania jednokrotnego. Użyj własnej domeny firmy.",
     "domain-not-verified": "Nie znaleziono jeszcze rekordu DNS TXT. Zmiany DNS mogą potrwać; spróbuj ponownie później.",
     "domain-taken": "Inna organizacja zweryfikowała już tę domenę.",
     "email-not-verified": "Zweryfikuj adres e-mail, aby kontynuować.",
@@ -403,6 +404,7 @@
     "project-too-large": "Projekt osiągnął limit plików lub rozmiaru. Usuń plik, zanim wgrasz kolejny.",
     "quota-exceeded": "Osiągnięto limit planu. Skontaktuj się z właścicielem organizacji, aby go zwiększyć.",
     "rate-limited": "Zbyt wiele żądań. Poczekaj chwilę i spróbuj ponownie.",
+    "reauth-required": "Twoje logowanie wygasło. Zaloguj się ponownie przez dostawcę tożsamości swojej organizacji.",
     "run-not-cancellable": "Anulować można tylko przebieg oczekujący lub trwający.",
     "runtime-variant": "To środowisko nie obsługuje wybranego wariantu. Wybierz inny wariant.",
     "sample-read-only": "Projekty przykładowe są tylko do odczytu. Utwórz własny projekt, aby wgrać pliki.",

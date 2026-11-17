@@ -46,6 +46,8 @@ class Principal:
     email: str
     name: str
     email_verified: bool = False
+    #: ``auth_time`` claim (epoch seconds of the original sign-in at the IdP), when present
+    auth_time: int | None = None
     #: Cognito federation: the identity provider the user signed in through
     identity_provider: str | None = None
     #: the token proves a second factor (SEC-06): ``aal`` >= aal2 or an ``amr`` value from
@@ -167,6 +169,7 @@ class TokenVerifier:
             name=next((str(n) for n in names if isinstance(n, str) and n), ""),
             # OIDC: boolean; some IdPs (older Cognito) send the string "true"
             email_verified=claim(claims, self.email_verified_claim) in (True, "true"),
+            auth_time=_auth_time(claims.get("auth_time")),
             identity_provider=_identity_provider(claims.get("identities")),
             mfa=mfa_from_claims(claims, self.mfa_amr_values),
         )
@@ -181,6 +184,13 @@ class OidcSettings(Protocol):
     oidc_email_verified_claim: str
     oidc_name_claims: list[str]
     oidc_mfa_amr_values: list[str]
+
+
+def _auth_time(value: Any) -> int | None:
+    """``auth_time`` as epoch seconds; booleans, strings and negatives are not a time."""
+    if isinstance(value, bool) or not isinstance(value, int | float) or value < 0:
+        return None
+    return int(value)
 
 
 def _identity_provider(identities: Any) -> str | None:
@@ -223,6 +233,7 @@ class LocalIdp:
             "email": email,
             "name": name,
             "email_verified": email_verified,
+            "auth_time": now,
             "iat": now,
             "exp": now + ttl_s,
         }
@@ -432,6 +443,8 @@ async def org_context(
         principal.email,
         principal.identity_provider,
         member["roles"],
+        auth_time=principal.auth_time,
+        max_auth_age_s=request.app.state.sso_max_auth_age_s,
     )
     ctx = TenantContext(
         tenant_id=org_id,
