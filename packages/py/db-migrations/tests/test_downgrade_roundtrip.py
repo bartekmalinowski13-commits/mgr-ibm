@@ -64,7 +64,13 @@ def fresh_db(db_urls: DbUrls) -> Iterator[str]:
     """A prepared (roles, extensions) but unmigrated database; yields the migrator URL."""
     base = make_url(db_urls.admin).set(drivername="postgresql+psycopg")
     name = f"bomagent_roundtrip_{secrets.token_hex(4)}"
-    pwds = {r: secrets.token_hex(16) for r in (MIGRATOR_ROLE, APP_ROLE, PLATFORM_ROLE)}
+    # roles are cluster-wide: reuse the session database's passwords, or this fixture would
+    # change them under the other tests that share the cluster
+    pwds = {
+        MIGRATOR_ROLE: make_url(db_urls.migrator).password or secrets.token_hex(16),
+        APP_ROLE: make_url(db_urls.app).password or secrets.token_hex(16),
+        PLATFORM_ROLE: make_url(db_urls.platform).password or secrets.token_hex(16),
+    }
     root = create_engine(base.render_as_string(hide_password=False), isolation_level="AUTOCOMMIT")
     with root.connect() as conn:
         conn.execute(text(f'CREATE DATABASE "{name}"'))
