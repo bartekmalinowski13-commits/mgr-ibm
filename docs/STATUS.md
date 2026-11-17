@@ -260,3 +260,12 @@ domain) and the assumptions awaiting acceptance (`docs/DECISIONS_LOG.md`, last c
   revision). #41 (SEC-12) waits for CI.
 - Found by the new tests: `normalize_value("1M", "capacitor")` produced "1 MF" (fixed);
   rolling back past the SSO revision fails on `tenancy.sso_domains` (needs a migration fix).
+
+## 2026-11-17 - second batch merged (#41, #64-#67)
+
+- Merged: SEC-12 (#41), OPS-04 (#64), SEC-10 report-only gates (#65), UX-03 lifecycle actions (#66),
+  SEC-14 organisation export + sub-processor list (#67).
+- Found while merging: the UX-05 slug-coverage test caught two untranslated export error slugs;
+  the new version history made a Playwright selector ambiguous (fixed in the PR).
+- Open for the owner: #28, #37 (`deploy/*`), #55 (draft; downgrade round-trip test that exposes the
+  broken SSO downgrade). In progress: ARCH-06 (KB snapshot per run).

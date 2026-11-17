@@ -44,14 +44,14 @@ Scheduled task `audit-implementation-continue` (hourly, id `trig_0174gXcCFuTekwm
 | SEC-02 BFF session + CSP tightening | todo | | | touches web session handling / auth: PR stays open for owner |
 | SEC-15 onboarding SECURITY DEFINER function | todo | | | migration/RLS: PR stays open for owner |
 | SEC-06 MFA (aal2 / amr checks) | todo | | | enabling MFA in Supabase console = owner; auth/authz change: PR stays open |
-| SEC-14 export / delete / retention / sub-processors | todo | | | migration likely: PR stays open; DPAs = owner |
+| SEC-14 export / delete / retention / sub-processors | partial (export + legal docs, #67); delete/retention/MFA = owner | claude/audit-sec-14 | #67 | `POST /v1/organizations/{id}/export` (async ZIP, signed link, rate limited, audited, tenant-isolation test), SUBPROCESSORS.md, DPA_CHECKLIST.md; not done: org hard delete, retention sweeps, export file expiry, in-app legal link |
 | UX-02 e-mail invitations | merged (backend, #48); web landing + resend todo | claude/audit-ux-02 | #48 | mailer protocol (log default, SMTP via env, TLS always), invitation e-mail PL+EN, audited; owner: mail provider, SPF/DKIM, env vars. Note: `LogMailer.sent` is unbounded when SMTP is off |
-| UX-03 lifecycle actions (delete, cancel, history, XLSX) | todo | | | |
+| UX-03 lifecycle actions (delete, cancel, history, XLSX) | merged (#66) | claude/audit-ux-03 | #66 | project rename/delete, file delete, run cancel/re-run, BOM version history + diff, XLSX; cancelled run stored as `failed` ("cancelled by user") until a migration adds a status |
 | SEC-09 malware scan | merged (code, #46); running clamd = owner | claude/audit-sec-09 | #46 | scanner protocol, EICAR default, optional clamd (fail closed), audit + metrics; GuardDuty S3 / quarantine not done |
-| OPS-04 migration policy, rollback runbook, smoke | todo | | | |
+| OPS-04 migration policy, rollback runbook, smoke | merged (#64); Fly 2 machines + smoke tenant = owner | claude/audit-ops-04 | #64 | expand/contract policy, `drop-table` / `contract-mixed` lint rules, rollback runbook, manual smoke workflow (secret by name) |
 | OPS-05 backups / DR runbook + restore drill script | merged (script + runbook, #45); drills = owner | claude/audit-ops-05-06 | #45 | `tools/restore_drill.py` (scratch DB only), backup-restore-dr runbook with proposed RPO/RTO; owner: PITR plan, backup bucket, first real drill. Script never run on a real Postgres |
 | OPS-06 runbooks | merged (#45) | claude/audit-ops-05-06 | #45 | incident, breach (72 h), offboarding, on-call, capacity runbooks; owner: contact details. `docs/platform/SECURITY.md` still links `docs/runbooks/` (needs a docs(spec) fix) |
-| SEC-10 supply chain (digests, Trivy image, license gate, SAST) | todo | | | cosign in deploy.sh touches `deploy/*` |
+| SEC-10 supply chain (digests, Trivy image, license gate, SAST) | merged (#65, report-only); digests/cosign/SBOM = owner | claude/audit-sec-10 | #65 | licence gate (AGPL/SSPL), Trivy image scan x3, Bandit; none required yet; digest pinning checklist in the runbooks (deploy/docker is owner-reserved) |
 | QA-02 cassette recorder, nightly real-model eval workflow | merged (code, #44); real recordings + nightly secrets = owner | claude/audit-qa-02-03 | #44 | `RecordingChat`, `bomagent record`, `run --min-f1/--max-hallucination-rate`, secret-gated nightly workflow |
 | ARCH-06 KB snapshot per run | todo | | | |
 
@@ -74,7 +74,7 @@ Scheduled task `audit-implementation-continue` (hourly, id `trig_0174gXcCFuTekwm
 |---|---|---|---|---|
 | SEC-07 Supabase custom access token hook | todo | | | hook activation in Supabase = owner |
 | SEC-11 docs/openapi off outside dev | merged (#38) | claude/audit-sec-11 | #38 | `Settings.docs_enabled` (local/test/dev only); contract stays in `services/api/openapi.json`; a docs-site page (Redocly/Scalar) is a follow-up |
-| SEC-12 injection corpus, canary, free-text sanitising | in PR #41 (corpus, detector fix, free-text cleaner) | claude/audit-sec-12 | #41 | left: wire `clean_free_text` into storage, injection success rate metric in experiment, canary in prompt, LLM classifier |
+| SEC-12 injection corpus, canary, free-text sanitising | merged (#41); remainder todo | claude/audit-sec-12 | #41 | detector fix (irregular whitespace), 16+12 corpus with a 5 % success-rate gate, `clean_free_text`; left: wire the cleaner into storage, injection success rate in `bomagent experiment`, canary in prompt, LLM classifier |
 | SEC-16/17 low items (CODEOWNERS, SECURITY.md, idempotency TTL, parser error leak test) | merged (SEC-17, #39); SEC-16, auth.py comment, branch protection = owner | claude/audit-sec-17 | #39 | SECURITY.md, CODEOWNERS, idempotency TTL sweep, parser error text test |
 | ARCH-01 deployment tiers ADR | merged as draft ADR-0018 (Proposed) | claude/audit-doc-02 | #25 | acceptance = owner |
 | ARCH-07 embeddings status in readyz | merged (#40) | claude/audit-arch-07 | #40 | API and KB indexer refuse hashing embeddings outside local/test unless `BOMAGENT_ALLOW_FAKE_LLM` |
