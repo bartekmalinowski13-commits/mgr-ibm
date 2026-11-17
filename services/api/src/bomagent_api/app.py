@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from bomagent_api import __version__, maintenance
 from bomagent_api.auth import ALGORITHMS, LocalIdp, TokenVerifier, UserInfo, check_algorithms
+from bomagent_api.authz import MfaRequiredError, mfa_required_handler
 from bomagent_api.ip_limits import install_ip_limits, install_origin
 from bomagent_api.routers import (
     api_keys,
@@ -102,6 +103,13 @@ class Settings(ServiceSettings):
     oidc_email_claim: str = "email"
     oidc_email_verified_claim: str = "email_verified"
     oidc_name_claims: list[str] = Field(default_factory=lambda: ["name"])
+    #: SEC-06 step-up MFA, OFF by default so the pilot keeps working. When on, member, API key,
+    #: SSO and organisation management need a token that proves a second factor (``aal`` aal2
+    #: for Supabase, or an ``amr`` value below for Cognito/OIDC); else 403 ``mfa-required``.
+    #: Turn it on only after the admins have enrolled a factor (Supabase: enable TOTP MFA).
+    mfa_enforced: bool = False
+    #: RFC 8176 ``amr`` strings that count as multi-factor (Cognito pre-token trigger)
+    oidc_mfa_amr_values: list[str] = Field(default_factory=lambda: ["mfa"])
     #: when set, a verified e-mail (org creation, invitation acceptance) is confirmed with
     #: the identity provider's user endpoint instead of a token claim (Supabase:
     #: ``<url>/auth/v1/user`` + the anon key) - for providers whose claim the user can edit
@@ -234,6 +242,14 @@ def _configure_mail(app: FastAPI, settings: Settings, mailer: Mailer | None) -> 
     )
 
 
+def _install_mfa(app: FastAPI, settings: Settings) -> None:
+    """Step-up MFA (SEC-06) and the SSE timings: small per-process switches on ``app.state``."""
+    app.state.sse_interval_s = settings.sse_interval_s
+    app.state.sse_timeout_s = settings.sse_timeout_s
+    app.state.mfa_enforced = settings.mfa_enforced
+    app.add_exception_handler(MfaRequiredError, mfa_required_handler)
+
+
 def create_app(
     settings: Settings | None = None,
     *,
@@ -313,14 +329,13 @@ def create_app(
     app.state.cognito_domain = settings.cognito_domain
     app.state.cognito_user_pool_id = settings.cognito_user_pool_id
     app.state.samples_enabled = settings.samples_enabled
-    app.state.sse_interval_s = settings.sse_interval_s
-    app.state.sse_timeout_s = settings.sse_timeout_s
     if settings.auth_mode == "local":
         idp = LocalIdp(settings.oidc_audience)
         app.state.local_idp = idp
         app.state.verifier = idp.verifier
     else:
         app.state.verifier = TokenVerifier.from_settings(settings)
+    _install_mfa(app, settings)
     app.state.userinfo = (
         UserInfo(settings.oidc_userinfo_url, settings.oidc_userinfo_apikey)
         if settings.oidc_userinfo_url
