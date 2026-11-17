@@ -1,0 +1,11 @@
+# Minimal Bandit config (SEC-10, report only). Keep it quiet: findings must be worth reading.
+exclude_dirs:
+  - "*/tests"
+  - "*/test"
+  - "*/node_modules"
+  - "*/.venv"
+  - "*/migrations/versions"
+skips:
+  - B101  # assert: used for type narrowing (ruff S101 ignored for the same reason)
+  - B311  # random: only used for non-security jitter/sampling
+  - B404  # import subprocess: the use sites (B603/B607) are the signal, not the import
