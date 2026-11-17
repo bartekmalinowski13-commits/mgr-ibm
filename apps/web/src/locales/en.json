@@ -360,6 +360,8 @@
     "domain-taken": "Another organisation has already verified this domain.",
     "email-not-verified": "Verify your e-mail address to continue.",
     "empty-patch": "Nothing to change: edit at least one field.",
+    "expired": "This download link has expired. Request a new export.",
+    "export-not-ready": "The export is still being prepared. Try again in a moment.",
     "file-in-use": "A run of this project is queued or running. Wait until it finishes and try again.",
     "file-too-large": "The file is too large. Upload a smaller one.",
     "forbidden-action": "Your role does not allow this action. Ask an organisation owner for access.",

@@ -19,3 +19,11 @@ Health: `/healthz`, `/readyz`. Config: `BOMAGENT_DATABASE_URL`,
 health-only mode.
 
 Tests: `uv run pytest services/kb-indexer`.
+
+## Organisation export (SEC-14)
+
+`org.export.requested` on the same `kb` queue (no extra queue to provision) builds the ZIP of an
+organisation (`bomagent_kb_indexer.export`): projects with file metadata, runs, every BOM version
+(JSON + CSV), own knowledge-base document metadata, the audit log. Stored under
+`tenants/{id}/exports/{job}/`; state in `status.json` there. Uploaded design files and document
+bodies are not included yet. Tests: `test_export_unit.py` (unit), `services/api/tests/test_org_export.py` (DB, CI).

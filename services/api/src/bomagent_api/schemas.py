@@ -256,6 +256,27 @@ class UsageReport(_M):
     limits: dict[str, float]
 
 
+class ExportJob(_M):
+    """State of an organisation data export (SEC-14)."""
+
+    id: uuid.UUID
+    status: Literal["queued", "running", "completed", "failed"]
+    requested_by: str
+    requested_at: datetime
+    finished_at: datetime | None = None
+    expires_at: datetime | None = None
+    size_bytes: int | None = None
+    counts: dict[str, int] = Field(default_factory=dict)
+    error: str | None = None
+
+
+class ExportDownload(_M):
+    """Short-lived signed link to the finished export ZIP."""
+
+    url: str
+    expires_in_s: int
+
+
 KeyRole = Literal["engineer", "reviewer", "viewer"]
 
 

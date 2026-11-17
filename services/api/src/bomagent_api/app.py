@@ -13,7 +13,16 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 from bomagent_api import __version__, maintenance
 from bomagent_api.auth import ALGORITHMS, LocalIdp, TokenVerifier, UserInfo, check_algorithms
 from bomagent_api.ip_limits import install_ip_limits, install_origin
-from bomagent_api.routers import api_keys, audit, identity, members, projects, runs, samples
+from bomagent_api.routers import (
+    api_keys,
+    audit,
+    exports,
+    identity,
+    members,
+    projects,
+    runs,
+    samples,
+)
 from bomagent_api.routers import kb as kb_routes
 from bomagent_api.routers import sso as sso_routes
 from bomagent_api.routers.kb import MAX_DOCUMENT
@@ -327,6 +336,7 @@ def create_app(
         runs.router,
         runs.models_router,
         audit.router,
+        exports.router,
         kb_routes.router,
         sso_routes.router,
         sso_routes.public,

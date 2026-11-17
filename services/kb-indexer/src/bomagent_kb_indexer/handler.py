@@ -5,6 +5,8 @@ Message types:
 * ``kb.document.uploaded`` (tenant scope) - payload ``{document_id, object_key, filename}``;
   runs in the message's tenant context with the application role, so RLS confines every
   read and write to that tenant.
+* ``org.export.requested`` (tenant scope) - payload ``{job_id}``; builds the organisation's
+  data export ZIP (``bomagent_kb_indexer.export``).
 * ``kb.global_document.uploaded`` (global corpus) - accepted only from the platform
   pseudo-tenant with ``actor_type == "system"``; uses the platform role.
 
@@ -22,8 +24,10 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 from bomagent_common.db import platform_transaction, tenant_transaction
 from bomagent_common.logging import get_logger
 from bomagent_common.messaging import Message
+from bomagent_common.org_export import EXPORT_REQUESTED
 from bomagent_common.storage import ObjectStore, key_belongs_to
 from bomagent_kb import ExtractionError, KnowledgeBase, extract
+from bomagent_kb_indexer.export import OrgExporter
 
 log = get_logger(__name__)
 PLATFORM_TENANT = uuid.UUID(int=0)
@@ -45,7 +49,10 @@ class KbIndexer:
     use_docling: bool = False
 
     async def handle(self, message: Message) -> None:
-        if message.type == TENANT_UPLOAD:
+        if message.type == EXPORT_REQUESTED:
+            # organisation data export (SEC-14) rides on this queue: no extra queue to provision
+            await OrgExporter(self.app_engine, self.tenant_store).handle(message)
+        elif message.type == TENANT_UPLOAD:
             await self._tenant(message)
         elif message.type == GLOBAL_UPLOAD:
             await self._global(message)
