@@ -176,7 +176,7 @@ services:
     environment: *langfuse-env
 
   clickhouse:
-    image: clickhouse/clickhouse-server:25.8.33
+    image: clickhouse/clickhouse-server:26.10.3.7
     profiles: ["langfuse"]
     user: "101:101"
     environment:
