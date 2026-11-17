@@ -78,6 +78,23 @@ export async function downloadCsv(runId: string): Promise<Blob> {
   return resp.blob();
 }
 
+export async function downloadXlsx(runId: string): Promise<Blob> {
+  const resp = await fetch(`/v1/runs/${runId}/bom.xlsx`, { headers: headers() });
+  if (!resp.ok) throw new ApiError(resp.status, (await resp.json()) as Problem);
+  return resp.blob();
+}
+
+/** Save a blob under a file name (object URL + temporary link). */
+export function saveBlob(blob: Blob, name: string): void {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  document.body.append(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 10_000);
+}
+
 export interface RunProgress {
   status: string;
   usage: Record<string, number>;

@@ -11,7 +11,7 @@ from collections.abc import AsyncIterator
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Header, Request, UploadFile
-from fastapi.responses import PlainTextResponse, StreamingResponse
+from fastapi.responses import PlainTextResponse, Response, StreamingResponse
 from sqlalchemy import text
 
 from bomagent_api import idempotency
@@ -21,8 +21,12 @@ from bomagent_api.pagination import clamp, encode_cursor, page_clause
 from bomagent_api.plans import check_new_run
 from bomagent_api.routers.projects import deliver_now, get_project
 from bomagent_api.schemas import (
+    BomDiffOut,
     BomEnvelope,
+    BomFieldChange,
     BomItemPatch,
+    BomLineChange,
+    BomVersionInfo,
     Counts,
     Evaluation,
     FieldAccuracy,
@@ -34,8 +38,9 @@ from bomagent_api.schemas import (
     RunStep,
     problem_responses,
 )
-from bomagent_bom.export import to_csv
-from bomagent_bom.model import BomVersion, Provenance, ProvenanceKind
+from bomagent_bom.diff import diff_versions
+from bomagent_bom.export import to_csv, to_xlsx
+from bomagent_bom.model import BomVersion, Provenance, ProvenanceKind, Requirements
 from bomagent_common.audit import AuditEvent, emit_audit
 from bomagent_common.db import tenant_transaction
 from bomagent_common.messaging import Message
@@ -73,6 +78,96 @@ async def get_run(conn: Any, run_id: uuid.UUID) -> dict[str, Any]:
     return dict(row._mapping)
 
 
+def check_model_allowed(request: Request, model_id: str) -> None:
+    try:
+        request.app.state.catalog.get(model_id, allow_local=request.app.state.allow_local_models)
+    except ModelNotAllowedError as exc:
+        raise ProblemError(422, "Unprocessable Entity", str(exc), slug="model-not-allowed") from exc
+
+
+async def start_run(
+    request: Request,
+    ctx: OrgContext,
+    conn: Any,
+    *,
+    project_id: uuid.UUID,
+    variant: str,
+    runtime: str,
+    model_id: str,
+    requirements: dict[str, Any],
+    audit_extra: dict[str, Any] | None = None,
+) -> tuple[Run, uuid.UUID]:
+    """Insert a queued run for the project's parsed files and queue it (outbox). Shared by
+    ``POST /v1/runs`` and re-execution; the caller delivers the outbox message after commit."""
+    await get_project(conn, project_id)
+    await check_new_run(conn)
+    keys = (
+        (
+            await conn.execute(
+                text(
+                    "SELECT object_key FROM projects.files WHERE project_id = :p"
+                    " AND status = 'parsed' ORDER BY name"
+                ),
+                {"p": project_id},
+            )
+        )
+        .scalars()
+        .all()
+    )
+    if not keys:
+        raise ProblemError(
+            409,
+            "Conflict",
+            "upload design files and wait until they are checked before starting a run",
+            slug="no-files",
+        )
+    rid = uuid.uuid4()
+    await conn.execute(
+        text(
+            "INSERT INTO runs.runs (id, tenant_id, project_id, variant,"
+            " runtime, model_id, requirements, created_by) VALUES (:i,"
+            " app.current_tenant_id(), :p, :v, :rt, :m, CAST(:rq AS jsonb),"
+            " :u)"
+        ),
+        {
+            "i": rid,
+            "p": project_id,
+            "v": variant,
+            "rt": runtime,
+            "m": model_id,
+            "rq": json.dumps(requirements),
+            "u": ctx.actor_id,
+        },
+    )
+    run = Run(**await get_run(conn, rid))
+    await emit_audit(
+        conn,
+        AuditEvent(
+            action="run.created",
+            object_type="run",
+            object_id=str(rid),
+            after={"variant": variant, "runtime": runtime, "model": model_id} | (audit_extra or {}),
+        ),
+    )
+    outbox_id = await enqueue(
+        conn,
+        "runs",
+        Message.create(
+            "run.requested",
+            ctx,
+            {
+                "run_id": str(rid),
+                "variant": variant,
+                "runtime": runtime,
+                "model_id": model_id,
+                "object_keys": list(keys),
+                "requirements": requirements,
+            },
+        ),
+    )
+    return run, outbox_id
+
+
 @router.post("", status_code=202, summary="Start a BOM run (variant A or B)")
 async def create_run(
     request: Request,
@@ -89,12 +184,7 @@ async def create_run(
             f"runtime {runtime} does not implement variant {body.variant}",
             slug="runtime-variant",
         )
-    try:
-        request.app.state.catalog.get(
-            body.model_id, allow_local=request.app.state.allow_local_models
-        )
-    except ModelNotAllowedError as exc:
-        raise ProblemError(422, "Unprocessable Entity", str(exc), slug="model-not-allowed") from exc
+    check_model_allowed(request, body.model_id)
     payload = body.model_dump(mode="json")
     async with tenant_transaction(request.app.state.engine) as conn:
         stored = await idempotency.replay(
@@ -102,71 +192,15 @@ async def create_run(
         )
         if stored is not None:
             return Run(**stored)
-        await get_project(conn, body.project_id)
-        await check_new_run(conn)
-        keys = (
-            (
-                await conn.execute(
-                    text(
-                        "SELECT object_key FROM projects.files WHERE project_id = :p"
-                        " AND status = 'parsed' ORDER BY name"
-                    ),
-                    {"p": body.project_id},
-                )
-            )
-            .scalars()
-            .all()
-        )
-        if not keys:
-            raise ProblemError(
-                409,
-                "Conflict",
-                "upload design files and wait until they are checked before starting a run",
-                slug="no-files",
-            )
-        rid = uuid.uuid4()
-        await conn.execute(
-            text(
-                "INSERT INTO runs.runs (id, tenant_id, project_id, variant,"
-                " runtime, model_id, requirements, created_by) VALUES (:i,"
-                " app.current_tenant_id(), :p, :v, :rt, :m, CAST(:rq AS jsonb),"
-                " :u)"
-            ),
-            {
-                "i": rid,
-                "p": body.project_id,
-                "v": body.variant,
-                "rt": runtime,
-                "m": body.model_id,
-                "rq": json.dumps(payload["requirements"]),
-                "u": ctx.actor_id,
-            },
-        )
-        run = Run(**await get_run(conn, rid))
-        await emit_audit(
+        run, outbox_id = await start_run(
+            request,
+            ctx,
             conn,
-            AuditEvent(
-                action="run.created",
-                object_type="run",
-                object_id=str(rid),
-                after={"variant": body.variant, "runtime": runtime, "model": body.model_id},
-            ),
-        )
-        outbox_id = await enqueue(
-            conn,
-            "runs",
-            Message.create(
-                "run.requested",
-                ctx,
-                {
-                    "run_id": str(rid),
-                    "variant": body.variant,
-                    "runtime": runtime,
-                    "model_id": body.model_id,
-                    "object_keys": list(keys),
-                    "requirements": payload["requirements"],
-                },
-            ),
+            project_id=body.project_id,
+            variant=body.variant,
+            runtime=runtime,
+            model_id=body.model_id,
+            requirements=payload["requirements"],
         )
         await idempotency.store(
             conn,
@@ -177,6 +211,104 @@ async def create_run(
             route=idempotency.route_of(request),
         )
     await deliver_now(request, ctx.tenant_id, outbox_id)
+    return run
+
+
+@router.post("/{run_id}/rerun", status_code=202, summary="Run again with the same settings")
+async def rerun(
+    request: Request,
+    ctx: OrgContext,
+    run_id: uuid.UUID,
+    idempotency_key: Annotated[str | None, Header()] = None,
+) -> Run:
+    """Starts a new run with the variant, runtime, model and requirements of ``run_id`` on
+    the project's current parsed files (the run's own file snapshot is not kept; ARCH-06).
+    The model must still be allowed and the usual run quota applies."""
+    require(ctx, "run.create")
+    payload = {"rerun_of": str(run_id)}
+    async with tenant_transaction(request.app.state.engine) as conn:
+        stored = await idempotency.replay(
+            conn, idempotency_key, payload, route=idempotency.route_of(request)
+        )
+        if stored is not None:
+            return Run(**stored)
+        row = (
+            await conn.execute(
+                text(
+                    "SELECT project_id, variant, runtime, model_id, requirements"
+                    " FROM runs.runs WHERE id = :i"
+                ),
+                {"i": run_id},
+            )
+        ).first()
+        if row is None:
+            raise ProblemError(404, "Not Found", "run not found", slug="not-found")
+        check_model_allowed(request, row.model_id)
+        run, outbox_id = await start_run(
+            request,
+            ctx,
+            conn,
+            project_id=row.project_id,
+            variant=row.variant,
+            runtime=row.runtime,
+            model_id=row.model_id,
+            requirements=Requirements.model_validate(row.requirements).model_dump(mode="json"),
+            audit_extra={"rerun_of": str(run_id)},
+        )
+        await idempotency.store(
+            conn,
+            idempotency_key,
+            payload,
+            202,
+            run.model_dump(mode="json"),
+            route=idempotency.route_of(request),
+        )
+    await deliver_now(request, ctx.tenant_id, outbox_id)
+    return run
+
+
+CANCELLED = "cancelled by user"
+
+
+@router.post("/{run_id}/cancel", summary="Cancel a queued or running run")
+async def cancel_run(request: Request, ctx: OrgContext, run_id: uuid.UUID) -> Run:
+    """Marks the run ``failed`` with the error ``cancelled by user`` (the run status set has no
+    separate value). A queued run is never started; a running run finishes its current step in
+    the worker and the result is discarded (the worker only writes into a still-running row)."""
+    require(ctx, "run.create")
+    async with tenant_transaction(request.app.state.engine) as conn:
+        row = (
+            await conn.execute(
+                text("SELECT status FROM runs.runs WHERE id = :i FOR UPDATE"), {"i": run_id}
+            )
+        ).first()
+        if row is None:
+            raise ProblemError(404, "Not Found", "run not found", slug="not-found")
+        if row.status not in ("queued", "running"):
+            raise ProblemError(
+                409,
+                "Conflict",
+                f"a {row.status} run cannot be cancelled",
+                slug="run-not-cancellable",
+            )
+        await conn.execute(
+            text(
+                "UPDATE runs.runs SET status = 'failed', error = :e, finished_at = now()"
+                " WHERE id = :i"
+            ),
+            {"e": CANCELLED, "i": run_id},
+        )
+        run = Run(**await get_run(conn, run_id))
+        await emit_audit(
+            conn,
+            AuditEvent(
+                action="run.cancelled",
+                object_type="run",
+                object_id=str(run_id),
+                before={"status": row.status},
+                after={"status": "failed", "error": CANCELLED},
+            ),
+        )
     return run
 
 
@@ -410,6 +542,104 @@ async def export_bom(request: Request, ctx: OrgContext, run_id: uuid.UUID) -> Pl
         media_type="text/csv",
         headers={"Content-Disposition": f'attachment; filename="bom-{run_id}-v{version}.csv"'},
     )
+
+
+XLSX_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
+
+@router.get(
+    "/{run_id}/bom.xlsx",
+    summary="Export the latest BOM as XLSX",
+    response_class=Response,
+    responses={200: {"content": {XLSX_TYPE: {}}, "description": "Excel workbook"}},
+)
+async def export_bom_xlsx(request: Request, ctx: OrgContext, run_id: uuid.UUID) -> Response:
+    require(ctx, "bom.export")
+    async with tenant_transaction(request.app.state.engine) as conn:
+        _, version, bom = await latest_bom(conn, run_id)
+        await emit_audit(
+            conn,
+            AuditEvent(
+                action="bom.exported",
+                object_type="run",
+                object_id=str(run_id),
+                after={"version": version, "format": "xlsx"},
+            ),
+        )
+    return Response(
+        to_xlsx(bom, demo=_is_demo(request)),
+        media_type=XLSX_TYPE,
+        headers={"Content-Disposition": f'attachment; filename="bom-{run_id}-v{version}.xlsx"'},
+    )
+
+
+async def bom_at(conn: Any, run_id: uuid.UUID, version: int) -> BomVersion:
+    row = (
+        await conn.execute(
+            text("SELECT content FROM bom.versions WHERE run_id = :r AND version = :v"),
+            {"r": run_id, "v": version},
+        )
+    ).first()
+    if row is None:
+        raise ProblemError(404, "Not Found", f"version {version} not found", slug="not-found")
+    return BomVersion.model_validate(row.content)
+
+
+@router.get("/{run_id}/bom/versions", summary="Version history of a run's BOM")
+async def list_bom_versions(
+    request: Request, ctx: OrgContext, run_id: uuid.UUID
+) -> list[BomVersionInfo]:
+    """Newest first: the generated version 1 and every user correction after it."""
+    require(ctx, "bom.read")
+    async with tenant_transaction(request.app.state.engine) as conn:
+        await get_run(conn, run_id)
+        rows = await conn.execute(
+            text(
+                "SELECT v.version, p.version AS parent_version, v.reason, v.created_by,"
+                " v.created_at, jsonb_array_length(v.content->'items') AS lines,"
+                " jsonb_array_length(COALESCE(v.content->'findings', '[]'::jsonb)) AS findings"
+                " FROM bom.versions v LEFT JOIN bom.versions p ON p.id = v.parent_id"
+                " WHERE v.run_id = :r ORDER BY v.version DESC"
+            ),
+            {"r": run_id},
+        )
+        return [BomVersionInfo(**dict(r._mapping)) for r in rows]
+
+
+@router.get("/{run_id}/bom/diff", summary="Differences between two BOM versions")
+async def diff_bom_versions(
+    request: Request, ctx: OrgContext, run_id: uuid.UUID, from_version: int, to_version: int
+) -> BomDiffOut:
+    require(ctx, "bom.read")
+    async with tenant_transaction(request.app.state.engine) as conn:
+        old = await bom_at(conn, run_id, from_version)
+        new = await bom_at(conn, run_id, to_version)
+    diff = diff_versions(old, new)
+    return BomDiffOut(
+        run_id=run_id,
+        from_version=from_version,
+        to_version=to_version,
+        added=diff.added,
+        removed=diff.removed,
+        changed=[
+            BomLineChange(
+                line=c.line,
+                refdes=c.refdes,
+                fields=[BomFieldChange(**f.model_dump()) for f in c.fields],
+            )
+            for c in diff.changed
+        ],
+    )
+
+
+@router.get("/{run_id}/bom/versions/{version}", summary="One BOM version of a run")
+async def read_bom_version(
+    request: Request, ctx: OrgContext, run_id: uuid.UUID, version: int
+) -> BomEnvelope:
+    require(ctx, "bom.read")
+    async with tenant_transaction(request.app.state.engine) as conn:
+        bom = await bom_at(conn, run_id, version)
+    return BomEnvelope(run_id=run_id, version=version, bom=bom, demo=_is_demo(request))
 
 
 @router.patch("/{run_id}/bom/items/{line}", summary="Correct a BOM line (new version)")

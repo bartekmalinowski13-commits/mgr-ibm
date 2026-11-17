@@ -62,7 +62,14 @@ test("new run from a template -> live progress -> BOM -> provenance -> correctio
   await panel.getByLabel("Powód zmiany").fill("Zamiennik z magazynu");
   await panel.getByRole("button", { name: "Zapisz poprawkę" }).click();
   await expect(page.getByText("Zapisano poprawkę jako wersję 2")).toBeVisible();
-  await expect(page.getByText(/Wersja 2/)).toBeVisible();
+  // "Wersja 2" is now shown in the run header, in the version history and in its pickers
+  await expect(page.getByText(/Wersja 2/).first()).toBeVisible();
+  await expect(
+    page
+      .getByRole("region", { name: "Historia wersji" })
+      .getByRole("listitem")
+      .filter({ hasText: /Wersja 2/ }),
+  ).toBeVisible();
   await expectAccessible(page);
 
   await page.keyboard.press("Escape");

@@ -255,12 +255,12 @@ async def test_samples_are_exempt_from_the_project_quota(env) -> None:
 
 
 @pg
-async def test_only_sample_projects_can_be_deleted(env) -> None:
+async def test_sample_and_own_projects_can_be_deleted(env) -> None:
     s = uniq()
     owner = await env.org(f"own-{s}", f"del-{s}")
     mine = (await env.client.post("/v1/projects", headers=owner, json={"name": "mine"})).json()
-    refused = await env.client.delete(f"/v1/projects/{mine['id']}", headers=owner)
-    assert refused.status_code == 409
+    own = await env.client.delete(f"/v1/projects/{mine['id']}", headers=owner)
+    assert own.status_code == 204  # UX-03: own projects can be deleted too
     sample = next(p for p in await env.projects(owner) if p["is_sample"])
     keys_before = set(env.store.objects)
     assert (

@@ -8,7 +8,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from bomagent_bom.model import BomVersion, Requirements
+from bomagent_bom.model import BomItem, BomVersion, Requirements
 
 
 def _no_nul(value: Any) -> Any:
@@ -63,6 +63,11 @@ class Organization(_M):
 class ProjectCreate(_M):
     name: str = Field(min_length=1, max_length=200)
     description: str = Field(default="", max_length=4000)
+
+
+class ProjectUpdate(_M):
+    name: str | None = Field(default=None, min_length=1, max_length=200)
+    description: str | None = Field(default=None, max_length=4000)
 
 
 class Project(_M):
@@ -127,6 +132,38 @@ class BomItemPatch(_M):
     value: str | None = Field(default=None, max_length=120)
     footprint: str | None = Field(default=None, max_length=255)
     reason: str = Field(min_length=1, max_length=1000)
+
+
+class BomVersionInfo(_M):
+    version: int
+    #: version this one was derived from (null for the generated version 1)
+    parent_version: int | None
+    reason: str
+    created_by: str
+    created_at: datetime
+    lines: int
+    findings: int
+
+
+class BomFieldChange(_M):
+    field: str
+    before: str
+    after: str
+
+
+class BomLineChange(_M):
+    line: int
+    refdes: list[str]
+    fields: list[BomFieldChange]
+
+
+class BomDiffOut(_M):
+    run_id: uuid.UUID
+    from_version: int
+    to_version: int
+    added: list[BomItem]
+    removed: list[BomItem]
+    changed: list[BomLineChange]
 
 
 class AuditEventOut(_M):
