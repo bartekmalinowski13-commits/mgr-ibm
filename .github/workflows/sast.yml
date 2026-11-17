@@ -1,0 +1,41 @@
+# SEC-10 SAST: Bandit over first-party Python, report only (never fails the build, not a
+# required check). Minimal config in .github/bandit.yaml: tests excluded, noisy rules skipped.
+# Bandit runs from a pinned release via uvx, so no third-party action is needed.
+name: sast
+
+on:
+  schedule:
+    - cron: "27 4 * * 3"
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "packages/py/**/*.py"
+      - "services/**/*.py"
+      - ".github/bandit.yaml"
+      - ".github/workflows/sast.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sast-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  bandit:
+    name: Bandit (report only)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+      - name: Bandit scan (exit code forced to 0)
+        run: |
+          uvx --from "bandit[sarif]==1.8.6" bandit -r packages/py services \
+            -c .github/bandit.yaml -f sarif -o bandit.sarif || true
+          uvx --from "bandit[sarif]==1.8.6" bandit -r packages/py services \
+            -c .github/bandit.yaml -f txt || true
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: ${{ !cancelled() }}
+        with: { name: bandit-sarif, path: bandit.sarif, if-no-files-found: warn }

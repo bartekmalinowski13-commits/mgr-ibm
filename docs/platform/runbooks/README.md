@@ -6,6 +6,8 @@ All cloud operations are performed by a **human** (or a pipeline started by a hu
 >
 > **Operations (OPS-05/06):** [backups, restore, DR (RPO/RTO) and the restore drill](backup-restore-dr.md) · [incident response](incident-response.md) · [security incident and GDPR breach notification](security-incident-breach.md) · [tenant offboarding](tenant-offboarding.md) · [on-call and escalation](on-call-escalation.md) · [capacity](capacity.md) · [rollback](rollback.md).
 >
+> **Supply chain (SEC-10):** [pinning base images by digest (owner checklist)](supply-chain-pinning.md).
+>
 > **Starting out?** One AWS account, dev only: [`single-account-dev.md`](single-account-dev.md). Quick pilot on Supabase + Fly.io (ADR-0017): [`supabase-pilot.md`](supabase-pilot.md); social sign-in there: [`social-login.md`](social-login.md).
 
 ## first-deployment – first deployment of an environment

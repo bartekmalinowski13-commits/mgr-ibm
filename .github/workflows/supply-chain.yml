@@ -1,0 +1,101 @@
+# SEC-10 supply-chain checks. NOT part of the required checks yet (report-only / non-blocking).
+#  - licence-gate: fails on AGPL/SSPL (DECISIONS_LOG 2026-11-09: MinIO, PyMuPDF rejected);
+#    unrecognised licences are only listed as a warning. Promote to required once it has been
+#    green for a while (branch protection is a human decision).
+#  - trivy-image: scans the BUILT images (the pr.yml Trivy job scans only the filesystem).
+#    Report-only: exit-code 0, findings go to SARIF + the job log. Switch exit-code to "1" for
+#    CRITICAL,HIGH with ignore-unfixed once the baseline is triaged.
+# Base images are still referenced by tag; digest pinning is a deploy/docker change reserved for
+# the owner: docs/platform/runbooks/supply-chain-pinning.md.
+name: supply-chain
+
+on:
+  schedule:
+    - cron: "17 4 * * 2"
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "deploy/docker/**"
+      - "uv.lock"
+      - "pnpm-lock.yaml"
+      - "tools/license_gate.py"
+      - ".github/workflows/supply-chain.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: supply-chain-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  licence-gate:
+    name: licence gate (AGPL/SSPL)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with: { enable-cache: true }
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with: { node-version: "22", cache: pnpm }
+      - run: uv sync --all-packages --frozen
+      - run: pnpm install --frozen-lockfile
+      - name: Python distributions
+        run: uv run python tools/license_gate.py python
+      - name: npm packages
+        run: pnpm licenses list --json | uv run python tools/license_gate.py js
+
+  trivy-image:
+    name: Trivy image scan (${{ matrix.image.name }}) - report only
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        image:
+          - { name: allinone, dockerfile: allinone, package: "", module: "" }
+          - { name: python-service, dockerfile: python-service, package: bomagent-api, module: bomagent_api }
+          - { name: llm-gateway, dockerfile: llm-gateway, package: "", module: "" }
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - name: build image (not pushed)
+        env:
+          DOCKERFILE: "deploy/docker/${{ matrix.image.dockerfile }}.Dockerfile"
+          NAME: "${{ matrix.image.name }}"
+          PACKAGE: "${{ matrix.image.package }}"
+          MODULE: "${{ matrix.image.module }}"
+        run: |
+          args=()
+          if [ -n "$PACKAGE" ]; then args+=(--build-arg "PACKAGE=$PACKAGE" --build-arg "MODULE=$MODULE"); fi
+          docker build -f "$DOCKERFILE" "${args[@]}" -t "bomagent-scan/$NAME:ci" .
+      - name: Trivy image scan (report only, exit code 0)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: "bomagent-scan/${{ matrix.image.name }}:ci"
+          format: sarif
+          output: trivy-${{ matrix.image.name }}.sarif
+          scanners: vuln,secret
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: "0"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: ${{ !cancelled() }}
+        with:
+          name: trivy-${{ matrix.image.name }}-sarif
+          path: trivy-${{ matrix.image.name }}.sarif
+          if-no-files-found: warn
+      # Code-scanning upload needs GitHub Advanced Security; on a private repo without it the
+      # step fails, which must not fail this report-only job (the artifact above is the record).
+      - uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        if: ${{ !cancelled() && github.event.pull_request.head.repo.fork != true }}
+        continue-on-error: true
+        with:
+          sarif_file: trivy-${{ matrix.image.name }}.sarif
+          category: trivy-image-${{ matrix.image.name }}
