@@ -109,3 +109,116 @@ def test_refuses_existing_database_without_creating_or_dropping(dump, monkeypatc
     monkeypatch.setattr(rd, "_psql", fake)
     assert call(dump, "restore_drill_a", env={rd.ENV_ADMIN_URL: URL}) == rd.EXIT_REFUSED
     assert all("CREATE" not in c and "DROP" not in c for c in calls)
+
+
+# --- verification (fake psql/pg_restore): the drill must never "verify" what it cannot see ---
+
+TID = "11111111-1111-1111-1111-111111111111"
+
+
+class FakeDb:
+    """Answers the drill's queries; records every psql session."""
+
+    def __init__(self, tenants: list[str], events: int, chain: dict[str, str]) -> None:
+        self.tenants, self.events, self.chain = tenants, events, chain
+        self.sessions: list[tuple[str, ...]] = []
+
+    def psql(self, url: str, *statements: str) -> str:
+        self.sessions.append(statements)
+        sql = statements[-1]
+        if "pg_database" in sql or sql.startswith(("CREATE", "DROP")):
+            return ""
+        if sql == "SELECT count(*) FROM tenancy.tenants":
+            return str(len(self.tenants))
+        if sql == "SELECT count(*) FROM audit.events":
+            return str(self.events)
+        if sql.startswith("SELECT id FROM tenancy.tenants"):
+            return "\n".join(self.tenants)
+        if "verify_chain" in sql:
+            tid = statements[0].split("'")[1]
+            return self.chain[tid]
+        raise AssertionError(f"unexpected SQL {sql}")
+
+
+@pytest.fixture
+def fake_db(monkeypatch: pytest.MonkeyPatch):
+    def install(tenants: list[str], events: int, chain: dict[str, str]) -> FakeDb:
+        db = FakeDb(tenants, events, chain)
+        monkeypatch.setattr(rd.shutil, "which", lambda _: "/bin/x")
+        monkeypatch.setattr(rd, "_psql", db.psql)
+        monkeypatch.setattr(rd.subprocess, "run", lambda *a, **k: None)  # pg_restore
+        return db
+
+    return install
+
+
+def drill(dump: Path, *extra: str) -> int:
+    return call(dump, "restore_drill_a", None, {rd.ENV_ADMIN_URL: URL}, *extra)
+
+
+def test_verify_chain_runs_in_the_tenant_context(dump, fake_db, capsys):
+    db = fake_db([TID], 3, {TID: "3|3|"})
+    assert drill(dump) == rd.EXIT_OK
+    session = next(s for s in db.sessions if "verify_chain" in s[-1])
+    assert session[0] == f"SET app.tenant_id = '{TID}'"  # same psql session as the check
+    assert "restore verified" in capsys.readouterr().out
+
+
+def test_empty_dump_fails_unless_explicitly_allowed(dump, fake_db, capsys):
+    fake_db([], 0, {})
+    assert drill(dump) == rd.EXIT_FAILED
+    captured = capsys.readouterr()
+    assert "no tenants" in captured.err
+    assert "FAILED" in captured.out
+    fake_db([], 0, {})
+    assert drill(dump, "--allow-empty") == rd.EXIT_OK
+
+
+def test_tenant_without_audit_events_fails(dump, fake_db, capsys):
+    fake_db([TID], 0, {TID: "0|0|"})
+    assert drill(dump) == rd.EXIT_FAILED
+    assert "no audit events" in capsys.readouterr().err
+
+
+def test_chain_check_that_walked_fewer_events_than_visible_fails(dump, fake_db, capsys):
+    fake_db([TID], 3, {TID: "3|0|"})
+    assert drill(dump) == rd.EXIT_FAILED
+    assert "checked 0 of 3" in capsys.readouterr().err
+
+
+def test_events_outside_the_listed_tenants_fail(dump, fake_db, capsys):
+    fake_db([TID], 5, {TID: "3|3|"})
+    assert drill(dump) == rd.EXIT_FAILED
+    assert "cover 3 of 5" in capsys.readouterr().err
+
+
+def test_broken_chain_fails(dump, fake_db, capsys):
+    fake_db([TID], 3, {TID: "3|2|2"})
+    assert drill(dump) == rd.EXIT_FAILED
+    assert "BROKEN at seq 2" in capsys.readouterr().out
+
+
+def test_a_psql_error_fails(dump, fake_db, monkeypatch):
+    db = fake_db([TID], 3, {TID: "3|3|"})
+
+    def failing(url: str, *statements: str) -> str:
+        if "verify_chain" in statements[-1]:
+            raise rd.subprocess.CalledProcessError(3, "psql", stderr="insufficient_privilege")
+        return db.psql(url, *statements)
+
+    monkeypatch.setattr(rd, "_psql", failing)
+    assert drill(dump) == rd.EXIT_FAILED
+
+
+def test_tenant_ids_are_never_interpolated_unchecked(dump, fake_db, capsys):
+    db = fake_db(["x'; DROP DATABASE prod; --"], 1, {})
+    assert drill(dump) == rd.EXIT_FAILED
+    assert not any("DROP DATABASE prod" in sql for s in db.sessions for sql in s)
+    assert "not a UUID" in capsys.readouterr().err
+
+
+def test_password_goes_to_the_environment_not_argv():
+    url, env = rd._conn("postgresql://admin:s3cret@db.example.invalid:5432/restore_drill_a")
+    assert "s3cret" not in url
+    assert url == "postgresql://admin@db.example.invalid:5432/restore_drill_a"
+    assert env["PGPASSWORD"] == "s3cret"
