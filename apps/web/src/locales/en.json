@@ -216,7 +216,8 @@
     },
     "defib": "Defibrillation-proof",
     "submit": "Start run",
-    "started": "Started run"
+    "started": "Started run",
+    "partlyStarted": "Variant {{variants}} has already started; trying again starts only the rest."
   },
   "run": {
     "title": "Run",

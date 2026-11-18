@@ -1,4 +1,3 @@
-import { idempotencyKey } from "@bomagent/api-client";
 import { Button } from "@bomagent/ui";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
@@ -16,6 +15,7 @@ import {
   streamRun,
 } from "../lib/api";
 import { formatNumber } from "../lib/format";
+import { useIntentKeys } from "../lib/idempotency";
 import { usePageTitle } from "../lib/layout";
 import {
   type BomItem,
@@ -58,6 +58,8 @@ export function RunScreen() {
     enabled: status === "completed" || status === "budget_exceeded",
   });
   const [selected, setSelected] = useState<number>();
+  const [rerunning, setRerunning] = useState(false);
+  const keys = useIntentKeys();
   usePageTitle(
     run.data
       ? `${t("run.title")}: ${t("run.variant", { variant: run.data.variant })}`
@@ -109,18 +111,24 @@ export function RunScreen() {
   };
 
   const rerun = async () => {
+    if (rerunning) return;
+    setRerunning(true);
     try {
       const next = await call(
         api.POST("/v1/runs/{run_id}/rerun", {
           params: { path: { run_id: runId } },
-          headers: { "Idempotency-Key": idempotencyKey() },
+          // a retry after an error replays the same rerun instead of starting another one
+          headers: { "Idempotency-Key": keys.keyFor(`rerun:${runId}`, runId) },
         }),
       );
+      keys.done(`rerun:${runId}`);
       await queryClient.invalidateQueries({ queryKey: ["runs"] });
       toast(t("run.rerunStarted"));
       await navigate({ to: "/runs/$runId", params: { runId: next.id } });
     } catch (err) {
       toast(problemMessage(err), "error");
+    } finally {
+      setRerunning(false);
     }
   };
   const cancelled = status === "failed" && run.data.error === CANCELLED;
@@ -167,7 +175,12 @@ export function RunScreen() {
               </Button>
             ) : null}
             {finished ? (
-              <Button variant="secondary" size="sm" onClick={() => void rerun()}>
+              <Button
+                variant="secondary"
+                size="sm"
+                disabled={rerunning}
+                onClick={() => void rerun()}
+              >
                 <RotateCw size={16} aria-hidden /> {t("run.rerun")}
               </Button>
             ) : null}

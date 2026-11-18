@@ -216,7 +216,8 @@
     },
     "defib": "Odporność na defibrylację",
     "submit": "Uruchom przebieg",
-    "started": "Uruchomiono przebieg"
+    "started": "Uruchomiono przebieg",
+    "partlyStarted": "Wariant {{variants}} został już uruchomiony; ponowna próba uruchomi tylko pozostałe."
   },
   "run": {
     "title": "Przebieg",

@@ -1,4 +1,3 @@
-import { idempotencyKey } from "@bomagent/api-client";
 import {
   Button,
   cn,
@@ -11,9 +10,10 @@ import {
 } from "@bomagent/ui";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { api, call, problemMessage } from "../lib/api";
+import { api, call, problemMessage, type Schemas } from "../lib/api";
+import { useIntentKeys } from "../lib/idempotency";
 import type { NewRunPreset } from "../lib/layout";
 import { useModels, useProjects } from "../lib/queries";
 import { useToast } from "../lib/toast";
@@ -72,33 +72,49 @@ export function NewRunDialog({ preset, onClose }: { preset: NewRunPreset; onClos
   const [defib, setDefib] = useState(template?.defib ?? false);
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState(false);
+  const pending = useRef(false);
+  const keys = useIntentKeys();
+  /** Runs this dialog already started, per variant, with the request that started them. */
+  const created = useRef(new Map<"A" | "B", { payload: string; run: Schemas["Run"] }>());
   const model = modelId || models.data?.[0]?.id || "";
   const list = projects.data?.items ?? [];
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
+    if (pending.current) return;
+    pending.current = true;
     setBusy(true);
     setError(undefined);
+    const requirements = {
+      device_name: device,
+      applied_part: appliedPart as "none" | "B" | "BF" | "CF",
+      power_source: power as "battery" | "usb" | "mains" | "external_psu",
+      defibrillation_proof: defib,
+      notes: "",
+    };
+    const variants: ("A" | "B")[] = variant === "both" ? ["A", "B"] : [variant];
     try {
-      const requirements = {
-        device_name: device,
-        applied_part: appliedPart as "none" | "B" | "BF" | "CF",
-        power_source: power as "battery" | "usb" | "mains" | "external_psu",
-        defibrillation_proof: defib,
-        notes: "",
-      };
-      const variants: ("A" | "B")[] = variant === "both" ? ["A", "B"] : [variant];
       const runs = [];
       for (const v of variants) {
-        runs.push(
-          await call(
-            api.POST("/v1/runs", {
-              body: { project_id: projectId, variant: v, model_id: model, requirements },
-              headers: { "Idempotency-Key": idempotencyKey() },
-            }),
-          ),
+        const body = { project_id: projectId, variant: v, model_id: model, requirements };
+        const payload = JSON.stringify(body);
+        // "Both": a variant that already started for this exact form is not started again
+        const already = created.current.get(v);
+        if (already && already.payload === payload) {
+          runs.push(already.run);
+          continue;
+        }
+        const run = await call(
+          api.POST("/v1/runs", {
+            body,
+            headers: { "Idempotency-Key": keys.keyFor(`run:${v}`, body) },
+          }),
         );
+        created.current.set(v, { payload, run });
+        runs.push(run);
       }
+      keys.done();
+      created.current.clear();
       await queryClient.invalidateQueries({ queryKey: ["runs"] });
       toast(t("newRun.started"));
       onClose();
@@ -107,8 +123,15 @@ export function NewRunDialog({ preset, onClose }: { preset: NewRunPreset; onClos
         await navigate({ to: "/runs/$runId", params: { runId: first.id } });
       else await navigate({ to: "/projects/$projectId", params: { projectId } });
     } catch (err) {
-      setError(problemMessage(err));
+      const started = variants.filter((v) => created.current.has(v));
+      const message = problemMessage(err);
+      setError(
+        started.length
+          ? `${t("newRun.partlyStarted", { variants: started.join(", ") })} ${message}`
+          : message,
+      );
     } finally {
+      pending.current = false;
       setBusy(false);
     }
   };
