@@ -58,3 +58,15 @@ def test_nothing_enabled_renders_an_empty_but_valid_config():
     config = render(_catalog_with(set()), region="eu-central-1")
     assert config["model_list"] == []
     assert config["general_settings"]["master_key"] == "os.environ/LITELLM_MASTER_KEY"
+
+
+def test_gateway_timeout_fits_the_longest_call_and_retries_are_left_to_the_app():
+    """Long structured outputs (validate/compose: thousands of tokens) take minutes on Mistral
+    Large; a 120 s gateway timeout cut them off and the gateway's own retries repeated the same
+    doomed (and paid) generation three times before the app saw an error."""
+    from bomagent_llm.chat import CALL_TIMEOUT_MAX_S
+
+    config = render(_catalog_with({"mistral-large-eu"}), region="eu-central-1")
+    assert config["litellm_settings"]["request_timeout"] >= CALL_TIMEOUT_MAX_S
+    assert config["litellm_settings"]["num_retries"] == 0
+    assert config["router_settings"]["num_retries"] == 0

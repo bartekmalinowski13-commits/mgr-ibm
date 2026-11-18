@@ -38,7 +38,7 @@ from bomagent_agents.checkpoint import TenantCheckpointSaver
 from bomagent_agents.contracts import ResumeRecord, RunConfig, RunInput, RunOutput, TraceStep
 from bomagent_agents.registry import context_factory, runtime_for
 from bomagent_agents.retrieval import KbRetriever, Retriever
-from bomagent_bom.model import Requirements, Usage
+from bomagent_bom.model import Finding, Requirements, Usage
 from bomagent_cad import FileRef
 from bomagent_cad.sandbox import ProjectSize, parse_files_sandboxed
 from bomagent_common import metrics
@@ -54,6 +54,21 @@ from bomagent_llm.chat import ChatClient
 log = get_logger(__name__)
 RUN_REQUESTED = "run.requested"
 RUNTIME_VARIANT = {"langgraph_a": "A", "claude_agent_sdk_a": "A", "langgraph_b": "B"}
+
+
+ERROR_MAX_CHARS = 300
+
+
+def run_error(status: str, issues: list[Finding]) -> str | None:
+    """Why a run that finished inside the graph is not ``completed``: the first ``run.*``
+    finding (model failure or budget stop; their messages are ours, never file content)."""
+    if status == "completed":
+        return None
+    reasons = [f.message for f in issues if f.rule_id.startswith("run.")]
+    if not reasons:
+        return status
+    more = f" (+{len(reasons) - 1} more)" if len(reasons) > 1 else ""
+    return reasons[0][:ERROR_MAX_CHARS] + more
 
 
 class RejectedRunError(ValueError):
@@ -74,8 +89,9 @@ class RunWorker:
     retriever_factory: Callable[[uuid.UUID, str | None], Retriever] | None = None
     allow_unregistered: bool = False
     #: a ``running`` run without a checkpoint/state write for this long is taken to have lost
-    #: its worker and is resumed on redelivery (must exceed the longest single step)
-    resume_stale_after_s: float = 300.0
+    #: its worker and is resumed on redelivery (must exceed the longest single step: one LLM
+    #: call may take up to ``bomagent_llm.chat.CALL_TIMEOUT_MAX_S``)
+    resume_stale_after_s: float = 1200.0
     max_resumes: int = 3
     #: size cap of ``runs.trace`` (DATA-01/02); the full trace stays in ``trace.json``
     trace_max_bytes: int = DEFAULT_TRACE_MAX_BYTES
@@ -377,10 +393,11 @@ class RunWorker:
                 text(
                     "UPDATE runs.runs SET status = :s, finished_at = now(),"
                     " usage = CAST(:u AS jsonb), trace = CAST(:t AS jsonb),"
-                    " kb_snapshot_id = :k WHERE id = :i AND status = 'running'"
+                    " kb_snapshot_id = :k, error = :e WHERE id = :i AND status = 'running'"
                 ),
                 {
                     "s": result.status,
+                    "e": run_error(result.status, result.bom.findings),
                     "u": result.usage.model_dump_json(),
                     "t": json.dumps(
                         [

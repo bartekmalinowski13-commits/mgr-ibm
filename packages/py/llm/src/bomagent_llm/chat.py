@@ -138,7 +138,27 @@ def _usage(
     )
 
 
-RETRY_STATUS = frozenset({408, 409, 429, 500, 502, 503, 504})
+#: transient failures worth another attempt. Not 408: the gateway's timeout means the
+#: generation itself ran out of time, and repeating it repeats the same long, paid call.
+RETRY_STATUS = frozenset({409, 429, 500, 502, 503, 504})
+
+#: per-call time budget. Structured outputs of the long steps (extract/validate/compose:
+#: thousands of tokens) take minutes on large models - Mistral Large measured in the pilot
+#: at a few dozen output tokens/s - so a fixed 120 s cut them off. The budget assumes a
+#: slow sustained rate and is capped; the gateway's ``request_timeout`` must not be lower.
+CALL_TIMEOUT_BASE_S = 60.0
+CALL_TIMEOUT_MIN_TOKENS_PER_S = 15.0
+CALL_TIMEOUT_MAX_S = 900.0
+#: the client waits this much longer than the gateway, so the gateway's own timeout
+#: answer arrives first (a clean 408 instead of a dropped connection)
+CLIENT_TIMEOUT_MARGIN_S = 15.0
+CONNECT_TIMEOUT_S = 10.0
+
+
+def call_timeout_s(max_tokens: int) -> float:
+    """Wall-clock budget of one chat call that may produce up to ``max_tokens`` tokens."""
+    budget = CALL_TIMEOUT_BASE_S + max_tokens / CALL_TIMEOUT_MIN_TOKENS_PER_S
+    return float(min(CALL_TIMEOUT_MAX_S, round(budget)))
 
 
 class GatewayChat:
@@ -147,7 +167,6 @@ class GatewayChat:
         base_url: str,
         api_key: str,
         *,
-        timeout: float = 120.0,
         client: httpx.AsyncClient | None = None,
         max_retries: int = 2,
         backoff_s: float = 1.0,
@@ -155,18 +174,26 @@ class GatewayChat:
         self._max_retries = max_retries
         self._backoff = backoff_s
         self._headers = {"Authorization": f"Bearer {api_key}"}
-        self._client = client or httpx.AsyncClient(base_url=base_url.rstrip("/"), timeout=timeout)
+        # the read timeout is set per call (``call_timeout_s``), see ``complete``
+        self._client = client or httpx.AsyncClient(
+            base_url=base_url.rstrip("/"), timeout=httpx.Timeout(CALL_TIMEOUT_MAX_S)
+        )
 
-    async def _post_with_retry(self, body: dict[str, Any], span: Any) -> httpx.Response:
+    async def _post_with_retry(
+        self, body: dict[str, Any], span: Any, limits: httpx.Timeout
+    ) -> httpx.Response:
         """Retry transient failures (rate limits, 5xx, transport) with exponential backoff,
-        honouring ``Retry-After``."""
+        honouring ``Retry-After``. A call that ran out of time is not repeated."""
         attempt = 0
         while True:
             retry_after = 0.0
             try:
                 resp = await self._client.post(
-                    "/v1/chat/completions", json=body, headers=self._headers
+                    "/v1/chat/completions", json=body, headers=self._headers, timeout=limits
                 )
+            except (httpx.ReadTimeout, httpx.WriteTimeout) as exc:
+                span.set_status(trace.StatusCode.ERROR, type(exc).__name__)
+                raise LlmError(f"gateway timed out after {limits.read:.0f}s") from exc
             except httpx.HTTPError as exc:
                 if attempt >= self._max_retries:
                     span.set_status(trace.StatusCode.ERROR, type(exc).__name__)
@@ -181,11 +208,14 @@ class GatewayChat:
             await asyncio.sleep(min(max(self._backoff * 2 ** (attempt - 1), retry_after), 30.0))
 
     async def complete(self, request: ChatRequest) -> ChatResult:
+        # a reasoning model's thinking counts against max_tokens: reserve room for it
+        max_tokens = request.max_tokens + request.model.reasoning_tokens
+        budget_s = call_timeout_s(max_tokens)
         body = {
             "model": request.model.gateway_model,
             "messages": [{"role": m.role, "content": m.content} for m in request.messages],
             "temperature": request.temperature,
-            "max_tokens": request.max_tokens,
+            "max_tokens": max_tokens,
             "response_format": {
                 "type": "json_schema",
                 "json_schema": {
@@ -196,12 +226,15 @@ class GatewayChat:
             },
             # tenant/run tags for gateway budgets and Langfuse (no content in metadata)
             "metadata": request.metadata,
+            # LiteLLM's per-request timeout: long generations get the time they need
+            "timeout": budget_s,
         }
+        limits = httpx.Timeout(budget_s + CLIENT_TIMEOUT_MARGIN_S, connect=CONNECT_TIMEOUT_S)
         start = time.perf_counter()
         with tracer.start_as_current_span(
             f"chat {request.prompt_id}", attributes=_span_attrs(request)
         ) as span:
-            resp = await self._post_with_retry(body, span)
+            resp = await self._post_with_retry(body, span, limits)
             if resp.status_code >= 400:
                 span.set_status(trace.StatusCode.ERROR, str(resp.status_code))
                 raise LlmError(f"gateway returned {resp.status_code}")

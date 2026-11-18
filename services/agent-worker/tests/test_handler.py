@@ -430,3 +430,32 @@ async def test_run_that_keeps_dying_is_failed_after_the_resume_limit(app_engine,
     assert status == "failed"
     assert error is not None
     assert "run.failed" in actions
+
+
+def test_a_run_is_not_taken_for_dead_while_one_long_llm_call_is_in_flight():
+    """The run's heartbeat is written between steps; a single chat call may legitimately take
+    up to the per-call budget (``CALL_TIMEOUT_MAX_S``), so the stale threshold must exceed it."""
+    from bomagent_llm.chat import CALL_TIMEOUT_MAX_S
+
+    assert RunWorker.resume_stale_after_s > CALL_TIMEOUT_MAX_S
+    assert Settings.model_fields["run_resume_stale_s"].default > CALL_TIMEOUT_MAX_S
+
+
+def test_a_run_that_ends_failed_inside_the_graph_says_why():
+    """A model failure is caught in the graph (``run.llm_error`` finding, status ``failed``);
+    the run row needs a reason too, or the UI shows "the run failed: ." with nothing after."""
+    from bomagent_agent_worker.handler import run_error
+    from bomagent_bom.model import Finding, Severity
+
+    def finding(rule: str, message: str) -> Finding:
+        return Finding(rule_id=rule, severity=Severity.ERROR, message=message)
+
+    issues = [
+        finding("agent.mpn_rejected", "not a run problem"),
+        finding("run.llm_error", "validate: gateway timed out after 608s"),
+        finding("run.llm_error", "compose: gateway returned 500"),
+    ]
+    assert run_error("completed", issues) is None
+    assert run_error("failed", issues) == "validate: gateway timed out after 608s (+1 more)"
+    assert run_error("budget_exceeded", [finding("run.budget", "x" * 1000)]) == "x" * 300
+    assert run_error("failed", []) == "failed"

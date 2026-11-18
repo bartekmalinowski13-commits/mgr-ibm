@@ -12,7 +12,11 @@ gateway (ADR-0006).
   batched, OTel `gen_ai.*` spans) and `HashingEmbeddings` (deterministic, tests/offline).
 
 - `chat.GatewayChat` - `/v1/chat/completions` with `response_format=json_schema`,
-  GenAI OTel spans, `Usage` with cost from the catalogue; `structured()` validates against a
+  GenAI OTel spans, `Usage` with cost from the catalogue. Each call gets a time budget sized
+  to its `max_tokens` (`call_timeout_s`, capped at `CALL_TIMEOUT_MAX_S`), sent to LiteLLM as
+  the per-request `timeout`; the gateway config sets `request_timeout` to that cap and
+  `num_retries: 0` - transient errors (429/5xx/connect) are retried here, a timed-out
+  generation is never repeated. `structured()` validates against a
   Pydantic schema (one retry); `FakeChat` replays cassettes (`record_cassette`) or a
   scripted responder - CI never calls a real model. `RecordingChat` wraps a real client and
   stores responses + usage under `tests/cassettes/<model>/` (`bomagent record`, owner-run);
