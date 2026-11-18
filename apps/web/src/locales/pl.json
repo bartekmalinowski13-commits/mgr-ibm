@@ -372,7 +372,15 @@
     "of": "z {{limit}}",
     "sso": "Logowanie jednokrotne (SSO)",
     "ssoLead": "Logowanie przez dostawcę tożsamości organizacji (SAML 2.0 lub OpenID Connect), federowane w Amazon Cognito w UE.",
-    "ssoUnavailable": "Logowanie jednokrotne jest dostępne tylko we wdrożeniu AWS. To wdrożenie loguje e-mailem i hasłem."
+    "ssoUnavailable": "Logowanie jednokrotne jest dostępne tylko we wdrożeniu AWS. To wdrożenie loguje e-mailem i hasłem.",
+    "confirmRemoveMember": "Usunąć {{name}} z organizacji? Ta osoba od razu straci dostęp do wszystkich projektów.",
+    "confirmRoleChange": "Zmienić rolę {{name}} na „{{role}}”?",
+    "confirmOwnRole": "Zmienić swoją rolę na „{{role}}”? Możesz stracić dostęp do tych ustawień.",
+    "confirmRevokeInvite": "Unieważnić zaproszenie dla {{email}}? Token zaproszenia przestanie działać.",
+    "invitationRevoked": "Unieważniono zaproszenie",
+    "confirmRotate": "Wymienić klucz „{{name}}”? Obecny klucz od razu przestanie działać; zaktualizuj integracje nowym kluczem.",
+    "confirmRevokeKey": "Unieważnić klucz „{{name}}”? Integracje, które go używają, przestaną działać.",
+    "keyRevoked": "Unieważniono klucz"
   },
   "errors": {
     "already-member": "Ta osoba jest już członkiem organizacji.",
@@ -515,7 +523,11 @@
     "entityId": "Identyfikator encji (audience)",
     "saved": "Dostawca tożsamości zapisany",
     "failed": "Nie udało się skonfigurować dostawcy – zobacz stan poniżej",
-    "removeProvider": "Usuń dostawcę tożsamości"
+    "removeProvider": "Usuń dostawcę tożsamości",
+    "confirmRemoveDomain": "Usunąć domenę {{domain}}? Osoby z tej domeny nie zalogują się już przez jednokrotne logowanie.",
+    "domainRemoved": "Usunięto domenę",
+    "confirmRemoveProvider": "Usunąć dostawcę tożsamości? Członkowie nie zalogują się już przez jednokrotne logowanie.",
+    "providerRemoved": "Usunięto dostawcę tożsamości"
   },
   "samples": {
     "badge": "Przykład",

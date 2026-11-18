@@ -370,7 +370,15 @@
     "of": "of {{limit}}",
     "sso": "Single sign-on (SSO)",
     "ssoLead": "Single sign-on through your organisation's identity provider (SAML 2.0 or OpenID Connect), federated in Amazon Cognito in the EU.",
-    "ssoUnavailable": "Single sign-on is available only in the AWS deployment. This deployment signs in with e-mail and password."
+    "ssoUnavailable": "Single sign-on is available only in the AWS deployment. This deployment signs in with e-mail and password.",
+    "confirmRemoveMember": "Remove {{name}} from the organisation? They lose access to all its projects at once.",
+    "confirmRoleChange": "Change the role of {{name}} to “{{role}}”?",
+    "confirmOwnRole": "Change your own role to “{{role}}”? You may lose access to these settings.",
+    "confirmRevokeInvite": "Revoke the invitation for {{email}}? The invitation token stops working.",
+    "invitationRevoked": "Revoked the invitation",
+    "confirmRotate": "Rotate the key “{{name}}”? The current key stops working at once; update your integrations with the new one.",
+    "confirmRevokeKey": "Revoke the key “{{name}}”? Integrations using it stop working.",
+    "keyRevoked": "Revoked the key"
   },
   "errors": {
     "already-member": "This person is already a member of the organisation.",
@@ -507,7 +515,11 @@
     "entityId": "Entity ID (audience)",
     "saved": "Identity provider saved",
     "failed": "The identity provider could not be configured – see the status below",
-    "removeProvider": "Remove identity provider"
+    "removeProvider": "Remove identity provider",
+    "confirmRemoveDomain": "Remove the domain {{domain}}? People from it can no longer sign in with single sign-on.",
+    "domainRemoved": "Removed the domain",
+    "confirmRemoveProvider": "Remove the identity provider? Members can no longer sign in through single sign-on.",
+    "providerRemoved": "Removed the identity provider"
   },
   "samples": {
     "badge": "Sample",
