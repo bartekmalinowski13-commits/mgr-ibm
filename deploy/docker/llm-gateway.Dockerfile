@@ -26,9 +26,14 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # ---------------------------------------------------------------- gateway
 FROM ${LITELLM_IMAGE}
 COPY --from=render --chmod=0444 /config.yaml /app/config.yaml
+# start-up EU check of the environment (bomagent_llm.eu_guard; needs only pydantic + PyYAML,
+# which LiteLLM already ships) - the entrypoint refuses to start on a non-EU region/endpoint
+COPY --from=render --chmod=0444 /src/packages/py/llm/src/bomagent_llm /opt/eu-guard/bomagent_llm
+COPY --chmod=0555 deploy/gateway/entrypoint.sh /app/entrypoint.sh
 # non-root (10001, as in the ECS task definition); writable path: /tmp only.
 # LITELLM_LOCAL_MODEL_COST_MAP avoids a download at start.
 ENV LITELLM_LOCAL_MODEL_COST_MAP=True HOME=/tmp
 USER 10001:10001
 EXPOSE 4000
+ENTRYPOINT ["/app/entrypoint.sh"]
 CMD ["--config", "/app/config.yaml", "--host", "::", "--port", "4000", "--num_workers", "1"]

@@ -67,7 +67,7 @@ Scheduled task `audit-implementation-continue` (hourly, id `trig_0174gXcCFuTekwm
 | TH-05 catalogue prices with date/source, manifest model ids, temperature/seed notes | merged (code, #31); prices/access needs owner | claude/audit-th-05 | #31 | real prices/model access from provider consoles = owner |
 | TH-02 Postgres retriever in the experiment, manifest fields | merged (manifest part, #32); `--retriever postgres` todo | claude/audit-th-02 | #32 | this PR: manifest `retrieval` block (retriever, embedding, reranker, `kb_snapshot_id` content hash) + limitation note in METODYKA; postgres retriever needs a DB (CI-only tests) |
 | TH-01 attempted-hallucination metric, METODYKA note, A-unguarded ablation | merged (metric + note, #29); ablation todo | claude/audit-th-01 | #29 | metric `attempted_mpn_hallucination_rate` in eval summary, experiment tables/figure, `docs/thesis/METODYKA.md`; A-unguarded ablation = follow-up |
-| TH-03 dataset ingestion with double verification | merged (tooling, #36); dataset ingestion needs owner | claude/audit-th-03 | #36 | this PR: `bomagent_eval.agreement` (per-field agreement + Cohen kappa between two verifiers) and `bomagent_eval.dataset` (SOURCE.md validation, two distinct verifiers for real designs, size strata, control vs real); ingesting >= 6 real designs and the two human verifications = owner |
+| TH-03 dataset ingestion with double verification | in PR (tooling); dataset ingestion needs owner | claude/audit-th-03 | | this PR: `bomagent_eval.agreement` (per-field agreement + Cohen kappa between two verifiers) and `bomagent_eval.dataset` (SOURCE.md validation, two distinct verifiers for real designs, size strata, control vs real); ingesting >= 6 real designs and the two human verifications = owner |
 | TH-06 extra error classes in validation experiment | merged (#33 injector, this PR config + report) | claude/audit-th-06b | #33 | `injection.kinds` in the experiment config, `rule coverage` column and false alarms per rule in the report, `rule_covered` in `detection_by_kind.csv` |
 | TH-04 pre-registration, Holm, cluster bootstrap, effect sizes | merged (#35); freezing the pre-registration = owner | claude/audit-th-04 | #35 | `holm_adjust`, `cluster_bootstrap_ci`, `effect_size` (d_z) in `experiment_stats`; primary family (line F1, attempted hallucination, cost) in the report and `paired.csv`; the note must be frozen (tag `prereg-v1`) by the author before the first real-model run |
 | Run the matrix, chapter 7 figures | needs owner | | | needs real models + dataset |
@@ -126,6 +126,20 @@ Scheduled task `audit-implementation-continue` (hourly, id `trig_0174gXcCFuTekwm
 | UX-06 focus management | merged (#43) | claude/audit-ux-05-06-08 | #43 | ItemPanel focus in/out, Tab trap, aria-live save |
 | UX-07 quota chips, checklist | merged (#51, admin-only chips) | claude/audit-ux-04-07 | #51 | chips for all roles need a backend permission change (authz.py = owner) |
 | UX-08 a11y regression gate | merged (#43, vitest gate) | claude/audit-ux-05-06-08 | #43 | contrast/reduced-motion/lang; Playwright axe not added |
+| ARCH-07 embeddings status in readyz | todo | | | |
+| ARCH-08 wire eu_guard check_environment at gateway start | in PR, needs owner (touches `deploy/*`) | claude/audit-arch-08 | | `check_environment` now covers AWS regions, Azure/Mistral/Bedrock endpoints; gateway image entrypoint runs it before LiteLLM. Image start was not run here (no Docker in the sandbox): check that the base image has `litellm` on PATH and `python` with pydantic/PyYAML, and that bypassing its own entrypoint is fine; signed runtime config in object storage = later |
+| ARCH-09 / DOC-01 as-built section, status files cleanup | todo | | | |
+| ARCH-10 symlink removal, CHANGELOG, tags | todo | | | |
+| OPS-03 bomagent-ops CLI | todo | | | |
+| OPS-07 CI cost / path filters | todo | | | |
+| OPS-08 migration lint + downgrade test | todo | | | |
+| DATA-01 / DATA-02 indexes, TTL sweeps, re-index doc | todo | | | indexes need a migration: PR stays open |
+| QA-03 property tests | todo | | | |
+| UX-04 BOM table sort/filter/virtualise | todo | | | |
+| UX-05 localised error messages | todo | | | |
+| UX-06 focus management | todo | | | |
+| UX-07 quota chips, checklist | todo | | | |
+| UX-08 a11y regression gate | todo | | | |
 | DOC-03 LICENSE / legal drafts | needs owner | | | licence choice and legal review = owner |
 | DOC-04 just doctor, CONTRIBUTING | merged (#42) | claude/audit-doc-04-ops-03-07 | #42 | `just doctor`, CONTRIBUTING.md; static OpenAPI page todo |
 | TH-07 Agent SDK arm decision | needs owner | | | scope decision = owner |
