@@ -53,7 +53,7 @@ def test_shipped_catalogue_is_clean_even_with_everything_enabled():
 
 
 # hosted entries a human verified for the pilot (EU endpoint pinned)
-PILOT_ENABLED = {"mistral-large-eu"}
+PILOT_ENABLED = {"mistral-large-eu", "mistral-embed-eu"}
 
 
 def test_shipped_catalogue_enables_only_local_entries():

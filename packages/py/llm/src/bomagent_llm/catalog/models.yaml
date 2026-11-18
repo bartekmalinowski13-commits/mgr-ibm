@@ -325,6 +325,23 @@ models:
     notes: model-serving on EC2 GPU, behind a feature flag (ADR-0003)
 
   # ---------------------------------------------------------------- embeddings
+  - id: mistral-embed-eu
+    gateway_model: mistral/mistral-embed
+    provider: mistral
+    license_class: closed
+    residency: eu-region
+    capabilities: [embedding]
+    dimensions: 1024
+    cost_in_eur: 0.11
+    cost_out_eur: 0.0
+    price_source_url: https://mistral.ai/pricing
+    price_checked_on: 2026-11-18
+    enabled: true
+    verified: true
+    notes: >-
+      Mistral embeddings via the EU regional endpoint (same key and base as mistral-large-eu).
+      1024 dimensions, matching the kb.chunks vector(1024) column. Price is an approximation
+      (about 0.1 USD per 1M tokens plus the 10% EU surcharge): recheck on the pricing page.
   - id: titan-embed-v2-eu
     gateway_model: bedrock/amazon.titan-embed-text-v2:0
     provider: bedrock
