@@ -113,3 +113,25 @@ async def test_monthly_llm_budget_blocks_new_runs(client, monkeypatch, app_engin
     with pytest.raises(ValueError, match="unknown"):
         async with tenant_transaction(app_engine, uuid.UUID(owner["X-Org-Id"])) as conn:
             await record_usage(conn, gpu_hours=1)
+
+
+async def test_owned_organisation_quota_holds_under_concurrency(client):
+    """Review M-2: concurrent creations must not exceed MAX_OWNED_ORGANIZATIONS."""
+    import asyncio
+
+    s = uuid.uuid4().hex[:6]
+    auth = await _login(client, f"race-{s}")
+    attempts = plans.MAX_OWNED_ORGANIZATIONS + 2  # within the per-IP burst of 5
+    results = await asyncio.gather(
+        *(
+            client.post(
+                "/v1/organizations", headers=auth, json={"name": "x", "slug": f"race{n}-{s}"}
+            )
+            for n in range(attempts)
+        )
+    )
+    codes = sorted(r.status_code for r in results)
+    assert codes.count(201) == plans.MAX_OWNED_ORGANIZATIONS, codes
+    assert codes.count(429) == attempts - plans.MAX_OWNED_ORGANIZATIONS, codes
+    me = (await client.get("/v1/me", headers=auth)).json()
+    assert len(me["organizations"]) == plans.MAX_OWNED_ORGANIZATIONS

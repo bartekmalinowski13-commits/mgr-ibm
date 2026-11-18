@@ -10,12 +10,18 @@ from typing import Any
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from bomagent_api.plans import hit_rate_limit, plan_of, usage_report
+from bomagent_api.plans import (
+    MAX_OWNED_ORGANIZATIONS,
+    hit_rate_limit,
+    plan_of,
+    quota_exceeded,
+    usage_report,
+)
 from bomagent_api.repositories import organizations as repo
 from bomagent_api.samples.seeding import SeedResult, seed_samples
 from bomagent_api.schemas import Organization, OrganizationCreate, SamplesAdded, UsageReport
 from bomagent_common.audit import AuditEvent, emit_audit
-from bomagent_common.db import platform_transaction, tenant_transaction
+from bomagent_common.db import platform_transaction, tenant_transaction, user_transaction
 from bomagent_common.logging import get_logger
 from bomagent_common.problems import ProblemError
 from bomagent_common.tenancy import TenantContext
@@ -38,11 +44,20 @@ async def create_organization(
 ) -> Organization:
     """The caller becomes the owner. Tenant creation runs with the platform role (the
     application role cannot create tenants); the audit event lands in the new tenant in
-    the same transaction."""
+    the same transaction. The owned-organisation quota is re-counted under a per-user
+    advisory lock held until the new membership commits, so concurrent requests cannot
+    exceed it."""
     org_id = uuid.uuid4()
     ctx = TenantContext(tenant_id=org_id, actor_id=sub, roles=frozenset({"owner"}))
     try:
         async with platform_transaction(platform_engine) as conn:
+            await repo.lock_owner(conn, sub)
+            async with user_transaction(engine, sub) as uconn:  # starts after the lock
+                owned = await repo.count_owned(uconn, sub)
+            if owned >= MAX_OWNED_ORGANIZATIONS:
+                raise quota_exceeded(
+                    f"a user can own at most {MAX_OWNED_ORGANIZATIONS} organisations"
+                )
             await repo.create_with_owner(
                 conn,
                 org_id=org_id,
