@@ -387,3 +387,36 @@ async def test_no_email_without_base_url(app_engine, platform_engine) -> None:
     owner = await env.org(await env.login("nomail-owner"), "nomail-org")
     assert (await env.invite(owner, "n@x.eu", ["viewer"])).status_code == 201
     assert mailer.sent == []
+
+
+@pytest.mark.parametrize(
+    "name", ["Acme\r\nBcc: x@evil.example", "Acme\nX", "Acme\x00", "A\u2028B", "A\x7fB"]
+)
+async def test_organisation_names_reject_control_characters(env, name) -> None:
+    """Review M-1: names go into e-mail headers; control characters are a 422, not a 500."""
+    auth = await env.login(f"ctl-{uuid.uuid4().hex[:8]}")
+    resp = await env.c.post(
+        "/v1/organizations",
+        headers=auth,
+        json={"name": name, "slug": f"ctl-{uuid.uuid4().hex[:8]}"},
+    )
+    assert resp.status_code == 422, resp.text
+
+
+async def test_unexpected_mailer_error_keeps_the_invitation_and_audits_failure(
+    app_engine, platform_engine
+) -> None:
+    class Broken:
+        async def send(self, mail) -> None:
+            raise ValueError("Header values may not contain linefeed or carriage return")
+
+    env = Env(app_engine, platform_engine)
+    env.app.state.mailer = Broken()
+    env.app.state.invite_base_url = "https://app.example.eu"
+    owner = await env.org(await env.login("brokenmail-owner"), "brokenmail-org")
+    resp = await env.invite(owner, "b@x.eu", ["viewer"])
+    assert resp.status_code == 201, resp.text
+    assert resp.json()["token"]
+    events = (await env.c.get("/v1/audit-events?limit=100", headers=owner)).json()["items"]
+    emailed = [e for e in events if e["action"] == "member.invitation_emailed"]
+    assert [e["after"]["outcome"] for e in emailed] == ["failed"]

@@ -233,6 +233,9 @@ async def _send_invitation_email(
     except MailError as exc:
         outcome = "failed"
         log.warning("invitation.email_failed", invitation_id=str(inv_id), error=str(exc))
+    except Exception as exc:  # the invitation is committed: any mailer bug is a failed send
+        outcome = "failed"
+        log.warning("invitation.email_failed", invitation_id=str(inv_id), error=type(exc).__name__)
     async with tenant_transaction(engine) as conn:
         await emit_audit(
             conn,
