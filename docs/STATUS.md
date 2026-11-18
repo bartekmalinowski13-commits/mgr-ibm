@@ -4,6 +4,13 @@
 
 _Updated by Claude Code after every milestone (see `docs/prompts/CLAUDE_CODE_MASTER_PROMPT.md` §5)._
 
+## 2026-11-18 - deployed to the pilot (Fly release v9)
+
+- Deployed `main` at `f704a8f` to `mgr-ibm-bomagent` (Fly, `fra`, one machine) as release v9 (previous: v8). The release command applied the migrations up to **0016** (0015 SECURITY DEFINER `create_organization`, 0016 concurrent indexes) without errors.
+- Checked: machine `started`, health check passing, `/readyz` ok (`llm` and `embeddings` = `gateway`, not `fake`), `/config.json` lists providers `google` and `azure`. No backup or PITR was taken before the migrations (owner's decision); rollback would be `alembic downgrade 0014` or `fly deploy --image` of the v8 image.
+- Not yet checked: onboarding end to end (new organisation + Google sign-in; owner to do in the browser).
+- #28 (process groups) and #37 (gateway entrypoint) are still open and not deployed.
+
 ## 2026-11-17 - audit PRs merged, Mistral enabled in the catalogue
 
 - Merged on request of the owner: migrations 0015 (SECURITY DEFINER `tenancy.create_organization`, the platform role loses direct INSERT on tenants and memberships) and 0016 (concurrent indexes), the Supabase access-token hook SQL and runbook, step-up MFA (`BOMAGENT_MFA_ENFORCED`, off by default), SSO hardening (discovery as POST: the web app and API ship in one image and must be deployed together), the rest of the ARCH-04 service/repository layers, and the downgrade round-trip test with the fixes it needed (revisions 0010 and 0003).
