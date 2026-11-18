@@ -17,6 +17,7 @@ from typing import Any
 import yaml
 
 from bomagent_llm.catalog import Catalog, ModelSpec, load_catalog
+from bomagent_llm.chat import CALL_TIMEOUT_MAX_S
 from bomagent_llm.eu_guard import (
     MISTRAL_EU_BASE,
     assert_eu_only,
@@ -68,7 +69,16 @@ def render(catalog: Catalog, *, region: str) -> dict[str, Any]:
     ]
     config = {
         "model_list": entries,
-        "litellm_settings": {"drop_params": True, "telemetry": False, "request_timeout": 120},
+        "litellm_settings": {
+            "drop_params": True,
+            "telemetry": False,
+            # upper bound of the per-request ``timeout`` the app sends (``call_timeout_s``)
+            "request_timeout": int(CALL_TIMEOUT_MAX_S),
+            # the app retries transient failures itself; gateway retries on top of that
+            # repeated long (paid) generations up to 3x before the app saw an error
+            "num_retries": 0,
+        },
+        "router_settings": {"num_retries": 0},
         "general_settings": {"master_key": "os.environ/LITELLM_MASTER_KEY"},
     }
     # fail closed: a non-EU region, profile or endpoint must never reach the gateway

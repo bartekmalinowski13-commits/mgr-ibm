@@ -28,8 +28,9 @@ class Settings(ServiceSettings):
     llm_gateway_url: str | None = None
     llm_gateway_key: str | None = None
     embedding_model: str = "fake-embedding"
-    #: a running run idle for this long is resumed from its checkpoint on redelivery
-    run_resume_stale_s: float = 300.0
+    #: a running run idle for this long is resumed from its checkpoint on redelivery; must
+    #: exceed the longest single LLM call (``bomagent_llm.chat.CALL_TIMEOUT_MAX_S``)
+    run_resume_stale_s: float = 1200.0
     run_max_resumes: int = 3
     #: size cap of the ``runs.trace`` column in bytes (0 = off); ``trace.json`` stays complete
     run_trace_max_bytes: int = DEFAULT_TRACE_MAX_BYTES

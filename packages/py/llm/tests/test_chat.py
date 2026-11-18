@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import dataclasses
 import json
 
 import httpx
@@ -192,3 +193,61 @@ async def test_cassette_replays_recorded_usage(tmp_path):
     )
     result = await FakeChat(lambda r: {}, cassette_dir=tmp_path).complete(req)
     assert (result.usage.input_tokens, result.usage.output_tokens) == (1234, 56)
+
+
+def test_call_timeout_grows_with_max_tokens_and_is_capped():
+    from bomagent_llm.chat import CALL_TIMEOUT_MAX_S, call_timeout_s
+
+    assert call_timeout_s(1024) < call_timeout_s(8_000) < call_timeout_s(16_000)
+    assert call_timeout_s(8_000) >= 300  # validate: ~8k tokens at a slow provider rate
+    assert call_timeout_s(1_000_000) == CALL_TIMEOUT_MAX_S
+
+
+async def test_gateway_chat_passes_a_per_call_timeout_sized_to_max_tokens():
+    from bomagent_llm.chat import call_timeout_s
+
+    seen: dict[str, object] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["body"] = json.loads(request.content)
+        seen["read"] = request.extensions["timeout"]["read"]
+        return httpx.Response(
+            200,
+            json={
+                "choices": [{"message": {"content": '{"mpn": "X"}'}}],
+                "usage": {"prompt_tokens": 1, "completion_tokens": 1},
+            },
+        )
+
+    chat = GatewayChat(
+        "http://gw",
+        "k",
+        client=httpx.AsyncClient(transport=httpx.MockTransport(handler), base_url="http://gw"),
+    )
+    await chat.complete(dataclasses.replace(_request(), max_tokens=8_000))
+    # the gateway gets the same budget (LiteLLM per-request ``timeout``); the client waits a
+    # little longer so the gateway's answer (or its timeout error) arrives first
+    assert seen["body"]["timeout"] == call_timeout_s(8_000)
+    assert seen["read"] > call_timeout_s(8_000)
+
+
+@pytest.mark.parametrize("failure", ["read_timeout", "status_408"])
+async def test_a_timed_out_generation_is_not_repeated(failure):
+    """Retrying a call that ran out of time repeats the same long (paid) generation."""
+    calls = {"n": 0}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls["n"] += 1
+        if failure == "read_timeout":
+            raise httpx.ReadTimeout("slow", request=request)
+        return httpx.Response(408, json={"error": "timeout"})
+
+    chat = GatewayChat(
+        "http://gw",
+        "k",
+        backoff_s=0.0,
+        client=httpx.AsyncClient(transport=httpx.MockTransport(handler), base_url="http://gw"),
+    )
+    with pytest.raises(LlmError, match=r"timed out|408"):
+        await chat.complete(_request())
+    assert calls["n"] == 1

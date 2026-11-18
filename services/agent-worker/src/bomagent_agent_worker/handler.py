@@ -74,8 +74,9 @@ class RunWorker:
     retriever_factory: Callable[[uuid.UUID, str | None], Retriever] | None = None
     allow_unregistered: bool = False
     #: a ``running`` run without a checkpoint/state write for this long is taken to have lost
-    #: its worker and is resumed on redelivery (must exceed the longest single step)
-    resume_stale_after_s: float = 300.0
+    #: its worker and is resumed on redelivery (must exceed the longest single step: one LLM
+    #: call may take up to ``bomagent_llm.chat.CALL_TIMEOUT_MAX_S``)
+    resume_stale_after_s: float = 1200.0
     max_resumes: int = 3
     #: size cap of ``runs.trace`` (DATA-01/02); the full trace stays in ``trace.json``
     trace_max_bytes: int = DEFAULT_TRACE_MAX_BYTES

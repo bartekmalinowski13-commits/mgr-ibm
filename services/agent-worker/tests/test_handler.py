@@ -430,3 +430,12 @@ async def test_run_that_keeps_dying_is_failed_after_the_resume_limit(app_engine,
     assert status == "failed"
     assert error is not None
     assert "run.failed" in actions
+
+
+def test_a_run_is_not_taken_for_dead_while_one_long_llm_call_is_in_flight():
+    """The run's heartbeat is written between steps; a single chat call may legitimately take
+    up to the per-call budget (``CALL_TIMEOUT_MAX_S``), so the stale threshold must exceed it."""
+    from bomagent_llm.chat import CALL_TIMEOUT_MAX_S
+
+    assert RunWorker.resume_stale_after_s > CALL_TIMEOUT_MAX_S
+    assert Settings.model_fields["run_resume_stale_s"].default > CALL_TIMEOUT_MAX_S

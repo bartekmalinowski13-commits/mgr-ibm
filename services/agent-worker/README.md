@@ -18,7 +18,7 @@ Run tables, progress streaming (SSE) and run status in the API come with M4.
 health-only mode.
 
 **Resume (ARCH-05):** a redelivered `run.requested` for a run still `running` whose last
-checkpoint/state write is older than `BOMAGENT_RUN_RESUME_STALE_S` (default 300 s) is taken
+checkpoint/state write is older than `BOMAGENT_RUN_RESUME_STALE_S` (default 1200 s, above the longest single LLM call) is taken
 over (compare-and-swap on `started_at`, audit `run.resumed`) and continued from the last
 checkpoint; a younger one raises `RunInProgressError` (not acked, retried later). After
 `BOMAGENT_RUN_MAX_RESUMES` (3) resumes the run is failed. The final audit event and the
