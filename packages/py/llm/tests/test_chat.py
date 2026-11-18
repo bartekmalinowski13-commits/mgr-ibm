@@ -251,3 +251,37 @@ async def test_a_timed_out_generation_is_not_repeated(failure):
     with pytest.raises(LlmError, match=r"timed out|408"):
         await chat.complete(_request())
     assert calls["n"] == 1
+
+
+async def test_reasoning_models_get_room_for_their_thinking_tokens():
+    """Mistral Large 4 thinks before it answers and the thinking counts against
+    ``max_tokens``: a 1024-token MPN answer was cut off mid-JSON ("non-JSON response")."""
+    from bomagent_llm.chat import call_timeout_s
+
+    seen: dict[str, object] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.update(json.loads(request.content))
+        return httpx.Response(
+            200,
+            json={
+                "choices": [{"message": {"content": '{"mpn": "X"}'}}],
+                "usage": {"prompt_tokens": 1, "completion_tokens": 1},
+            },
+        )
+
+    chat = GatewayChat(
+        "http://gw",
+        "k",
+        client=httpx.AsyncClient(transport=httpx.MockTransport(handler), base_url="http://gw"),
+    )
+    thinking = load_catalog().get("fake-closed").model_copy(update={"reasoning_tokens": 4096})
+    await chat.complete(dataclasses.replace(_request(), model=thinking, max_tokens=1024))
+    assert seen["max_tokens"] == 1024 + 4096
+    assert seen["timeout"] == call_timeout_s(1024 + 4096)
+
+
+def test_the_mistral_large_entry_is_pinned_and_reserves_reasoning_tokens():
+    spec = load_catalog().get("mistral-large-eu")
+    assert not spec.gateway_model.endswith("-latest")  # experiments need a fixed model
+    assert spec.reasoning_tokens >= 4096

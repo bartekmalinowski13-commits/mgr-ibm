@@ -208,12 +208,14 @@ class GatewayChat:
             await asyncio.sleep(min(max(self._backoff * 2 ** (attempt - 1), retry_after), 30.0))
 
     async def complete(self, request: ChatRequest) -> ChatResult:
-        budget_s = call_timeout_s(request.max_tokens)
+        # a reasoning model's thinking counts against max_tokens: reserve room for it
+        max_tokens = request.max_tokens + request.model.reasoning_tokens
+        budget_s = call_timeout_s(max_tokens)
         body = {
             "model": request.model.gateway_model,
             "messages": [{"role": m.role, "content": m.content} for m in request.messages],
             "temperature": request.temperature,
-            "max_tokens": request.max_tokens,
+            "max_tokens": max_tokens,
             "response_format": {
                 "type": "json_schema",
                 "json_schema": {

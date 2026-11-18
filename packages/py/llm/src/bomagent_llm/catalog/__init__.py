@@ -32,6 +32,9 @@ class ModelSpec(BaseModel):
     capabilities: list[str] = Field(default_factory=list)
     tier: Literal["fast", "balanced", "strong"] | None = None
     dimensions: int | None = None
+    #: reasoning models think before they answer and the provider counts those tokens in
+    #: ``max_tokens``: the gateway client adds this reserve so the answer is not cut off
+    reasoning_tokens: int = Field(default=0, ge=0)
     cost_in_eur: float = 0.0  # per 1M input tokens
     cost_out_eur: float = 0.0  # per 1M output tokens
     price_source_url: str | None = None  # provider price list the costs were taken from

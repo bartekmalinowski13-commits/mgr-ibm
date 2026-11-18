@@ -77,7 +77,7 @@ Przybliżony koszt do eksperymentu: **ok. 20-60 EUR** (patrz szacunek w rozdzial
 
 ### 2.4 Które modele
 
-Katalog w repozytorium używa wpisu `mistral-large-eu` z identyfikatorem `mistral/mistral-large-latest`. Aktualne modele wg <https://docs.mistral.ai/models/overview>: **Mistral Large 4** (open-weight), **Mistral Small 4**, **Ministral 3** (14B/8B/3B). Dokładne identyfikatory API sprawdź poleceniem (po wpięciu klucza do zmiennej w terminalu, nie w czacie):
+Katalog w repozytorium używa wpisu `mistral-large-eu` z przypiętym identyfikatorem `mistral/mistral-large-4-0` (model rozumujący: tokeny „myślenia” liczą się do `max_tokens` i do kosztu). Aktualne modele wg <https://docs.mistral.ai/models/overview>: **Mistral Large 4** (open-weight), **Mistral Small 4**, **Ministral 3** (14B/8B/3B). Dokładne identyfikatory API sprawdź poleceniem (po wpięciu klucza do zmiennej w terminalu, nie w czacie):
 
 ```bash
 curl https://api.eu.mistral.ai/v1/models -H "Authorization: Bearer $MISTRAL_API_KEY"

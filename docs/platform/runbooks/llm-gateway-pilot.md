@@ -30,7 +30,8 @@ without a gateway unless `BOMAGENT_ALLOW_FAKE_LLM=true`.
    <https://docs.mistral.ai/inference/regional-inference>) and covers **inference only** -
    account, billing and console data are not covered by it. Note the exact model id from
    `GET https://api.eu.mistral.ai/v1/models` (the catalogue uses
-   `mistral/mistral-large-latest`; pin an exact id if you prefer) and check the key works
+   `mistral/mistral-large-4-0`, a reasoning model - see `reasoning_tokens` in the catalogue)
+   and check the key works
    against the EU endpoint.
 2. **Azure OpenAI (OpenAI models).** In the Azure portal create an *Azure OpenAI* /
    Foundry resource in an EU region (`swedencentral`, `francecentral` or
