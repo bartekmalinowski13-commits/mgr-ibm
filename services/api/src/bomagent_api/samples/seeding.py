@@ -28,7 +28,7 @@ from bomagent_common.messaging import Message, Queue
 from bomagent_common.metering import record_usage
 from bomagent_common.outbox import deliver, enqueue
 from bomagent_common.storage import ObjectStore, tenant_key
-from bomagent_common.tenancy import TenantContext
+from bomagent_common.tenancy import TenantContext, tenant_scope
 
 log = get_logger(__name__)
 
@@ -48,7 +48,24 @@ async def seed_samples(
     trigger: str,
 ) -> SeedResult:
     """Add every missing sample to the organisation of ``ctx``; audited as
-    ``org.samples_seeded`` when anything was added."""
+    ``org.samples_seeded`` when anything was added.
+
+    Activates ``ctx`` itself: at organisation creation no request-level tenant scope exists
+    (the caller is not a member yet), and the tenant-enforcing object store refuses keys
+    without one. Entering the scope inside the coroutine also covers the copy of the
+    context that ``asyncio.create_task`` runs it in."""
+    with tenant_scope(ctx):
+        return await _seed(ctx, engine=engine, store=store, queues=queues, trigger=trigger)
+
+
+async def _seed(
+    ctx: TenantContext,
+    *,
+    engine: AsyncEngine,
+    store: ObjectStore,
+    queues: dict[str, Queue],
+    trigger: str,
+) -> SeedResult:
     result = SeedResult()
     outbox_ids: list[uuid.UUID] = []
     for sample in SAMPLES:

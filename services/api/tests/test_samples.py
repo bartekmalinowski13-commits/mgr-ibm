@@ -83,7 +83,8 @@ pg = pytest.mark.integration
 
 class Env:
     def __init__(self, app_engine, platform_engine, **settings) -> None:
-        self.store = InMemoryObjectStore(enforce_tenant=False)
+        # tenant-enforcing like make_object_store in deployed environments (review I-3)
+        self.store = InMemoryObjectStore()
         self.queues = {"ingest": InMemoryQueue(), "runs": InMemoryQueue()}
         self.engine = app_engine
         self.app = create_app(
