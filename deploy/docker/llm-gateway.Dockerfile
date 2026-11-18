@@ -31,4 +31,4 @@ COPY --from=render --chmod=0444 /config.yaml /app/config.yaml
 ENV LITELLM_LOCAL_MODEL_COST_MAP=True HOME=/tmp
 USER 10001:10001
 EXPOSE 4000
-CMD ["--config", "/app/config.yaml", "--port", "4000", "--num_workers", "1"]
+CMD ["--config", "/app/config.yaml", "--host", "::", "--port", "4000", "--num_workers", "1"]
