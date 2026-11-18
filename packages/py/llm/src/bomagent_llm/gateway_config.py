@@ -41,6 +41,10 @@ def _entry(model: ModelSpec, region: str) -> dict[str, Any] | None:
             params["api_base"] = f"os.environ/{base}"
         elif model.provider == "mistral":
             params["api_base"] = MISTRAL_EU_BASE  # not the default api.mistral.ai
+            # Mistral rejects temperature=0 ("greedy sampling") unless top_p is 1; the app asks
+            # for temperature 0 (reproducible experiments), so make top_p 1 the default here.
+            if "chat" in model.capabilities:  # not for embeddings, which take no sampling params
+                params["top_p"] = 1
     else:  # local, self-hosted or unknown providers are not served by the cloud gateway
         return None
     info: dict[str, Any] = {

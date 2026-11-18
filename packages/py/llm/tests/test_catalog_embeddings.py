@@ -13,7 +13,7 @@ def test_catalogue_is_eu_only_and_real_models_start_disabled():
     cat = load_catalog()
     assert {m.residency for m in cat.models} <= {"eu-region", "eu-geo", "local"}
     for m in cat.models:
-        if m.provider not in {"fake"} and m.id != "mistral-large-eu":
+        if m.provider not in {"fake"} and m.id not in {"mistral-large-eu", "mistral-embed-eu"}:
             assert not (m.enabled and m.verified), f"{m.id} must be verified by a human first"
     assert {m.license_class for m in cat.models} == {LicenseClass.CLOSED, LicenseClass.OPEN_WEIGHT}
 
@@ -28,7 +28,7 @@ def test_get_and_enabled_filters():
         cat.get("gpt-global")
     with pytest.raises(ModelNotAllowedError, match="local development"):
         cat.get("fake-closed", allow_local=False)
-    assert [m.id for m in cat.enabled("embedding")] == ["fake-embedding"]
+    assert [m.id for m in cat.enabled("embedding")] == ["fake-embedding", "mistral-embed-eu"]
 
 
 def test_cost():
