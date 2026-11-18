@@ -569,5 +569,11 @@
     "noChanges": "No differences between these versions.",
     "added": "Line {{line}} added",
     "removed": "Line {{line}} removed"
+  },
+  "httpErrors": {
+    "413": "The file is too large for the server to accept. Upload a smaller file or split the project into parts.",
+    "429": "Too many requests in a short time. Wait a moment and try again.",
+    "5xx": "The server is temporarily unavailable. Try again in a moment.",
+    "generic": "The request failed (HTTP {{status}}). Try again; if it keeps failing, contact your administrator."
   }
 }

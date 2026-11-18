@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ApiError, createApiClient, idempotencyKey, unwrap } from "./index";
+import { ApiError, createApiClient, idempotencyKey, toProblem, unwrap } from "./index";
 
 describe("api client", () => {
   it("sends bearer token and organisation header, unwraps data", async () => {
@@ -37,5 +37,39 @@ describe("api client", () => {
     const result = await client.GET("/v1/me");
     expect(() => unwrap(result)).toThrow(ApiError);
     expect(idempotencyKey()).toMatch(/^[0-9a-f-]{36}$/);
+  });
+
+  it.each([
+    ["an HTML gateway page", "<html>502 Bad Gateway</html>", "text/html", 502],
+    ["an empty body", "", "text/plain", 503],
+    ["plain JSON without a type", JSON.stringify({ message: "too big" }), "application/json", 413],
+  ])("normalises %s into an RFC 9457 problem", async (_name, body, type, status) => {
+    const client = createApiClient({
+      baseUrl: "https://api.example.eu",
+      getToken: () => "tok",
+      fetch: async () => new Response(body, { status, headers: { "content-type": type } }),
+    });
+    const result = await client.GET("/v1/me");
+    let caught: unknown;
+    try {
+      unwrap(result);
+    } catch (err) {
+      caught = err;
+    }
+    expect(caught).toBeInstanceOf(ApiError);
+    const problem = (caught as ApiError).problem;
+    expect(problem.type).toBe("about:blank");
+    expect(problem.status).toBe(status);
+    expect(typeof problem.title).toBe("string");
+  });
+
+  it("keeps a real problem body as it is", () => {
+    const real = { type: "https://bomagent.eu/problems/x", title: "X", status: 409, detail: "d" };
+    expect(toProblem(409, "Conflict", real)).toEqual(real);
+    expect(toProblem(500, "", undefined)).toEqual({
+      type: "about:blank",
+      title: "HTTP 500",
+      status: 500,
+    });
   });
 });

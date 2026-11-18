@@ -577,5 +577,11 @@
     "noChanges": "Brak różnic między tymi wersjami.",
     "added": "Dodano pozycję {{line}}",
     "removed": "Usunięto pozycję {{line}}"
+  },
+  "httpErrors": {
+    "413": "Plik jest za duży, by serwer go przyjął. Wgraj mniejszy plik albo podziel projekt na części.",
+    "429": "Zbyt wiele żądań w krótkim czasie. Odczekaj chwilę i spróbuj ponownie.",
+    "5xx": "Serwer jest chwilowo niedostępny. Spróbuj ponownie za chwilę.",
+    "generic": "Żądanie nie powiodło się (HTTP {{status}}). Spróbuj ponownie; jeśli błąd się powtarza, skontaktuj się z administratorem."
   }
 }
