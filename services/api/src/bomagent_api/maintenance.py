@@ -23,7 +23,7 @@ from bomagent_common.audit import AuditEvent, emit_audit
 from bomagent_common.audit_anchor import AnchorSink, export_anchor
 from bomagent_common.db import platform_transaction, tenant_transaction
 from bomagent_common.logging import get_logger
-from bomagent_common.messaging import Queue
+from bomagent_common.messaging import QUEUE_VISIBILITY_S, RUN_RESUME_STALE_S, Queue
 from bomagent_common.outbox import cleanup_sent, deliver
 from bomagent_common.tenancy import TenantContext
 
@@ -32,6 +32,11 @@ OUTBOX_GRACE_S = 30.0  # requests deliver their own messages first
 ANCHOR_TIMEOUT_S = 15.0
 RATE_WINDOW_TTL_S = 3600.0  # windows are one minute long; an hour is far past any retry
 IDEMPOTENCY_TTL_S = 24 * 3600.0  # a retry after a day is a new request (SEC-17)
+#: a running run is never reaped within this long of its start/takeover: a worker killed
+#: without handing its message back leaves it invisible for the runs queue's visibility
+#: timeout, and the redelivery takes the run over once it has been idle for the resume
+#: threshold - the reaper must not fall due in that same window (+ a sweep's margin)
+RUNNING_REAP_GRACE_S = QUEUE_VISIBILITY_S["runs"] + RUN_RESUME_STALE_S + 300.0
 _anchored: dict[uuid.UUID, date] = {}  # tenant -> day its anchor was written (this process)
 
 
@@ -41,8 +46,9 @@ async def reap_stuck_runs(engine: AsyncEngine, tenant_id: uuid.UUID, timeout_s: 
     ``failed`` - otherwise they would hold the tenant's concurrent-run quota for good.
 
     A running run's idle time counts from its start, takeover or last checkpoint, whichever
-    is latest: an interrupted run is resumed after ``resume_stale_after_s`` (20 min) idle, so
-    the reaper never races that takeover, and a run that still checkpoints is not killed."""
+    is latest, and it is never reaped within ``RUNNING_REAP_GRACE_S`` of its start/takeover:
+    an interrupted run is redelivered and resumed first, and a run that still checkpoints is
+    not killed."""
     ctx = TenantContext(tenant_id=tenant_id, actor_id="maintenance", actor_type="system")
     async with tenant_transaction(engine, tenant_id) as conn:
         reaped = (
@@ -51,7 +57,7 @@ async def reap_stuck_runs(engine: AsyncEngine, tenant_id: uuid.UUID, timeout_s: 
                     "UPDATE runs.runs SET status = 'failed', finished_at = now(),"
                     " error = 'TimeoutError: run did not finish in time'"
                     " WHERE (status = 'running'"
-                    " AND started_at < now() - make_interval(secs => :t)"
+                    " AND started_at < now() - make_interval(secs => greatest(:t, :g))"
                     " AND NOT EXISTS (SELECT 1 FROM runs.graph_checkpoints c"
                     "  WHERE c.run_id = runs.runs.id"
                     "  AND c.created_at >= now() - make_interval(secs => :t)))"
@@ -59,7 +65,7 @@ async def reap_stuck_runs(engine: AsyncEngine, tenant_id: uuid.UUID, timeout_s: 
                     " AND created_at < now() - make_interval(secs => :t))"
                     " RETURNING id, variant"
                 ),
-                {"t": timeout_s},
+                {"t": timeout_s, "g": RUNNING_REAP_GRACE_S},
             )
         ).all()
         for run_id, _variant in reaped:

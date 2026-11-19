@@ -237,3 +237,37 @@ async def test_sqs_release_makes_the_message_visible_again(ctx, monkeypatch):
         await queue.release(item, 0)
         (again,) = await queue.receive(wait_seconds=0)
         assert again.message.message_id == item.message.message_id
+
+
+async def test_heartbeat_extends_visibility_while_the_handler_runs(ctx):
+    queue = InMemoryQueue()
+    await queue.send(Message.create("x.y", ctx))
+    extended: list[float] = []
+
+    async def extend(received, seconds):
+        extended.append(seconds)
+
+    queue.extend = extend  # type: ignore[method-assign]
+
+    async def slow(_: Message) -> None:
+        await asyncio.sleep(0.2)
+
+    (item,) = await queue.receive()
+    assert await process_one(queue, item, slow, heartbeat_s=0.05, extend_s=900)
+    assert len(extended) >= 2
+    assert set(extended) == {900}
+    assert len(queue) == 0  # extended, not released: nothing came back
+
+
+async def test_retry_later_is_released_without_counting_a_receive(ctx):
+    queue = InMemoryQueue(max_receive_count=2)
+    await queue.send(Message.create("x.y", ctx))
+
+    async def busy(_: Message) -> None:
+        raise RetryLaterError("alive", retry_after_s=0)
+
+    for _ in range(5):
+        (item,) = await queue.receive()
+        assert not await process_one(queue, item, busy)
+    queue.nack_all()
+    assert queue.dead_letters == []

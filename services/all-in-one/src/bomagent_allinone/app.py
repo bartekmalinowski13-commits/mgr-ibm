@@ -39,7 +39,15 @@ from bomagent_api.app import require_https
 from bomagent_common.config import QueueBackend
 from bomagent_common.db import make_engine
 from bomagent_common.logging import get_logger
-from bomagent_common.messaging import Handler, PostgresQueue, Queue, consume_forever, make_queue
+from bomagent_common.messaging import (
+    RUNS_EXTEND_S,
+    RUNS_HEARTBEAT_S,
+    Handler,
+    PostgresQueue,
+    Queue,
+    consume_forever,
+    make_queue,
+)
 from bomagent_common.problems import ProblemError, problem_response
 from bomagent_common.shutdown import shutdown_of
 from bomagent_common.storage import InMemoryObjectStore, ObjectStore, make_object_store
@@ -314,6 +322,8 @@ class _Workers:
                         max_messages=1,  # slow handlers: see consume_forever
                         # an interrupted run comes back when it can be taken over (resume)
                         release_delay_s=RELEASE_DELAY_S.get(name, 0.0),
+                        heartbeat_s=RUNS_HEARTBEAT_S if name == "runs" else None,
+                        extend_s=RUNS_EXTEND_S,
                     ),
                     name=f"consumer-{name}",
                 )

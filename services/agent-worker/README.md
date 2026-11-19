@@ -29,8 +29,13 @@ audit event and the trace carry the resume record.
 run may continue for `BOMAGENT_CONSUMER_STOP_GRACE_S` (default 20 s, inside ECS's 30 s stop
 timeout), then it is cancelled and its message released with a delay of
 `BOMAGENT_RUN_RESUME_STALE_S`, so it is taken over and resumed as soon as it counts as stale.
-The API's reaper fails a `running` run only after `run_timeout_s` (1 h) without a start,
-takeover or checkpoint, so it never races that resume. Limit without a migration: no
+While a run is alive its message is kept invisible (extended to 15 min every 5 min), so a run
+longer than the 1 h visibility timeout is never redelivered; hand-backs (shutdown, a
+`RetryLaterError` for a run still alive elsewhere) do not count towards dead-lettering on the
+Postgres queue (SQS cannot take a receive back: its redrive `maxReceiveCount`, 5 in the data
+stack, bounds hand-backs). The API's reaper fails a `running` run only after `run_timeout_s`
+(1 h) without a start, takeover or checkpoint, and never within visibility timeout + resume
+threshold (+5 min) of its start, so a redelivery after a hard kill is resumed first. Limit without a migration: no
 heartbeat column (liveness is the newest `runs.graph_checkpoints.created_at`).
 
 **Trace size cap (DATA-01/02):** the complete trace is always written to `trace.json` in

@@ -45,7 +45,7 @@ from bomagent_common import metrics
 from bomagent_common.audit import AuditEvent, emit_audit
 from bomagent_common.db import tenant_transaction
 from bomagent_common.logging import get_logger
-from bomagent_common.messaging import Message, RetryLaterError
+from bomagent_common.messaging import RUN_RESUME_STALE_S, Message, RetryLaterError
 from bomagent_common.metering import record_usage
 from bomagent_common.storage import ObjectStore, key_belongs_to, tenant_key
 from bomagent_kb import KnowledgeBase
@@ -98,7 +98,7 @@ class RunWorker:
     #: a ``running`` run without a checkpoint/state write for this long is taken to have lost
     #: its worker and is resumed on redelivery (must exceed the longest single step: one LLM
     #: call may take up to ``bomagent_llm.chat.CALL_TIMEOUT_MAX_S``)
-    resume_stale_after_s: float = 1200.0
+    resume_stale_after_s: float = RUN_RESUME_STALE_S
     max_resumes: int = 3
     #: size cap of ``runs.trace`` (DATA-01/02); the full trace stays in ``trace.json``
     trace_max_bytes: int = DEFAULT_TRACE_MAX_BYTES

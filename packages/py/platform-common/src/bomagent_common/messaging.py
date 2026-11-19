@@ -85,9 +85,17 @@ class Queue(Protocol):
         self, *, max_messages: int = 10, wait_seconds: int = 10
     ) -> list[Received]: ...
     async def ack(self, received: Received) -> None: ...
-    async def release(self, received: Received, delay_s: float) -> None:
+    async def release(
+        self, received: Received, delay_s: float, *, count_receive: bool = True
+    ) -> None:
         """Make an unacknowledged message visible again after ``delay_s`` (instead of the
-        rest of the visibility timeout); a stale receipt is ignored."""
+        rest of the visibility timeout); a stale receipt is ignored. ``count_receive=False``
+        (a hand-back, not a failure) takes this receive off the dead-letter count where the
+        backend can (Postgres, in memory; SQS always counts)."""
+        ...
+
+    async def extend(self, received: Received, seconds: float) -> None:
+        """Keep a message that is still being processed invisible for ``seconds`` more."""
         ...
 
 
@@ -127,12 +135,19 @@ class InMemoryQueue:
     async def ack(self, received: Received) -> None:
         self._inflight.pop(received.receipt, None)
 
-    async def release(self, received: Received, delay_s: float) -> None:
+    async def release(
+        self, received: Received, delay_s: float, *, count_receive: bool = True
+    ) -> None:
         """Back to the queue at once (no clock here); the delay is recorded."""
         msg = self._inflight.pop(received.receipt, None)
         if msg is not None:
             self.released.append((msg.message_id, delay_s))
+            if not count_receive:
+                self._receives[msg.message_id] -= 1
             self._items.append(msg)
+
+    async def extend(self, received: Received, seconds: float) -> None:
+        """No clock here: an in-flight message stays in flight until acked or nacked."""
 
     def nack_all(self) -> None:
         """Simulate visibility timeout expiry of unacknowledged messages."""
@@ -189,12 +204,19 @@ class SqsQueue:
             self._client.delete_message, QueueUrl=self._url, ReceiptHandle=received.receipt
         )
 
-    async def release(self, received: Received, delay_s: float) -> None:
+    async def release(
+        self, received: Received, delay_s: float, *, count_receive: bool = True
+    ) -> None:
+        # SQS cannot take a receive back: the redrive maxReceiveCount (infra) must allow
+        # the hand-backs (RetryLater) of a resumed run
+        await self.extend(received, delay_s)
+
+    async def extend(self, received: Received, seconds: float) -> None:
         await asyncio.to_thread(
             self._client.change_message_visibility,
             QueueUrl=self._url,
             ReceiptHandle=received.receipt,
-            VisibilityTimeout=min(int(max(delay_s, 0)), SQS_MAX_VISIBILITY_S),
+            VisibilityTimeout=min(int(max(seconds, 0)), SQS_MAX_VISIBILITY_S),
         )
 
 
@@ -323,16 +345,31 @@ class PostgresQueue:
                 {"i": uuid.UUID(row_id), "r": uuid.UUID(receipt)},
             )
 
-    async def release(self, received: Received, delay_s: float) -> None:
+    async def release(
+        self, received: Received, delay_s: float, *, count_receive: bool = True
+    ) -> None:
+        await self._set_visible(received, delay_s, uncount=not count_receive)
+
+    async def extend(self, received: Received, seconds: float) -> None:
+        await self._set_visible(received, seconds, uncount=False)
+
+    async def _set_visible(self, received: Received, delay_s: float, *, uncount: bool) -> None:
         row_id, receipt = received.receipt.split(":", 1)
         async with platform_transaction(self._engine("consumer")) as conn:
             await conn.execute(
                 text(
                     "UPDATE app.queue_messages"
-                    " SET visible_at = clock_timestamp() + make_interval(secs => :d)"
+                    " SET visible_at = clock_timestamp() + make_interval(secs => :d),"
+                    " receive_count = CASE WHEN :u THEN greatest(receive_count - 1, 0)"
+                    " ELSE receive_count END"
                     " WHERE id = :i AND receipt = :r AND dead_at IS NULL"
                 ),
-                {"i": uuid.UUID(row_id), "r": uuid.UUID(receipt), "d": max(delay_s, 0.0)},
+                {
+                    "i": uuid.UUID(row_id),
+                    "r": uuid.UUID(receipt),
+                    "d": max(delay_s, 0.0),
+                    "u": uncount,
+                },
             )
 
     async def dead_letter_count(self) -> int:
@@ -363,6 +400,15 @@ class PostgresQueue:
 #: same visibility timeouts and redrive count as the SQS queues in AWS (infra data stack)
 QUEUE_VISIBILITY_S: dict[str, float] = {"ingest": 600.0, "runs": 3600.0, "kb": 900.0}
 MAX_RECEIVE_COUNT = 5
+#: a run that has written nothing for this long has lost its worker and is resumed on
+#: redelivery (agent worker default ``BOMAGENT_RUN_RESUME_STALE_S``); must exceed the longest
+#: single LLM call
+RUN_RESUME_STALE_S = 1200.0
+#: while a run's handler is alive its message is kept invisible: extended to
+#: ``RUNS_EXTEND_S`` every ``RUNS_HEARTBEAT_S``, so a live run longer than the visibility
+#: timeout is never redelivered and a dead worker's run comes back within ``RUNS_EXTEND_S``
+RUNS_HEARTBEAT_S = 300.0
+RUNS_EXTEND_S = 900.0
 
 
 def make_queue(
@@ -409,22 +455,45 @@ Handler = Callable[[Message], Awaitable[None]]
 RELEASE_TIMEOUT_S = 5.0
 
 
-async def _release(queue: Queue, received: Received, delay_s: float) -> None:
+async def _release(
+    queue: Queue, received: Received, delay_s: float, *, count_receive: bool = True
+) -> None:
     try:
-        await asyncio.wait_for(queue.release(received, delay_s), RELEASE_TIMEOUT_S)
+        await asyncio.wait_for(
+            queue.release(received, delay_s, count_receive=count_receive), RELEASE_TIMEOUT_S
+        )
     except Exception:
         # the message then comes back after the visibility timeout, as before
         log.warning("message_release_failed", message_id=str(received.message.message_id))
 
 
+async def _heartbeat(queue: Queue, received: Received, every_s: float, extend_s: float) -> None:
+    """Keep the message of a running handler invisible: a live run longer than the visibility
+    timeout is then never redelivered (and never counts receives towards dead-lettering)."""
+    while True:
+        await asyncio.sleep(every_s)
+        try:
+            await asyncio.wait_for(queue.extend(received, extend_s), RELEASE_TIMEOUT_S)
+        except Exception:
+            log.warning("message_heartbeat_failed", message_id=str(received.message.message_id))
+
+
 async def process_one(
-    queue: Queue, received: Received, handler: Handler, *, release_delay_s: float = 0.0
+    queue: Queue,
+    received: Received,
+    handler: Handler,
+    *,
+    release_delay_s: float = 0.0,
+    heartbeat_s: float | None = None,
+    extend_s: float = 900.0,
 ) -> bool:
     """Run ``handler`` in the message's tenant + trace context; ack only on success.
 
     A handler that is cancelled (graceful shutdown, deploy) releases its message so it is
     redelivered after ``release_delay_s`` rather than the rest of the visibility timeout;
-    ``RetryLaterError`` releases it after the delay the handler asks for."""
+    ``RetryLaterError`` hands it back after the delay the handler asks for, without counting
+    the receive (not a failure). With ``heartbeat_s`` the message's visibility is extended to
+    ``extend_s`` every ``heartbeat_s`` while the handler runs."""
     msg = received.message
     token = otel_context.attach(extract(msg.trace_carrier))
     try:
@@ -440,15 +509,28 @@ async def process_one(
             ) as span,
             tenant_scope(msg.tenant_context()),
         ):
+            beat = (
+                asyncio.create_task(_heartbeat(queue, received, heartbeat_s, extend_s))
+                if heartbeat_s
+                else None
+            )
             try:
-                await handler(msg)
+                try:
+                    await handler(msg)
+                finally:  # never extend after the message was released or acked
+                    if beat is not None:
+                        beat.cancel()
+                        await asyncio.gather(beat, return_exceptions=True)
             except asyncio.CancelledError:
                 log.info("message_released", message_type=msg.type, delay_s=release_delay_s)
-                await asyncio.shield(_release(queue, received, release_delay_s))
+                # a shutdown hand-back is not a failure: it does not count towards dead-lettering
+                await asyncio.shield(
+                    _release(queue, received, release_delay_s, count_receive=False)
+                )
                 raise
             except RetryLaterError as exc:
                 log.info("message_retry_later", message_type=msg.type, delay_s=exc.retry_after_s)
-                await _release(queue, received, exc.retry_after_s)
+                await _release(queue, received, exc.retry_after_s, count_receive=False)
                 return False
             except Exception as exc:
                 span.record_exception(exc)
@@ -469,6 +551,8 @@ async def consume_forever(
     wait_seconds: int = 10,
     max_messages: int = 10,
     release_delay_s: float = 0.0,
+    heartbeat_s: float | None = None,
+    extend_s: float = 900.0,
 ) -> None:
     """Long-poll loop used by workers (cancel via ``stop``). Slow handlers pass
     ``max_messages=1``: messages of a batch wait unprocessed while earlier ones run, and
@@ -483,10 +567,17 @@ async def consume_forever(
             continue
         for i, item in enumerate(batch):
             try:
-                await process_one(queue, item, handler, release_delay_s=release_delay_s)
+                await process_one(
+                    queue,
+                    item,
+                    handler,
+                    release_delay_s=release_delay_s,
+                    heartbeat_s=heartbeat_s,
+                    extend_s=extend_s,
+                )
             except asyncio.CancelledError:
                 for waiting in batch[i + 1 :]:  # received but never started: back at once
-                    await asyncio.shield(_release(queue, waiting, 0.0))
+                    await asyncio.shield(_release(queue, waiting, 0.0, count_receive=False))
                 raise
         if not batch:
             await asyncio.sleep(0)

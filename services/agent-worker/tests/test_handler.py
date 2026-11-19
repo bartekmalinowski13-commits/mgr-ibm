@@ -458,8 +458,9 @@ async def test_an_interrupted_run_is_handed_back_once_it_can_be_resumed(monkeypa
     seen: dict[str, object] = {}
     running = asyncio.Event()
 
-    async def fake_consume(queue, handler, *, stop, release_delay_s, **kw):
+    async def fake_consume(queue, handler, *, stop, release_delay_s, heartbeat_s, extend_s, **kw):
         seen["release_delay_s"] = release_delay_s
+        seen["heartbeat"] = (heartbeat_s, extend_s)
         running.set()
         await stop.wait()
         seen["stopped_by_signal"] = True
@@ -475,6 +476,11 @@ async def test_an_interrupted_run_is_handed_back_once_it_can_be_resumed(monkeypa
         await asyncio.sleep(0.05)
         assert seen.get("stopped_by_signal") is True
     assert seen["release_delay_s"] == 600
+    # a live run keeps its message invisible: never redelivered, never dead-lettered
+    from bomagent_common.messaging import QUEUE_VISIBILITY_S, RUNS_EXTEND_S, RUNS_HEARTBEAT_S
+
+    assert seen["heartbeat"] == (RUNS_HEARTBEAT_S, RUNS_EXTEND_S)
+    assert RUNS_HEARTBEAT_S < RUNS_EXTEND_S <= QUEUE_VISIBILITY_S["runs"]
 
 
 def test_a_run_that_ends_failed_inside_the_graph_says_why():

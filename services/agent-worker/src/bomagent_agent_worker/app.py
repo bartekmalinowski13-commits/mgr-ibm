@@ -13,6 +13,9 @@ from bomagent_common.db import make_engine, ping
 from bomagent_common.health import ReadinessCheck
 from bomagent_common.logging import get_logger
 from bomagent_common.messaging import (
+    RUN_RESUME_STALE_S,
+    RUNS_EXTEND_S,
+    RUNS_HEARTBEAT_S,
     Handler,
     Message,
     Queue,
@@ -41,7 +44,7 @@ class Settings(ServiceSettings):
     embedding_model: str = "fake-embedding"
     #: a running run idle for this long is resumed from its checkpoint on redelivery; must
     #: exceed the longest single LLM call (``bomagent_llm.chat.CALL_TIMEOUT_MAX_S``)
-    run_resume_stale_s: float = 1200.0
+    run_resume_stale_s: float = RUN_RESUME_STALE_S
     run_max_resumes: int = 3
     #: size cap of the ``runs.trace`` column in bytes (0 = off); ``trace.json`` stays complete
     run_trace_max_bytes: int = DEFAULT_TRACE_MAX_BYTES
@@ -97,6 +100,9 @@ def _make_lifespan(settings: Settings, queue: Queue | None, handler: Handler) ->
                     max_messages=1,  # slow handlers: see consume_forever
                     # an interrupted run comes back when it can be taken over (resume)
                     release_delay_s=settings.run_resume_stale_s,
+                    # a live run is never redelivered; a dead worker's run is back quickly
+                    heartbeat_s=RUNS_HEARTBEAT_S,
+                    extend_s=RUNS_EXTEND_S,
                 )
             )
             log.info("consumer_started", queue="runs")

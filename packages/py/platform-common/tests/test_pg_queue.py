@@ -231,3 +231,50 @@ async def test_release_makes_the_message_visible_after_the_delay(
     await queue.release(second, 0)  # a stale receipt leaves the current delivery alone
     assert await queue.receive(wait_seconds=0) == []
     await queue.ack(third)
+
+
+async def test_a_live_long_handler_keeps_its_message_invisible(
+    app_engine, platform_engine, make_tenant
+):
+    """A run longer than the visibility timeout must not be redelivered (and must not burn
+    receives towards the dead-letter limit): the heartbeat extends its visibility."""
+    tenant = await make_tenant()
+    queue = _queue(app_engine, platform_engine, visibility_timeout_s=0.3, max_receive_count=2)
+    await queue.send(Message.create("x.y", tenant))
+    (item,) = await queue.receive(wait_seconds=0)
+    stolen: list[object] = []
+
+    async def long_run(_: Message) -> None:
+        for _ in range(12):  # 1.2 s = 4 visibility timeouts
+            stolen.extend(await queue.receive(wait_seconds=0))
+            await asyncio.sleep(0.1)
+
+    assert await process_one(queue, item, long_run, heartbeat_s=0.05, extend_s=0.3)
+    assert stolen == []
+    async with platform_transaction(platform_engine) as conn:
+        left = await conn.scalar(
+            text("SELECT count(*) FROM app.queue_messages WHERE queue = :q"), {"q": queue.name}
+        )
+    assert left == 0  # acked: never dead-lettered
+
+
+async def test_retry_later_cycles_do_not_count_towards_dead_lettering(
+    app_engine, platform_engine, make_tenant
+):
+    """A run that is still alive elsewhere is retried many times; those hand-backs are not
+    failures and must not dead-letter the message (max_receive_count)."""
+    from bomagent_common.messaging import RetryLaterError
+
+    tenant = await make_tenant()
+    queue = _queue(app_engine, platform_engine, max_receive_count=2)
+    await queue.send(Message.create("x.y", tenant))
+
+    async def busy(_: Message) -> None:
+        raise RetryLaterError("alive", retry_after_s=0)
+
+    for _ in range(6):
+        (item,) = await queue.receive(wait_seconds=0)
+        assert not await process_one(queue, item, busy)
+    row = await _row(platform_engine, queue)
+    assert row["dead_at"] is None
+    assert row["receive_count"] <= 1

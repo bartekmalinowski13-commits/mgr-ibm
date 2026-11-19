@@ -570,7 +570,10 @@ def test_interrupted_runs_are_resumed_before_the_reaper_can_fail_them():
     the reaper waits for far longer idle time, so resume wins (no hour-long hang, no reap)."""
     from bomagent_agent_worker.handler import RunWorker
     from bomagent_allinone.app import RELEASE_DELAY_S
+    from bomagent_api.maintenance import RUNNING_REAP_GRACE_S
+    from bomagent_common.messaging import QUEUE_VISIBILITY_S
 
     stale = RunWorker.resume_stale_after_s
     assert RELEASE_DELAY_S["runs"] == stale
     assert Settings(environment="test").run_timeout_s >= 2 * stale
+    assert QUEUE_VISIBILITY_S["runs"] + stale < RUNNING_REAP_GRACE_S  # hard-kill redelivery
