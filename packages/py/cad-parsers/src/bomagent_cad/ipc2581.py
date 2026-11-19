@@ -1,7 +1,8 @@
 """IPC-2581 (rev B/C) - the neutral export of Allegro, Altium, Xpedition and others.
 
 Read with ``defusedxml``: DTDs and entity declarations are refused outright (XXE,
-entity expansion), the document is size-limited by ``FileRef``. Element names are
+entity expansion); the document size is checked by ``registry.parse_files``
+(``MAX_FILE_BYTES``) before any parser runs. Element names are
 matched without namespaces (revisions use different namespace URIs).
 
 Sources, in order of trust:

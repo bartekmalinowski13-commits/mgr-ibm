@@ -23,7 +23,12 @@ instead of a guess (`docs/plans/M7-formats.md`).
 ## Safety
 Every parser error is a `ParseError` with a stable code: `parse_files` converts anything
 else a parser or library raises into `parse.internal`, so a hostile file never crashes the
-worker or loops its queue message. Archives are sniffed cheaply (zip entry count from the
+worker or loops its queue message. `parse_files` also refuses any file above
+`MAX_FILE_BYTES` and any design above `MAX_COMPONENTS` (`file.too_large`), whatever the
+parser; KiCad charges every symbol instance (including repeated instances of a
+hierarchical sheet) against its budget while adding it. ZIP members are inflated in 64 KiB
+chunks and counted on the bytes actually produced (declared sizes are not trusted);
+bzip2/LZMA members are refused (`archive.unsupported`). Archives are sniffed cheaply (zip entry count from the
 end-of-central-directory record, tar headers in a 16 MB prefix). Invalid designators,
 unknown DNP values, duplicate BOM sections and quantity mismatches are skipped or kept,
 and always reported as limitations. Regression and fuzz tests: `tests/test_hostile_inputs.py`.
@@ -36,7 +41,9 @@ URLs or cloud credentials). A killed or over-limit child becomes `ParseError` wi
 message being redelivered. Limits: `SandboxLimits` / `BOMAGENT_PARSE_MEMORY_MB`,
 `BOMAGENT_PARSE_CPU_SECONDS`, `BOMAGENT_PARSE_TIMEOUT_SECONDS`;
 `BOMAGENT_PARSE_SANDBOX=inprocess` disables the subprocess (unit tests only). Linux
-enforces memory/CPU; elsewhere only the timeout applies. Tests: `tests/test_sandbox.py`.
+enforces memory/CPU; elsewhere only the timeout applies. `run_sandboxed(module, payload,
+limits)` and `_sandbox_child.serve()` are the generic runner and child loop, reused by the
+kb-indexer for document extraction. Tests: `tests/test_sandbox.py`.
 
 `sexpr.parse` is iterative with limits on size (64 MB), depth (512) and token count; no
 recursion on file content; UTF-8 decoding is strict; files are never executed.

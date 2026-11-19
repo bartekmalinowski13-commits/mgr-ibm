@@ -19,6 +19,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import PurePosixPath
+from typing import NoReturn
 
 from bomagent_bom.model import Component, ParsedDesign
 from bomagent_bom.refdes import natural_key
@@ -60,7 +61,19 @@ class _Ctx:
     sheet_instances: int = 0
     duplicates: list[Component] = field(default_factory=list)
     foreign_projects: set[str] = field(default_factory=set)
+    #: every record a sheet instance produces (component, duplicate, unannotated or skipped
+    #: designator): repeated instances of one child sheet multiply them, so the budget is
+    #: charged per record, not per sheet (ingest review I2)
+    records: int = 0
     units: dict[str, set[str]] = field(default_factory=dict)
+
+
+def _too_complex() -> NoReturn:
+    raise ParseError(
+        f"design too large or hierarchy fans out too much (more than {MAX_COMPONENTS}"
+        f" symbol instances or {MAX_SHEET_INSTANCES} sheet instances)",
+        code="kicad.too_complex",
+    )
 
 
 def _props(sym: SList) -> dict[str, str]:
@@ -227,10 +240,8 @@ class KicadParser:
                 code="kicad.recursion",
             )
         ctx.sheet_instances += 1
-        if ctx.sheet_instances > MAX_SHEET_INSTANCES or len(ctx.components) > MAX_COMPONENTS:
-            raise ParseError(
-                "design too large or hierarchy fans out too much", code="kicad.too_complex"
-            )
+        if ctx.sheet_instances > MAX_SHEET_INSTANCES:
+            _too_complex()
         ctx.stack.append(name)
         sheet = ctx.sheets[name]
         ctx.sheet_paths.append(sheet_path)
@@ -296,6 +307,10 @@ class KicadParser:
         for ref, overrides in self._reference(ctx, sym, path):
             if not ref or ref.startswith("#"):
                 continue
+            # charged before anything is kept: memory stays bounded by MAX_COMPONENTS
+            ctx.records += 1
+            if ctx.records > MAX_COMPONENTS:
+                _too_complex()
             if ref.endswith("?"):
                 ctx.unannotated.append(ref)
                 continue

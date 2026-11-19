@@ -5,7 +5,13 @@ from __future__ import annotations
 import logging
 
 from bomagent_bom.model import ParsedDesign
-from bomagent_cad.base import FileRef, FormatParser, ParseError, UnsupportedFormatError
+from bomagent_cad.base import (
+    MAX_FILE_BYTES,
+    FileRef,
+    FormatParser,
+    ParseError,
+    UnsupportedFormatError,
+)
 from bomagent_cad.csv_bom import CsvBomParser
 from bomagent_cad.dxf import DxfParser
 from bomagent_cad.edif import EdifParser
@@ -15,6 +21,8 @@ from bomagent_cad.odbpp import OdbppParser
 from bomagent_cad.pdf_bom import PdfBomParser
 
 log = logging.getLogger(__name__)
+#: whatever the parser: a design above this is refused (ingest review I2)
+MAX_COMPONENTS = 100_000
 
 # extension -> (hint code for the UI i18n catalogue, English hint)
 UNSUPPORTED_HINTS: dict[str, tuple[str, str]] = {
@@ -81,9 +89,17 @@ def detect(files: list[FileRef], parsers: list[FormatParser] | None = None) -> F
 def parse_files(files: list[FileRef], parsers: list[FormatParser] | None = None) -> ParsedDesign:
     """Detect and parse. Files are untrusted: whatever a parser or library raises on a
     malformed input becomes a ``ParseError`` (``parse.internal``), so a bad upload is
-    reported to the user instead of crashing and redelivering the worker's message."""
+    reported to the user instead of crashing and redelivering the worker's message.
+
+    Every file is size-checked here too (``FileRef`` built from bytes has no limit of its own)
+    and so is the result, whatever the parser's own budgets."""
+    for f in files:
+        if len(f.data) > MAX_FILE_BYTES:
+            raise ParseError(
+                f"{f.name}: file larger than {MAX_FILE_BYTES} bytes", code="file.too_large"
+            )
     try:
-        return detect(files, parsers).parse(files)
+        design = detect(files, parsers).parse(files)
     except ParseError:
         raise
     except MemoryError:
@@ -93,3 +109,8 @@ def parse_files(files: list[FileRef], parsers: list[FormatParser] | None = None)
         raise ParseError(
             f"the file could not be read ({type(exc).__name__})", code="parse.internal"
         ) from exc
+    if len(design.components) > MAX_COMPONENTS:
+        raise ParseError(
+            f"the design has more than {MAX_COMPONENTS} components", code="file.too_large"
+        )
+    return design
