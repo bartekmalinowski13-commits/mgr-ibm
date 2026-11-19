@@ -11,16 +11,16 @@ from sqlalchemy.ext.asyncio import AsyncConnection
 async def list_events(
     conn: AsyncConnection,
     *,
-    cursor: str | None,
+    before_seq: int | None,
     limit: int,
     object_type: str | None,
     actor_id: str | None,
 ) -> list[dict[str, Any]]:
     params: dict[str, Any] = {"lim": limit}
     where = ""
-    if cursor:
+    if before_seq is not None:
         where += " AND seq < :c"
-        params["c"] = int(cursor) if cursor.isdigit() else 0
+        params["c"] = before_seq
     if object_type:
         where += " AND object_type = :ot"
         params["ot"] = object_type

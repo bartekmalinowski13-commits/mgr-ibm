@@ -12,6 +12,8 @@ from __future__ import annotations
 import uuid
 from collections.abc import Mapping, Sequence
 
+from opentelemetry import trace
+from opentelemetry.trace import SpanKind
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
@@ -21,6 +23,7 @@ from bomagent_common.logging import get_logger
 from bomagent_common.messaging import Message, Queue
 
 log = get_logger(__name__)
+tracer = trace.get_tracer(__name__)
 MAX_ATTEMPTS = 10
 #: a row is given up only when it failed MAX_ATTEMPTS times *and* is older than this, so a
 #: short SQS outage swept by several API replicas does not dead-letter fresh messages
@@ -53,56 +56,71 @@ async def deliver(
 ) -> int:
     """Send pending messages of one tenant; returns how many were sent. Rows are locked
     with SKIP LOCKED, so concurrent relays never send the same row at the same time."""
-    sent = 0
-    filters = " AND id = ANY(:ids)" if ids is not None else ""
-    async with tenant_transaction(engine, tenant_id) as conn:
-        rows = await conn.execute(
-            text(
-                "SELECT id, queue, message FROM app.outbox"  # noqa: S608
-                " WHERE sent_at IS NULL AND dead_at IS NULL"
-                " AND tenant_id = app.current_tenant_id()"
-                f" AND created_at <= now() - make_interval(secs => :age){filters}"
-                " ORDER BY created_at LIMIT :n FOR UPDATE SKIP LOCKED"
-            ),
-            {"age": older_than_s, "n": batch, **({"ids": list(ids)} if ids is not None else {})},
-        )
-        for row in rows.all():
-            try:
-                await queues[row.queue].send(_envelope(row.message, tenant_id))
-            except Exception as exc:
-                error = type(exc).__name__
-                dead = (
-                    await conn.execute(
-                        text(
-                            "UPDATE app.outbox SET attempts = attempts + 1, last_error = :e,"
-                            " dead_at = CASE WHEN attempts + 1 >= :max AND created_at <"
-                            " now() - make_interval(secs => :ttl) THEN now() END"
-                            " WHERE id = :i RETURNING dead_at IS NOT NULL"
-                        ),
-                        {"e": error, "i": row.id, "max": max_attempts, "ttl": give_up_after_s},
-                    )
-                ).scalar()
-                if dead:
-                    metrics.record_outbox_dead()
-                    log.error(  # noqa: TRY400
-                        "outbox_message_dead",
-                        outbox_id=str(row.id),
-                        queue=row.queue,
-                        error=error,
-                        attempts=max_attempts,
-                    )
-                else:
-                    log.warning("outbox_send_failed", outbox_id=str(row.id), error=error)
-                continue
-            await conn.execute(
+    with tracer.start_as_current_span(
+        "outbox.deliver",
+        kind=SpanKind.PRODUCER,
+        attributes={
+            "messaging.operation.type": "send",
+            "messaging.system": "bomagent.outbox",
+            "tenant.id": str(tenant_id),
+        },
+    ) as span:
+        sent = 0
+        filters = " AND id = ANY(:ids)" if ids is not None else ""
+        async with tenant_transaction(engine, tenant_id) as conn:
+            rows = await conn.execute(
                 text(
-                    "UPDATE app.outbox SET sent_at = now(), attempts = attempts + 1 WHERE id = :i"
+                    "SELECT id, queue, message FROM app.outbox"  # noqa: S608
+                    " WHERE sent_at IS NULL AND dead_at IS NULL"
+                    " AND tenant_id = app.current_tenant_id()"
+                    f" AND created_at <= now() - make_interval(secs => :age){filters}"
+                    " ORDER BY created_at LIMIT :n FOR UPDATE SKIP LOCKED"
                 ),
-                {"i": row.id},
+                {
+                    "age": older_than_s,
+                    "n": batch,
+                    **({"ids": list(ids)} if ids is not None else {}),
+                },
             )
-            metrics.record_outbox_sent()
-            sent += 1
-    return sent
+            for row in rows.all():
+                try:
+                    await queues[row.queue].send(_envelope(row.message, tenant_id))
+                except Exception as exc:
+                    error = type(exc).__name__
+                    dead = (
+                        await conn.execute(
+                            text(
+                                "UPDATE app.outbox SET attempts = attempts + 1, last_error = :e,"
+                                " dead_at = CASE WHEN attempts + 1 >= :max AND created_at <"
+                                " now() - make_interval(secs => :ttl) THEN now() END"
+                                " WHERE id = :i RETURNING dead_at IS NOT NULL"
+                            ),
+                            {"e": error, "i": row.id, "max": max_attempts, "ttl": give_up_after_s},
+                        )
+                    ).scalar()
+                    if dead:
+                        metrics.record_outbox_dead()
+                        log.error(  # noqa: TRY400
+                            "outbox_message_dead",
+                            outbox_id=str(row.id),
+                            queue=row.queue,
+                            error=error,
+                            attempts=max_attempts,
+                        )
+                    else:
+                        log.warning("outbox_send_failed", outbox_id=str(row.id), error=error)
+                    continue
+                await conn.execute(
+                    text(
+                        "UPDATE app.outbox SET sent_at = now(), attempts = attempts + 1"
+                        " WHERE id = :i"
+                    ),
+                    {"i": row.id},
+                )
+                metrics.record_outbox_sent()
+                sent += 1
+        span.set_attribute("bomagent.outbox.sent", sent)
+        return sent
 
 
 def _envelope(raw: object, tenant_id: uuid.UUID) -> Message:

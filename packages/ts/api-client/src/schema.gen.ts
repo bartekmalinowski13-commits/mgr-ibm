@@ -198,7 +198,8 @@ export interface paths {
         put?: never;
         /**
          * Add a document to the organisation's knowledge
-         * @description Duplicates (same content) return the existing document.
+         * @description 201 with the new document; a duplicate (same content) returns the existing document
+         *     with 200 and is not indexed again.
          */
         post: operations["upload_document_v1_kb_documents_post"];
         delete?: never;
@@ -233,7 +234,7 @@ export interface paths {
         };
         /**
          * List members of the organisation
-         * @description All members (organisations are small; the page has no next cursor).
+         * @description Active members, oldest first (cursor-paginated; at most 100 per page).
          */
         get: operations["list_members_v1_members_get"];
         put?: never;
@@ -3071,6 +3072,15 @@ export interface operations {
             };
         };
         responses: {
+            /** @description A document with this content already exists */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KbDocument"];
+                };
+            };
             /** @description Successful Response */
             201: {
                 headers: {
@@ -3256,7 +3266,10 @@ export interface operations {
     };
     list_members_v1_members_get: {
         parameters: {
-            query?: never;
+            query?: {
+                cursor?: string | null;
+                limit?: number;
+            };
             header?: {
                 authorization?: string | null;
                 "x-org-id"?: string | null;

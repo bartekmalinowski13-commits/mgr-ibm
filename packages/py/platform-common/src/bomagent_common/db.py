@@ -20,12 +20,14 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 
+from bomagent_common.telemetry import instrument_sqlalchemy
 from bomagent_common.tenancy import require_tenant
 
 
 def make_engine(url: str, *, pool_size: int = 5, echo: bool = False) -> AsyncEngine:
-    """Create an engine. ``url`` uses the psycopg 3 driver (``postgresql+psycopg://``)."""
-    return create_async_engine(
+    """Create an engine, traced with OpenTelemetry (ADR-0010). ``url`` uses the psycopg 3
+    driver (``postgresql+psycopg://``)."""
+    engine = create_async_engine(
         url,
         pool_size=pool_size,
         max_overflow=pool_size,
@@ -33,6 +35,8 @@ def make_engine(url: str, *, pool_size: int = 5, echo: bool = False) -> AsyncEng
         echo=echo,
         hide_parameters=True,  # bound values (customer data) never reach logs/exceptions
     )
+    instrument_sqlalchemy(engine)
+    return engine
 
 
 @contextlib.asynccontextmanager

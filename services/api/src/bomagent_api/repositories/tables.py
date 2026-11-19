@@ -136,6 +136,7 @@ kb_documents = Table(
     Column("status", Text),
     Column("error", Text),
     Column("size_bytes", BigInteger),
+    Column("sha256", Text),
     Column("superseded_at", _TS),
     Column("created_at", _TS),
     Column("indexed_at", _TS),

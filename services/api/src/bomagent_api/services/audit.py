@@ -7,7 +7,7 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from bomagent_api.pagination import clamp
+from bomagent_api.pagination import clamp, decode_seq_cursor, encode_seq_cursor
 from bomagent_api.repositories import audit as repo
 from bomagent_api.schemas import AuditEventOut, ChainStatus, Page
 from bomagent_common.audit import ChainAnchor, verify_chain
@@ -29,7 +29,7 @@ async def list_events(
     async with tenant_transaction(engine) as conn:
         rows = await repo.list_events(
             conn,
-            cursor=cursor,
+            before_seq=decode_seq_cursor(cursor),
             limit=clamp(limit) + 1,
             object_type=object_type,
             actor_id=actor_id,
@@ -37,7 +37,8 @@ async def list_events(
     more = len(rows) > clamp(limit)
     rows = rows[: clamp(limit)]
     return Page[AuditEventOut](
-        items=[AuditEventOut(**r) for r in rows], next_cursor=str(rows[-1]["seq"]) if more else None
+        items=[AuditEventOut(**r) for r in rows],
+        next_cursor=encode_seq_cursor(rows[-1]["seq"]) if more else None,
     )
 
 

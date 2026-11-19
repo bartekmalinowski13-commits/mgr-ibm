@@ -46,6 +46,7 @@ from bomagent_common.messaging import InMemoryQueue, Queue, make_queue
 from bomagent_common.problems import ProblemError, problem_response
 from bomagent_common.service import create_service_app
 from bomagent_common.storage import InMemoryObjectStore, ObjectStore, make_object_store
+from bomagent_common.telemetry import instrument_sqlalchemy
 from bomagent_kb import KnowledgeBase
 from bomagent_llm.catalog import load_catalog
 from bomagent_llm.embeddings import EmbeddingClient, GatewayEmbeddings, HashingEmbeddings
@@ -279,6 +280,21 @@ class UnavailableIdentityProviders:
         return None
 
 
+def _engines(
+    settings: Settings, engine: AsyncEngine | None, platform_engine: AsyncEngine | None
+) -> tuple[AsyncEngine | None, AsyncEngine | None]:
+    """The application and platform engines (from settings unless passed in), all traced;
+    tracing is idempotent for engines that ``make_engine`` already instrumented."""
+    if engine is None and settings.database_url:
+        engine = make_engine(settings.database_url)
+    if platform_engine is None and settings.platform_database_url:
+        platform_engine = make_engine(settings.platform_database_url, pool_size=2)
+    for traced in (engine, platform_engine):
+        if traced is not None:
+            instrument_sqlalchemy(traced)
+    return engine, platform_engine
+
+
 def create_app(
     settings: Settings | None = None,
     *,
@@ -300,11 +316,7 @@ def create_app(
         and not (settings.oidc_issuer and settings.oidc_jwks_url)
     ):
         raise RuntimeError("BOMAGENT_OIDC_ISSUER and BOMAGENT_OIDC_JWKS_URL are required")
-    if engine is None and settings.database_url:
-        engine = make_engine(settings.database_url)
-    if platform_engine is None and settings.platform_database_url:
-        platform_engine = make_engine(settings.platform_database_url, pool_size=2)
-
+    engine, platform_engine = _engines(settings, engine, platform_engine)
     checks: dict[str, ReadinessCheck] = dict(readiness or {})
     if engine is not None:
         db = engine
@@ -320,6 +332,7 @@ def create_app(
         title="BOM Agent API",
         readiness=checks,
         docs=settings.docs_enabled,
+        error_headers=SECURITY_HEADERS,
         lifespan=maintenance.lifespan(
             settings.maintenance_interval_s, settings.run_timeout_s, anchor_sink_for(settings)
         ),

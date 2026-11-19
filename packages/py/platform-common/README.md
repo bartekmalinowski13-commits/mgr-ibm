@@ -12,9 +12,9 @@
 | `shutdown` | `ShutdownSignal` (`app.state.shutdown`, set by every `create_service_app`), `GracefulServer`/`serve()` for the container entrypoints: SIGTERM ends long-lived responses (run SSE) and runs registered callbacks (consumers stop claiming) before uvicorn waits for open connections, bounded by `BOMAGENT_SHUTDOWN_GRACE_S` (15 s) |
 | `storage` | `tenant_key()` (`tenants/{id}/...`, traversal-safe); `S3ObjectStore`/`InMemoryObjectStore` refuse keys outside the active tenant's prefix; `make_object_store(settings, bucket)` builds AWS S3 by default or an S3-compatible store (Supabase Storage) from `BOMAGENT_S3_ENDPOINT_URL`, `BOMAGENT_S3_REGION`, `BOMAGENT_S3_FORCE_PATH_STYLE` (credentials from the standard `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY`; optional CRC checksums off for non-AWS endpoints) |
 | `logging` | structlog JSON; drops content-like keys (`prompt`, `content`, ...), masks secrets, adds `trace_id`/`tenant_id` |
-| `telemetry` | OTel tracer provider (OTLP/HTTP), FastAPI/SQLAlchemy/httpx instrumentation |
+| `telemetry` | OTel tracer provider (OTLP/HTTP), FastAPI/SQLAlchemy/httpx instrumentation (`make_engine` traces every engine, best effort: the SQLAlchemy instrumentation is pinned because a private API is used, and a failure logs one warning; `outbox.deliver` is a PRODUCER span) |
 | `outbox` | transactional outbox: `enqueue()`, `deliver()` (SKIP LOCKED; after `MAX_ATTEMPTS`=10 failures a row gets `dead_at` and is no longer retried, `outbox_message_dead` is logged), `cleanup_sent()` (default retention 7 days) |
-| `problems` | RFC 9457 `application/problem+json` handlers, `ProblemError` |
+| `problems` | RFC 9457 `application/problem+json` handlers (incl. a catch-all 500 `internal`, with optional `error_headers`), `ProblemError` |
 | `health`, `service` | `/healthz`, `/readyz`; `create_service_app()` used by all four services |
 
 ## Testing

@@ -141,41 +141,57 @@ class KnowledgeBase:
     ) -> uuid.UUID:
         """Register a document (status ``pending``); returns the existing id for a
         duplicate (same content in the same scope)."""
+        doc_id, _created = await self.register_document(
+            conn, meta, scope=scope, created_by=created_by
+        )
+        return doc_id
+
+    async def register_document(
+        self,
+        conn: AsyncConnection,
+        meta: DocumentMeta,
+        *,
+        scope: Scope,
+        created_by: str,
+    ) -> tuple[uuid.UUID, bool]:
+        """Like :meth:`add_document`, and whether this call created the row. A concurrent
+        registration of the same content waits on the unique index ``documents_dedupe``
+        and then returns the committed row (``ON CONFLICT DO NOTHING``), never an error."""
         tenant_id = require_tenant().tenant_id if scope == Scope.TENANT else None
-        existing = (
+        existing = await self._existing(conn, meta.sha256, scope, tenant_id)
+        if existing is not None:
+            return existing, False
+        doc_id = (
             await conn.execute(
                 text(
-                    "SELECT id FROM kb.documents WHERE sha256 = :sha AND scope = :scope"
-                    " AND tenant_id IS NOT DISTINCT FROM :tid AND superseded_at IS NULL"
+                    """INSERT INTO kb.documents (id, tenant_id, scope, title, kind, manufacturer,
+                         source_uri, object_key, mime_type, sha256, size_bytes, created_by)
+                       VALUES (:id, :tid, :scope, :title, :kind, :mfr, :uri, :key, :mime, :sha,
+                         :size, :by)
+                       ON CONFLICT DO NOTHING RETURNING id"""
                 ),
-                {"sha": meta.sha256, "scope": scope.value, "tid": tenant_id},
+                {
+                    "id": uuid.uuid4(),
+                    "tid": tenant_id,
+                    "scope": scope.value,
+                    "title": meta.title[:500],
+                    "kind": meta.kind,
+                    "mfr": meta.manufacturer,
+                    "uri": meta.source_uri,
+                    "key": meta.object_key,
+                    "mime": meta.mime_type,
+                    "sha": meta.sha256,
+                    "size": meta.size_bytes,
+                    "by": created_by,
+                },
             )
         ).scalar()
-        if existing is not None:
-            return uuid.UUID(str(existing))
-        doc_id = uuid.uuid4()
-        await conn.execute(
-            text(
-                """INSERT INTO kb.documents (id, tenant_id, scope, title, kind, manufacturer,
-                     source_uri, object_key, mime_type, sha256, size_bytes, created_by)
-                   VALUES (:id, :tid, :scope, :title, :kind, :mfr, :uri, :key, :mime, :sha,
-                     :size, :by)"""
-            ),
-            {
-                "id": doc_id,
-                "tid": tenant_id,
-                "scope": scope.value,
-                "title": meta.title[:500],
-                "kind": meta.kind,
-                "mfr": meta.manufacturer,
-                "uri": meta.source_uri,
-                "key": meta.object_key,
-                "mime": meta.mime_type,
-                "sha": meta.sha256,
-                "size": meta.size_bytes,
-                "by": created_by,
-            },
-        )
+        if doc_id is None:  # lost the race: another transaction committed the same content
+            existing = await self._existing(conn, meta.sha256, scope, tenant_id)
+            if existing is None:  # pragma: no cover - the conflicting row was superseded
+                raise RuntimeError("duplicate document vanished during registration")
+            return existing, False
+        doc_id = uuid.UUID(str(doc_id))
         if scope == Scope.TENANT:
             await emit_audit(
                 conn,
@@ -186,7 +202,21 @@ class KnowledgeBase:
                     after={"title": meta.title, "kind": meta.kind, "sha256": meta.sha256},
                 ),
             )
-        return doc_id
+        return doc_id, True
+
+    async def _existing(
+        self, conn: AsyncConnection, sha256: str, scope: Scope, tenant_id: uuid.UUID | None
+    ) -> uuid.UUID | None:
+        existing = (
+            await conn.execute(
+                text(
+                    "SELECT id FROM kb.documents WHERE sha256 = :sha AND scope = :scope"
+                    " AND tenant_id IS NOT DISTINCT FROM :tid AND superseded_at IS NULL"
+                ),
+                {"sha": sha256, "scope": scope.value, "tid": tenant_id},
+            )
+        ).scalar()
+        return None if existing is None else uuid.UUID(str(existing))
 
     async def _document(self, conn: AsyncConnection, doc_id: uuid.UUID) -> Any:
         row = (

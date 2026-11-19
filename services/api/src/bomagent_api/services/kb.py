@@ -11,10 +11,12 @@ from typing import Literal
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from bomagent_api.pagination import clamp, encode_cursor, page_filter
+from bomagent_api.plans import check_storage, plan_of
 from bomagent_api.repositories import kb as repo
 from bomagent_api.repositories.tables import kb_documents
 from bomagent_api.schemas import KbDocument, Page
 from bomagent_api.services.outbox import deliver_now
+from bomagent_api.services.projects import delete_objects
 from bomagent_common.db import tenant_transaction
 from bomagent_common.messaging import Message, Queue
 from bomagent_common.outbox import enqueue
@@ -72,31 +74,41 @@ async def upload_document(
     data: bytes,
     kind: DocumentKind,
     manufacturer: str,
-) -> KbDocument:
-    """Duplicates (same content) return the existing document."""
+) -> tuple[KbDocument, bool]:
+    """The document and whether it was created. A duplicate (same content) returns the
+    existing document: nothing is queued and the uploaded object is removed again.
+
+    The object is stored before the tenant lock is taken (its key is unique), so a slow
+    upload never holds up the organisation's other uploads; the lock then serialises the
+    duplicate check, the storage quota (design files + KB documents) and the insert."""
     if "\x00" in manufacturer:
         raise ProblemError(422, "Unprocessable Entity", "NUL characters are not allowed")
     key = tenant_key(ctx.tenant_id, "kb", str(uuid.uuid4()), name)
+    sha256 = hashlib.sha256(data).hexdigest()
     await store.put(key, data, "application/octet-stream")
     outbox_id = None
     try:
         async with tenant_transaction(engine) as conn:
-            doc_id = await kb.add_document(
-                conn,
-                DocumentMeta(
-                    title=name,
-                    mime_type=mime,
-                    sha256=hashlib.sha256(data).hexdigest(),
-                    size_bytes=len(data),
-                    kind=kind,
-                    manufacturer=manufacturer.strip(),
-                    object_key=key,
-                ),
-                scope=Scope.TENANT,
-                created_by=ctx.actor_id,
-            )
-            doc = await repo.get_document(conn, doc_id)
-            if doc["status"] == "pending" and doc["indexed_at"] is None:
+            await plan_of(conn, lock=True)
+            doc_id = await repo.find_current(conn, sha256)
+            created = False
+            if doc_id is None:
+                await check_storage(conn, len(data))
+                doc_id, created = await kb.register_document(
+                    conn,
+                    DocumentMeta(
+                        title=name,
+                        mime_type=mime,
+                        sha256=sha256,
+                        size_bytes=len(data),
+                        kind=kind,
+                        manufacturer=manufacturer.strip(),
+                        object_key=key,
+                    ),
+                    scope=Scope.TENANT,
+                    created_by=ctx.actor_id,
+                )
+            if created:  # a pending duplicate already has its own message
                 outbox_id = await enqueue(
                     conn,
                     "kb",
@@ -106,11 +118,12 @@ async def upload_document(
                         {"document_id": str(doc_id), "object_key": key, "filename": name},
                     ),
                 )
+            doc = await repo.get_document(conn, doc_id)
     except BaseException:
-        await store.delete(key)
+        await delete_objects(store, ctx.tenant_id, [key])
         raise
     if outbox_id is None:  # duplicate of an existing document: keep only the original object
-        await store.delete(key)
+        await delete_objects(store, ctx.tenant_id, [key])
     else:
         await deliver_now(engine, queues, ctx.tenant_id, outbox_id)
-    return KbDocument(**doc)
+    return KbDocument(**doc), created

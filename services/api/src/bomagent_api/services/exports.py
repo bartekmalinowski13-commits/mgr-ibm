@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from bomagent_api import idempotency
 from bomagent_api.authz import ADMIN
-from bomagent_api.plans import quota_exceeded
+from bomagent_api.plans import plan_of, quota_exceeded
 from bomagent_api.repositories import audit as audit_repo
 from bomagent_api.schemas import ExportDownload, ExportJob
 from bomagent_api.services.outbox import deliver_now
@@ -67,6 +67,7 @@ async def start_export(
         stored = await idempotency.replay(conn, idempotency_key, body, route=route)
         if stored is not None:
             return ExportJob(**stored)
+        await plan_of(conn, lock=True)  # serialises the daily cap of concurrent requests
         recent = await audit_repo.count_events_last_24h(conn, EXPORT_REQUESTED)
         if recent >= MAX_EXPORTS_PER_DAY:
             raise quota_exceeded(f"at most {MAX_EXPORTS_PER_DAY} exports per 24 hours")
@@ -76,8 +77,6 @@ async def start_export(
             requested_by=ctx.actor_id,
             requested_at=datetime.now(UTC),
         )
-        # before the commit: the worker never sees a message without a job
-        await write_status(store, ctx.tenant_id, status)
         await emit_audit(
             conn,
             AuditEvent(
@@ -93,6 +92,9 @@ async def start_export(
         await idempotency.store(
             conn, idempotency_key, body, 202, job.model_dump(mode="json"), route=route
         )
+        # the last step before the commit: the worker never sees a message without a job,
+        # and a transaction that failed earlier leaves no job that stays "queued" for ever
+        await write_status(store, ctx.tenant_id, status)
     await deliver_now(engine, queues, ctx.tenant_id, outbox_id)
     return job
 
