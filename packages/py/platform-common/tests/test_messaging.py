@@ -10,6 +10,7 @@ from moto import mock_aws
 from bomagent_common.messaging import (
     InMemoryQueue,
     Message,
+    RetryLaterError,
     SqsQueue,
     consume_forever,
     process_one,
@@ -123,3 +124,116 @@ async def test_poison_sqs_message_does_not_block_batch(ctx, monkeypatch):
         await queue.send(Message.create("run.requested", ctx))
         items = await queue.receive(wait_seconds=0)
         assert [i.message.type for i in items] == ["run.requested"]
+
+
+# --- interrupted handlers hand their message back (a deploy must not park it for an hour) ---
+
+
+async def test_cancelled_handler_releases_its_message_and_stays_cancelled(ctx):
+    queue = InMemoryQueue()
+    await queue.send(Message.create("run.requested", ctx))
+    started = asyncio.Event()
+
+    async def slow(_: Message) -> None:
+        started.set()
+        await asyncio.sleep(60)
+
+    (item,) = await queue.receive()
+    task = asyncio.create_task(process_one(queue, item, slow, release_delay_s=42))
+    await started.wait()
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    assert queue.released == [(item.message.message_id, 42)]
+    (again,) = await queue.receive()  # back without waiting out the visibility timeout
+    assert again.message.message_id == item.message.message_id
+
+
+async def test_retry_later_releases_with_the_handlers_delay(ctx):
+    queue = InMemoryQueue()
+    await queue.send(Message.create("run.requested", ctx))
+
+    async def busy(_: Message) -> None:
+        raise RetryLaterError("still running", retry_after_s=120)
+
+    (item,) = await queue.receive()
+    assert not await process_one(queue, item, busy)
+    assert queue.released == [(item.message.message_id, 120)]
+
+
+async def test_a_failing_release_never_hides_the_cancellation(ctx):
+    class Broken(InMemoryQueue):
+        async def release(self, received, delay_s):
+            raise RuntimeError("queue down")
+
+    queue = Broken()
+    await queue.send(Message.create("x.y", ctx))
+    started = asyncio.Event()
+
+    async def slow(_: Message) -> None:
+        started.set()
+        await asyncio.sleep(60)
+
+    (item,) = await queue.receive()
+    task = asyncio.create_task(process_one(queue, item, slow))
+    await started.wait()
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+
+
+async def test_consume_forever_passes_the_release_delay(ctx):
+    queue = InMemoryQueue()
+    await queue.send(Message.create("x.y", ctx))
+    stop = asyncio.Event()
+    started = asyncio.Event()
+
+    async def slow(_: Message) -> None:
+        started.set()
+        await asyncio.sleep(60)
+
+    task = asyncio.create_task(
+        consume_forever(queue, slow, stop=stop, wait_seconds=0, release_delay_s=7)
+    )
+    await started.wait()
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    assert [d for _, d in queue.released] == [7]
+
+
+async def test_cancelled_consumer_releases_the_rest_of_its_batch(ctx):
+    queue = InMemoryQueue()
+    for i in range(3):
+        await queue.send(Message.create("x.y", ctx, {"i": i}))
+    stop = asyncio.Event()
+    started = asyncio.Event()
+
+    async def slow(_: Message) -> None:
+        started.set()
+        await asyncio.sleep(60)
+
+    task = asyncio.create_task(consume_forever(queue, slow, stop=stop, wait_seconds=0))
+    await started.wait()
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    assert len(queue.released) == 3
+    assert len(queue) == 3
+
+
+async def test_sqs_release_makes_the_message_visible_again(ctx, monkeypatch):
+    monkeypatch.setenv("AWS_ACCESS_KEY_ID", "testing")
+    monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "testing")
+    with mock_aws():
+        client = boto3.client("sqs", region_name="eu-central-1")
+        url = client.create_queue(QueueName="runs", Attributes={"VisibilityTimeout": "3600"})[
+            "QueueUrl"
+        ]
+        queue = SqsQueue(url, region="eu-central-1")
+        await queue.send(Message.create("run.requested", ctx))
+        (item,) = await queue.receive(wait_seconds=0)
+        assert await queue.receive(wait_seconds=0) == []
+        await queue.release(item, 0)
+        (again,) = await queue.receive(wait_seconds=0)
+        assert again.message.message_id == item.message.message_id

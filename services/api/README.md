@@ -11,7 +11,7 @@ regenerate with `just openapi`; a test fails when it drifts).
 | API keys | `GET/POST /v1/api-keys`, `POST /v1/api-keys/{id}/rotate`, `DELETE /v1/api-keys/{id}` (admins; scope engineer/reviewer/viewer; secret shown once, SHA-256 stored) |
 | projects | `GET/POST /v1/projects`, `GET /v1/projects/{id}`, `GET/POST /v1/projects/{id}/files` (multipart upload -> S3 tenant prefix -> `file.uploaded` for the sandboxed ingest-worker) |
 | projects (lifecycle) | `PATCH /v1/projects/{id}` rename (not samples), `DELETE /v1/projects/{id}`, `DELETE /v1/projects/{id}/files/{file_id}` (409 `file-in-use` while a run is queued/running; objects removed under the tenant prefix only; audit `project.updated`/`project.deleted`/`file.deleted`) |
-| runs | `POST /v1/runs` (variant A/B, model from the catalogue) -> `run.requested` for agent-worker; `GET /v1/runs`, `GET /v1/runs/{id}`, `GET /v1/runs/{id}/events` (SSE); `POST /v1/runs/{id}/cancel` (queued/running -> `failed`, error `cancelled by user`, audit `run.cancelled`); `POST /v1/runs/{id}/rerun` (same variant/runtime/model/requirements on the project's current parsed files) |
+| runs | `POST /v1/runs` (variant A/B, model from the catalogue) -> `run.requested` for agent-worker; `GET /v1/runs`, `GET /v1/runs/{id}`, `GET /v1/runs/{id}/events` (SSE; ends with `{"status": "shutdown"}` on SIGTERM so the process can stop, the client reconnects); `POST /v1/runs/{id}/cancel` (queued/running -> `failed`, error `cancelled by user`, audit `run.cancelled`); `POST /v1/runs/{id}/rerun` (same variant/runtime/model/requirements on the project's current parsed files) |
 | BOM | `GET /v1/runs/{id}/bom`, `GET /v1/runs/{id}/bom.csv`, `GET /v1/runs/{id}/bom.xlsx`, `GET /v1/runs/{id}/bom/versions` (history), `GET /v1/runs/{id}/bom/versions/{n}`, `GET /v1/runs/{id}/bom/diff?from_version=&to_version=`, `PATCH /v1/runs/{id}/bom/items/{line}` (new immutable version, user provenance, MPN correction stored as tenant knowledge) |
 | SSO | `GET/PUT/DELETE /v1/sso` (owners/admins: SAML 2.0 or OIDC identity provider federated in Cognito; OIDC client secret goes to Cognito only), `POST /v1/sso/domains`, `POST /v1/sso/domains/{domain}/verify` (DNS TXT `_bomagent-verify.<domain>`), `DELETE /v1/sso/domains/{domain}`, `POST /v1/sso/discover` with `{"domain"}` only (public, sign-in screen; fixed minimum response time, per-IP limit; free-mail domains never match). First sign-in through the provider with a verified-domain e-mail creates the membership (default role); `enforce` requires SSO for those domains (owners exempt) and a sign-in at the provider within `BOMAGENT_SSO_MAX_AUTH_AGE_S` (default 8 h, `auth_time` claim, 0 = off; else 401 `reauth-required`). Provider names are random (`org-<24 hex>`, stored with the connection); public mailbox domains cannot be claimed (422 `domain-not-allowed`). See `bomagent_api.sso` |
 | audit | `GET /v1/audit-events` (filters, cursor), `GET /v1/audit-events/verify` |
@@ -75,7 +75,7 @@ regenerate with `just openapi`; a test fails when it drifts).
   The outbox relay delivers to whichever backend is configured.
 - **Maintenance loop:** outbox relay (a row is retried up to 10 times, then marked dead
   with `last_error` and logged as `outbox_message_dead`), deletion of sent outbox rows
-  older than 7 days, stuck-run reaper.
+  older than 7 days, stuck-run reaper (a `running` run idle - no start, takeover or checkpoint - for `run_timeout_s`).
 
 ## Sample projects
 

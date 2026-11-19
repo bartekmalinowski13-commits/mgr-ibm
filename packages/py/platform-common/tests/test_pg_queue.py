@@ -208,3 +208,26 @@ def test_requires_the_engine_for_each_side():
 def test_rejects_invalid_queue_names():
     with pytest.raises(ValueError, match="queue name"):
         PostgresQueue("Runs; DROP TABLE x")
+
+
+async def test_release_makes_the_message_visible_after_the_delay(
+    app_engine, platform_engine, make_tenant
+):
+    tenant = await make_tenant()
+    queue = _queue(app_engine, platform_engine, visibility_timeout_s=3600)
+    await queue.send(Message.create("x.y", tenant))
+    (first,) = await queue.receive(wait_seconds=0)
+    await queue.release(first, 30)
+    assert await queue.receive(wait_seconds=0) == []  # not before the delay
+    async with platform_transaction(platform_engine) as conn:
+        await conn.execute(
+            text("UPDATE app.queue_messages SET visible_at = now() WHERE queue = :q"),
+            {"q": queue.name},
+        )
+    (second,) = await queue.receive(wait_seconds=0)
+    await queue.release(second, 0)
+    (third,) = await queue.receive(wait_seconds=0)  # released at once: no hour-long wait
+    assert third.message.message_id == first.message.message_id
+    await queue.release(second, 0)  # a stale receipt leaves the current delivery alone
+    assert await queue.receive(wait_seconds=0) == []
+    await queue.ack(third)

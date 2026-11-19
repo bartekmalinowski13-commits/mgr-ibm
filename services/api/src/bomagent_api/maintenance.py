@@ -36,9 +36,13 @@ _anchored: dict[uuid.UUID, date] = {}  # tenant -> day its anchor was written (t
 
 
 async def reap_stuck_runs(engine: AsyncEngine, tenant_id: uuid.UUID, timeout_s: float) -> int:
-    """Runs left ``running`` past the timeout (worker crashed), or ``queued`` past it (the
-    message went to the dead-letter queue), become ``failed`` - otherwise they would hold
-    the tenant's concurrent-run quota for good."""
+    """Runs left ``running`` and idle past the timeout (worker crashed and the run was not
+    resumed), or ``queued`` past it (the message went to the dead-letter queue), become
+    ``failed`` - otherwise they would hold the tenant's concurrent-run quota for good.
+
+    A running run's idle time counts from its start, takeover or last checkpoint, whichever
+    is latest: an interrupted run is resumed after ``resume_stale_after_s`` (20 min) idle, so
+    the reaper never races that takeover, and a run that still checkpoints is not killed."""
     ctx = TenantContext(tenant_id=tenant_id, actor_id="maintenance", actor_type="system")
     async with tenant_transaction(engine, tenant_id) as conn:
         reaped = (
@@ -47,7 +51,10 @@ async def reap_stuck_runs(engine: AsyncEngine, tenant_id: uuid.UUID, timeout_s: 
                     "UPDATE runs.runs SET status = 'failed', finished_at = now(),"
                     " error = 'TimeoutError: run did not finish in time'"
                     " WHERE (status = 'running'"
-                    " AND started_at < now() - make_interval(secs => :t))"
+                    " AND started_at < now() - make_interval(secs => :t)"
+                    " AND NOT EXISTS (SELECT 1 FROM runs.graph_checkpoints c"
+                    "  WHERE c.run_id = runs.runs.id"
+                    "  AND c.created_at >= now() - make_interval(secs => :t)))"
                     " OR (status = 'queued'"
                     " AND created_at < now() - make_interval(secs => :t))"
                     " RETURNING id, variant"

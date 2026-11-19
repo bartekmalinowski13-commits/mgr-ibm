@@ -85,6 +85,19 @@ class Queue(Protocol):
         self, *, max_messages: int = 10, wait_seconds: int = 10
     ) -> list[Received]: ...
     async def ack(self, received: Received) -> None: ...
+    async def release(self, received: Received, delay_s: float) -> None:
+        """Make an unacknowledged message visible again after ``delay_s`` (instead of the
+        rest of the visibility timeout); a stale receipt is ignored."""
+        ...
+
+
+class RetryLaterError(RuntimeError):
+    """A handler cannot process the message yet: it is released and redelivered after
+    ``retry_after_s`` instead of waiting out the queue's visibility timeout."""
+
+    def __init__(self, message: str, *, retry_after_s: float) -> None:
+        super().__init__(message)
+        self.retry_after_s = max(0.0, retry_after_s)
 
 
 class InMemoryQueue:
@@ -95,6 +108,7 @@ class InMemoryQueue:
         self._inflight: dict[str, Message] = {}
         self._receives: defaultdict[uuid.UUID, int] = defaultdict(int)
         self.dead_letters: list[Message] = []
+        self.released: list[tuple[uuid.UUID, float]] = []  # (message id, delay): for tests
         self._max_receive = max_receive_count
 
     async def send(self, message: Message) -> None:
@@ -112,6 +126,13 @@ class InMemoryQueue:
 
     async def ack(self, received: Received) -> None:
         self._inflight.pop(received.receipt, None)
+
+    async def release(self, received: Received, delay_s: float) -> None:
+        """Back to the queue at once (no clock here); the delay is recorded."""
+        msg = self._inflight.pop(received.receipt, None)
+        if msg is not None:
+            self.released.append((msg.message_id, delay_s))
+            self._items.append(msg)
 
     def nack_all(self) -> None:
         """Simulate visibility timeout expiry of unacknowledged messages."""
@@ -168,6 +189,16 @@ class SqsQueue:
             self._client.delete_message, QueueUrl=self._url, ReceiptHandle=received.receipt
         )
 
+    async def release(self, received: Received, delay_s: float) -> None:
+        await asyncio.to_thread(
+            self._client.change_message_visibility,
+            QueueUrl=self._url,
+            ReceiptHandle=received.receipt,
+            VisibilityTimeout=min(int(max(delay_s, 0)), SQS_MAX_VISIBILITY_S),
+        )
+
+
+SQS_MAX_VISIBILITY_S = 12 * 3600
 
 _QUEUE_NAME = re.compile(r"^[a-z][a-z0-9_-]{0,62}$")
 
@@ -292,6 +323,18 @@ class PostgresQueue:
                 {"i": uuid.UUID(row_id), "r": uuid.UUID(receipt)},
             )
 
+    async def release(self, received: Received, delay_s: float) -> None:
+        row_id, receipt = received.receipt.split(":", 1)
+        async with platform_transaction(self._engine("consumer")) as conn:
+            await conn.execute(
+                text(
+                    "UPDATE app.queue_messages"
+                    " SET visible_at = clock_timestamp() + make_interval(secs => :d)"
+                    " WHERE id = :i AND receipt = :r AND dead_at IS NULL"
+                ),
+                {"i": uuid.UUID(row_id), "r": uuid.UUID(receipt), "d": max(delay_s, 0.0)},
+            )
+
     async def dead_letter_count(self) -> int:
         async with platform_transaction(self._engine("consumer")) as conn:
             count = await conn.scalar(
@@ -363,8 +406,25 @@ def consumer_queue(settings: ServiceSettings, name: str, *, sqs_url: str | None)
 Handler = Callable[[Message], Awaitable[None]]
 
 
-async def process_one(queue: Queue, received: Received, handler: Handler) -> bool:
-    """Run ``handler`` in the message's tenant + trace context; ack only on success."""
+RELEASE_TIMEOUT_S = 5.0
+
+
+async def _release(queue: Queue, received: Received, delay_s: float) -> None:
+    try:
+        await asyncio.wait_for(queue.release(received, delay_s), RELEASE_TIMEOUT_S)
+    except Exception:
+        # the message then comes back after the visibility timeout, as before
+        log.warning("message_release_failed", message_id=str(received.message.message_id))
+
+
+async def process_one(
+    queue: Queue, received: Received, handler: Handler, *, release_delay_s: float = 0.0
+) -> bool:
+    """Run ``handler`` in the message's tenant + trace context; ack only on success.
+
+    A handler that is cancelled (graceful shutdown, deploy) releases its message so it is
+    redelivered after ``release_delay_s`` rather than the rest of the visibility timeout;
+    ``RetryLaterError`` releases it after the delay the handler asks for."""
     msg = received.message
     token = otel_context.attach(extract(msg.trace_carrier))
     try:
@@ -382,6 +442,14 @@ async def process_one(queue: Queue, received: Received, handler: Handler) -> boo
         ):
             try:
                 await handler(msg)
+            except asyncio.CancelledError:
+                log.info("message_released", message_type=msg.type, delay_s=release_delay_s)
+                await asyncio.shield(_release(queue, received, release_delay_s))
+                raise
+            except RetryLaterError as exc:
+                log.info("message_retry_later", message_type=msg.type, delay_s=exc.retry_after_s)
+                await _release(queue, received, exc.retry_after_s)
+                return False
             except Exception as exc:
                 span.record_exception(exc)
                 span.set_status(trace.StatusCode.ERROR, type(exc).__name__)
@@ -400,6 +468,7 @@ async def consume_forever(
     stop: asyncio.Event,
     wait_seconds: int = 10,
     max_messages: int = 10,
+    release_delay_s: float = 0.0,
 ) -> None:
     """Long-poll loop used by workers (cancel via ``stop``). Slow handlers pass
     ``max_messages=1``: messages of a batch wait unprocessed while earlier ones run, and
@@ -412,7 +481,24 @@ async def consume_forever(
             with contextlib.suppress(TimeoutError):
                 await asyncio.wait_for(stop.wait(), timeout=2)
             continue
-        for item in batch:
-            await process_one(queue, item, handler)
+        for i, item in enumerate(batch):
+            try:
+                await process_one(queue, item, handler, release_delay_s=release_delay_s)
+            except asyncio.CancelledError:
+                for waiting in batch[i + 1 :]:  # received but never started: back at once
+                    await asyncio.shield(_release(queue, waiting, 0.0))
+                raise
         if not batch:
             await asyncio.sleep(0)
+
+
+async def stop_consumer(task: asyncio.Task[None], stop: asyncio.Event, *, grace_s: float) -> None:
+    """Stop a ``consume_forever`` task: let the current message finish for ``grace_s``, then
+    cancel it, which releases its message (``process_one``) before the host kills the process
+    (ECS waits 30 s by default)."""
+    stop.set()
+    done, _ = await asyncio.wait({task}, timeout=grace_s)
+    if not done:
+        log.warning("consumer_cancelled_after_grace", grace_s=grace_s)
+        task.cancel()
+        await asyncio.gather(task, return_exceptions=True)

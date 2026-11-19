@@ -41,6 +41,7 @@ from bomagent_common.db import make_engine
 from bomagent_common.logging import get_logger
 from bomagent_common.messaging import Handler, PostgresQueue, Queue, consume_forever, make_queue
 from bomagent_common.problems import ProblemError, problem_response
+from bomagent_common.shutdown import shutdown_of
 from bomagent_common.storage import InMemoryObjectStore, ObjectStore, make_object_store
 from bomagent_ingest.handler import IngestWorker
 from bomagent_kb import KnowledgeBase
@@ -281,6 +282,10 @@ def create_app(
     return app
 
 
+#: redelivery delay of a message whose handler was cancelled at shutdown
+RELEASE_DELAY_S = {"runs": RunWorker.resume_stale_after_s}
+
+
 class _Workers:
     """The three queue consumers and the dead-letter purge, as asyncio tasks."""
 
@@ -307,6 +312,8 @@ class _Workers:
                         stop=self._stop,
                         wait_seconds=self._settings.queue_wait_seconds,
                         max_messages=1,  # slow handlers: see consume_forever
+                        # an interrupted run comes back when it can be taken over (resume)
+                        release_delay_s=RELEASE_DELAY_S.get(name, 0.0),
                     ),
                     name=f"consumer-{name}",
                 )
@@ -325,10 +332,15 @@ class _Workers:
             with contextlib.suppress(TimeoutError):
                 await asyncio.wait_for(self._stop.wait(), timeout=3600)
 
+    def request_stop(self) -> None:
+        """Consumers finish their current message and take no new one (``stop`` follows)."""
+        self._stop.set()
+
     async def stop(self, grace_s: float = 30.0) -> None:
         """Let running handlers finish (the queues are long-polled, so consumers notice
         within ``queue_wait_seconds``); cancel what is still running after ``grace_s`` -
-        its message is redelivered after the visibility timeout."""
+        its message is released (redelivered after ``RELEASE_DELAY_S``, not the visibility
+        timeout)."""
         self._stop.set()
         if not self.tasks:
             return
@@ -348,6 +360,8 @@ def _wrap_lifespan(app: FastAPI, workers: _Workers) -> None:
         async with api_lifespan(a) as state:
             if start:
                 workers.start()
+                # SIGTERM: stop claiming new messages now, not after open connections drained
+                shutdown_of(a).on_request(workers.request_stop)
             try:
                 yield state
             finally:

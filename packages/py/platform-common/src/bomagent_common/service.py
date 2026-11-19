@@ -11,6 +11,7 @@ from bomagent_common.config import ServiceSettings
 from bomagent_common.health import ReadinessCheck, health_router
 from bomagent_common.logging import configure_logging
 from bomagent_common.problems import install_problem_handlers
+from bomagent_common.shutdown import shutdown_of
 from bomagent_common.telemetry import configure_telemetry, instrument_fastapi, instrument_httpx
 
 Lifespan = Callable[[FastAPI], AbstractAsyncContextManager[None]]
@@ -36,6 +37,7 @@ def create_service_app(
         redoc_url=None,
         openapi_url="/openapi.json" if docs else None,
     )
+    shutdown_of(app)  # app.state.shutdown: requested on SIGTERM (bomagent_common.shutdown)
     install_problem_handlers(app)
     app.include_router(health_router(settings.service_name, version, readiness))
     instrument_fastapi(app)
