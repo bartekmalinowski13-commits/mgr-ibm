@@ -8,6 +8,7 @@ import math
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
+import pytest
 import yaml
 from typer.testing import CliRunner
 
@@ -358,9 +359,126 @@ def test_an_exception_in_one_run_is_recorded_and_the_matrix_goes_on(tmp_path, mo
     # the spend of every call the failed run got answered (concurrent branches included)
     answered = [r for r in chat.inner.calls if r.metadata["run_id"] == failed_run[0]]
     assert errored[0]["spent"]["llm_calls"] == len(answered) >= 2
-    assert errored[0]["metrics"] == {}
+    # scored like a failed run: an empty BOM, so quality is 0 and the spend is in the metrics
+    metrics = errored[0]["metrics"]
+    assert metrics["line_f1"] == 0.0
+    assert metrics["llm_calls"] == len(answered)
+    assert metrics["cost_eur"] == errored[0]["spent"]["cost_eur"]
     assert result.cells[("A", "fake-closed")].statuses["error"] == 1
     assert "error" in (tmp_path / "pilot" / "report.md").read_text()
+
+
+def test_a_run_that_raises_stays_in_the_paired_comparison(tmp_path, monkeypatch):
+    """Review of #90: dropping errored runs from the metrics removed the design from the
+    paired test (survivor bias). An errored A run is scored, so the pair is kept; the report
+    gives the number of pairs and of dropped pairs per metric."""
+
+    def fail(request, n):  # every full A run breaks on its first model call
+        if request.prompt_id == "extract_group":
+            return TypeError("content is a list")
+        return None
+
+    _patch_chat(monkeypatch, _Chat(fail))
+    cfg = _config(tmp_path, repeats=1, injection={"errors": 2, "trials": 0})
+    result = run_experiment(ExperimentConfig.from_file(cfg), tmp_path)
+    comps = result.comparisons["fake-closed"]
+    assert comps["line_f1"].n == 1
+    assert comps["line_f1"].mean_a == 0.0
+    assert comps["cost_eur"].n == 1
+    assert comps["attempted_mpn_hallucination_rate"].n == 0  # undefined for the empty BOM
+    report = (tmp_path / "pilot" / "report.md").read_text()
+    assert "pairs (dropped)" in report
+    assert "| line_f1 | higher | 1 (0) |" in report
+    assert "| attempted_mpn_hallucination_rate | lower | 0 (1) |" in report
+
+
+def _resume_after(tmp_path, monkeypatch, mutate, **kwargs):
+    tmp_path.mkdir(parents=True, exist_ok=True)
+    _patch_chat(monkeypatch, _Chat())
+    config = ExperimentConfig.from_file(
+        _config(tmp_path, repeats=1, variants=["B"], injection={"errors": 2, "trials": 0})
+    )
+    run_experiment(config, tmp_path / "out")
+    path = tmp_path / "out" / "pilot" / "manifest.json"
+    manifest = json.loads(path.read_text())
+    mutate(manifest)
+    path.write_text(json.dumps(manifest))
+    return run_experiment(config, tmp_path / "out", **kwargs)
+
+
+def _set(*keys):
+    def mutate(manifest):
+        target = manifest
+        for k in keys[:-1]:
+            target = target[k]
+        target[keys[-1]] = "changed"
+
+    return mutate
+
+
+@pytest.mark.parametrize(
+    ("mutate", "what"),
+    [
+        (_set("prompts", "validate"), "prompts"),
+        (_set("rule_pack", "version"), "rule_pack"),
+        (_set("retrieval", "kb_snapshot_id"), "kb_snapshot_id"),
+        (_set("model_ids", "fake-closed"), "model_ids"),
+        (_set("models", "fake-closed", "gateway_model"), "models"),
+        (_set("budget", "timeout_s"), "budget"),
+    ],
+)
+def test_resume_refuses_a_changed_matrix(tmp_path, monkeypatch, mutate, what):
+    """Review of #90: a restart must continue the same experiment - same prompts, rule
+    pack, knowledge base and model entries, not only the same YAML."""
+    with pytest.raises(ValueError, match=what):
+        _resume_after(tmp_path, monkeypatch, mutate)
+
+
+def test_resume_refuses_code_drift_unless_allowed_and_reports_commits(tmp_path, monkeypatch):
+    old = "0" * 40
+    with pytest.raises(ValueError, match="allow-code-drift"):
+        _resume_after(tmp_path, monkeypatch, _set("commit"))
+
+    def other_commit(manifest):
+        manifest["commit"] = old
+
+    _resume_after(tmp_path / "again", monkeypatch, other_commit, allow_code_drift=True)
+    out = tmp_path / "again" / "out" / "pilot"
+    manifest = json.loads((out / "manifest.json").read_text())
+    (resumed,) = manifest["resumed"]
+    assert resumed["code_drift"] is True
+    assert resumed["commit"] != old
+    runs = _lines(out / "runs.jsonl")
+    assert all("commit" in r and "dirty" in r for r in runs)
+    report = (out / "report.md").read_text()
+    assert "## Code provenance" in report
+    assert old in report
+    assert resumed["commit"] in report
+    # the CLI flag reaches the resume check
+    res = CliRunner().invoke(app, ["experiment", "run", "--help"])
+    assert "--allow-code-drift" in res.output
+
+
+@pytest.mark.parametrize("where", ["injection", "run"])
+def test_a_cassette_miss_aborts_the_matrix(tmp_path, monkeypatch, where):
+    """A replay without a recording is a setup error, never a scored outcome: it stops the
+    matrix from inside a validation call or a graph run (resumable after recording)."""
+    from bomagent_llm.chat import CassetteMissError
+
+    def fail(request, n):
+        from_validation = request.metadata["run_id"].startswith("validation-")
+        if from_validation == (where == "injection"):
+            return CassetteMissError("no cassette")
+        return None
+
+    _patch_chat(monkeypatch, _Chat(fail))
+    trials = 1 if where == "injection" else 0
+    cfg = _config(tmp_path, repeats=1, variants=["A"], injection={"errors": 2, "trials": trials})
+    with pytest.raises(CassetteMissError):
+        run_experiment(ExperimentConfig.from_file(cfg), tmp_path)
+    out = tmp_path / "pilot"
+    assert not (out / "runs.jsonl").exists() or not _lines(out / "runs.jsonl")
+    assert not (out / "injection.jsonl").exists()
 
 
 def test_a_crashed_matrix_resumes_without_rerunning_paid_cells(tmp_path, monkeypatch):

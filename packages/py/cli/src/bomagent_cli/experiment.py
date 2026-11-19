@@ -43,7 +43,7 @@ import typer
 import yaml
 from pydantic import BaseModel, Field, field_validator
 
-from bomagent_bom.model import BomVersion
+from bomagent_bom.model import BomVersion, Finding, Severity, Usage
 from bomagent_cad import parse_files
 from bomagent_cli import thesis_assets
 from bomagent_cli.experiment_figures import Estimate, bar_panels, dot_interval_chart, slope_chart
@@ -513,26 +513,67 @@ def _num(v: float) -> float | None:
     return None if math.isnan(v) else v
 
 
-def _open_matrix(config: ExperimentConfig, out: Path) -> None:
+#: manifest parts that define the experiment: a restart must find them unchanged
+RESUME_INVARIANTS: tuple[tuple[str, ...], ...] = (
+    ("config",),
+    ("budget",),
+    ("prompts",),
+    ("rule_pack",),
+    ("retrieval", "kb_snapshot_id"),
+    ("model_ids",),
+    ("models",),
+)
+
+
+def _part(manifest: dict[str, Any], keys: tuple[str, ...]) -> Any:
+    value: Any = manifest
+    for k in keys:
+        value = value.get(k) if isinstance(value, dict) else None
+    return value
+
+
+def _open_matrix(
+    config: ExperimentConfig, out: Path, *, allow_code_drift: bool = False
+) -> dict[str, Any]:
     """Write the manifest before the first run, or check that a restart continues the same
-    matrix (same configuration) and note the restart in the manifest."""
+    experiment and note the restart in the manifest. Returns the code provenance of this
+    session (``commit``, ``dirty``), stored with every record it produces.
+
+    A restart is refused when the configuration, budget, prompt versions, rule pack, KB
+    snapshot or model entries differ from the manifest, and when the code commit differs
+    unless ``allow_code_drift`` (then the drift is recorded)."""
     path = out / "manifest.json"
-    current = json.loads(config.model_dump_json())
+    now = _manifest(config)
+    session = {"commit": now["commit"], "dirty": now["dirty"]}
     if not path.exists():
-        path.write_text(json.dumps(_manifest(config), indent=2, ensure_ascii=False) + "\n")
-        return
+        path.write_text(json.dumps(now, indent=2, ensure_ascii=False) + "\n")
+        return session
     manifest = json.loads(path.read_text(encoding="utf-8"))
-    if manifest.get("config") != current:
+    changed = [
+        ".".join(keys) for keys in RESUME_INVARIANTS if _part(manifest, keys) != _part(now, keys)
+    ]
+    if changed:
         raise ValueError(
-            f"{out} holds a matrix with a different configuration; use another name or directory"
+            f"{out} holds a matrix with a different configuration ({', '.join(changed)} "
+            "changed); use another name or directory"
+        )
+    drift = manifest.get("commit") != now["commit"]
+    if drift and not allow_code_drift:
+        raise ValueError(
+            f"{out} was started at commit {manifest.get('commit')}, the code is now at "
+            f"{now['commit']}; resume with --allow-code-drift to continue (recorded) or "
+            "start a new matrix"
         )
     manifest.setdefault("resumed", []).append(
-        {"at": datetime.now(UTC).isoformat(), "commit": _commit(), "dirty": _dirty()}
+        {"at": datetime.now(UTC).isoformat(), **session, "code_drift": drift}
     )
     path.write_text(json.dumps(manifest, indent=2, ensure_ascii=False) + "\n")
+    return session
 
 
-def run_experiment(config: ExperimentConfig, out_root: Path) -> ExperimentResult:
+def run_experiment(
+    config: ExperimentConfig, out_root: Path, *, allow_code_drift: bool = False
+) -> ExperimentResult:
     """Run (or resume) the matrix. Results are persisted as each run finishes; starting
     again with the same configuration and directory skips what is already done."""
     from bomagent_agents.registry import design_mpns as read_design_mpns
@@ -562,7 +603,7 @@ def run_experiment(config: ExperimentConfig, out_root: Path) -> ExperimentResult
 
     out = out_root / config.name
     out.mkdir(parents=True, exist_ok=True)
-    _open_matrix(config, out)
+    session = _open_matrix(config, out, allow_code_drift=allow_code_drift)
     store = _Store(out)
     done = {(r["design_dir"], r["variant"], r["model"], r["repeat"]) for r in store.runs}
     for design_dir, design, reference in designs:
@@ -581,6 +622,7 @@ def run_experiment(config: ExperimentConfig, out_root: Path) -> ExperimentResult
                         "variant": variant,
                         "model": model,
                         "repeat": rep,
+                        **session,
                     }
                     spent: dict[str, Any] = {}
                     try:
@@ -588,7 +630,10 @@ def run_experiment(config: ExperimentConfig, out_root: Path) -> ExperimentResult
                     except CassetteMissError:
                         raise  # an incomplete replay is a setup error: stop, fix, resume
                     except Exception as exc:  # recorded and reported (PREREJESTRACJA 7.1)
-                        usage = spent.get("usage")
+                        # scored like a failed run: an empty BOM with the spend so far, so the
+                        # design stays in the paired comparison (no survivor bias)
+                        usage = spent.get("usage") or Usage()
+                        bom = _error_bom(design.design_name, variant, exc, usage)
                         store.add_run(
                             record
                             | {
@@ -596,33 +641,56 @@ def run_experiment(config: ExperimentConfig, out_root: Path) -> ExperimentResult
                                 or ("langgraph_a" if variant == "A" else "langgraph_b"),
                                 "status": "error",
                                 "error": type(exc).__name__,
-                                "metrics": {},
+                                "metrics": _score(bom, reference, None, mpns, variant, model),
                                 "billing": {"estimated_calls": 0, "unbilled_calls": 0},
-                                "spent": usage.model_dump(mode="json") if usage else {},
+                                "spent": usage.model_dump(mode="json"),
                             },
-                            None,
+                            bom,
                         )
                         continue
-                    report = evaluate(
-                        result.bom,
-                        reference,
-                        known_mpns=known,
-                        design_mpns=mpns,
-                        design=design.design_name,
-                        variant=variant,
-                        model=model,
-                    )
                     store.add_run(
                         record
                         | {
                             "runtime": result.runtime,
                             "status": result.status,
-                            "metrics": {k: _num(v) for k, v in report.summary().items()},
+                            "metrics": _score(result.bom, reference, known, mpns, variant, model),
                             "billing": _billing(result.bom.findings),
                         },
                         result.bom,
                     )
     return _analyse(config, out, store)
+
+
+def _error_bom(design: str, variant: str, exc: Exception, usage: Usage) -> BomVersion:
+    """What a run that raised delivered: no lines, its spend and the reason (type only)."""
+    finding = Finding(
+        rule_id="run.error",
+        severity=Severity.ERROR,
+        message=f"run raised {type(exc).__name__}",
+    )
+    return BomVersion(
+        design_name=design, variant=variant, items=[], findings=[finding], usage=usage
+    )
+
+
+def _score(
+    bom: BomVersion,
+    reference: list[Any],
+    known: set[str] | None,
+    mpns: set[str],
+    variant: str,
+    model: str,
+) -> dict[str, float | None]:
+    report = evaluate(
+        bom,
+        reference,
+        known_mpns=known,
+        design_mpns=mpns,
+        design=bom.design_name,
+        variant=variant,
+        model=model,
+    )
+    return {k: _num(v) for k, v in report.summary().items()}
 
 
 def _analyse(config: ExperimentConfig, out: Path, store: _Store) -> ExperimentResult:
@@ -1065,8 +1133,8 @@ def _report(result: ExperimentResult, config: ExperimentConfig) -> str:
             " paired effect size. Cluster CI: sensitivity analysis resampling designs and then"
             " repetitions (not a replacement for the permutation test).",
             "",
-            "| metric | better | n | A | B | B - A [95 % CI] | d_z | p | p (Holm) |"
-            " cluster CI | B better / A better / ties |",
+            "| metric | better | pairs (dropped) | A | B | B - A [95 % CI] | d_z | p |"
+            " p (Holm) | cluster CI | B better / A better / ties |",
             "|---|---|---|---|---|---|---|---|---|---|---|",
         ]
         for metric, c in comps.items():
@@ -1085,11 +1153,25 @@ def _report(result: ExperimentResult, config: ExperimentConfig) -> str:
             diff = (
                 f"{_fmt(c.mean_diff, metric)} [{_fmt(c.ci_low, metric)}; {_fmt(c.ci_high, metric)}]"
             )
+            dropped = _dropped_pairs(result.records, model, metric)
             lines.append(
-                f"| {metric} | {better} | {c.n} | {_fmt(c.mean_a, metric)} | "
+                f"| {metric} | {better} | {c.n} ({len(dropped)}) | {_fmt(c.mean_a, metric)} | "
                 f"{_fmt(c.mean_b, metric)} | {diff} | {dz} | {p} | {holm} | {cluster} | "
                 f"{wins_b} / {wins_a} / {c.ties} |"
             )
+        dropped_rows = [
+            f"- `{metric}`: {', '.join(f'{d} ({why})' for d, why in dropped)}"
+            for metric in comps
+            if (dropped := _dropped_pairs(result.records, model, metric))
+        ]
+        if dropped_rows:
+            lines += [
+                "",
+                "Dropped pairs (the metric is undefined for a variant on that design - e.g. no"
+                " agent MPN decision - or the variant has no run):",
+                "",
+                *dropped_rows,
+            ]
         lines.append("")
     if result.injection_records:
         lines += _injection_lines(result, config)
@@ -1112,7 +1194,60 @@ def _report(result: ExperimentResult, config: ExperimentConfig) -> str:
     statuses = {f"{v}/{m}": dict(c.statuses) for (v, m), c in sorted(result.cells.items())}
     lines += ["", f"Run statuses: `{json.dumps(statuses)}`", ""]
     lines += _accounting_lines(result)
+    lines += _provenance_lines(result)
     return "\n".join(lines)
+
+
+def _dropped_pairs(records: list[dict[str, Any]], model: str, metric: str) -> list[tuple[str, str]]:
+    """Designs left out of the paired comparison of ``metric``, with the variant(s) whose
+    design mean is undefined."""
+    designs = sorted({r["design"] for r in records if r["model"] == model})
+    out = []
+    for design in designs:
+        missing = [
+            v for v in ("A", "B") if math.isnan(_design_mean(records, design, v, model, metric))
+        ]
+        if missing:
+            out.append((design, "undefined for " + " and ".join(missing)))
+    return out
+
+
+def _provenance_lines(result: ExperimentResult) -> list[str]:
+    """Code the runs were produced with: one row per (commit, dirty), from the manifest
+    and the records (a resumed matrix may span commits, ``--allow-code-drift``)."""
+    path = result.out_dir / "manifest.json"
+    manifest = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+    sessions = [
+        (
+            "start",
+            manifest.get("created_at", MISSING),
+            manifest.get("commit"),
+            manifest.get("dirty"),
+        )
+    ] + [
+        (
+            "resume" + (" (code drift)" if r.get("code_drift") else ""),
+            r["at"],
+            r["commit"],
+            r["dirty"],
+        )
+        for r in manifest.get("resumed", [])
+    ]
+    runs: dict[tuple[Any, Any], int] = defaultdict(int)
+    for r in result.records:
+        runs[(r.get("commit"), r.get("dirty"))] += 1
+    lines = [
+        "## Code provenance",
+        "",
+        "| session | at | commit | dirty | runs recorded with it |",
+        "|---|---|---|---|---|",
+    ]
+    for kind, at, commit, dirty in sessions:
+        lines.append(f"| {kind} | {at} | `{commit}` | {dirty} | {runs.pop((commit, dirty), 0)} |")
+    for (commit, dirty), n in sorted(runs.items(), key=str):  # records without a session row
+        lines.append(f"| (records) | {MISSING} | `{commit}` | {dirty} | {n} |")
+    lines.append("")
+    return lines
 
 
 def _injection_lines(result: ExperimentResult, config: ExperimentConfig) -> list[str]:
@@ -1211,6 +1346,13 @@ def _accounting_lines(result: ExperimentResult) -> list[str]:
 def run_cmd(
     config_path: Annotated[Path, typer.Argument(exists=True, help="experiment YAML")],
     out: Annotated[Path, typer.Option(help="reports root")] = Path("evals/reports"),
+    allow_code_drift: Annotated[
+        bool,
+        typer.Option(
+            "--allow-code-drift",
+            help="resume a matrix started at another commit (recorded in manifest and report)",
+        ),
+    ] = False,
 ) -> None:
     """Run the experiment matrix and write the report to <out>/<name>/.
 
@@ -1226,7 +1368,7 @@ def run_cmd(
         typer.echo(f"error: invalid experiment configuration: {exc}", err=True)
         raise typer.Exit(2) from exc
     try:
-        result = run_experiment(config, out)
+        result = run_experiment(config, out, allow_code_drift=allow_code_drift)
     except (ValueError, CassetteMissError) as exc:
         typer.echo(f"error: {exc}", err=True)
         raise typer.Exit(2) from exc
