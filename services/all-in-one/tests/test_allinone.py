@@ -417,22 +417,22 @@ async def test_upload_and_variant_b_run_complete_in_one_process(
 def test_entrypoint_dispatches_commands(monkeypatch):
     import sys
 
-    import uvicorn
-
     import bomagent_migrations
+    from bomagent_allinone import __main__ as entry
     from bomagent_allinone.__main__ import main
+    from bomagent_common import shutdown
 
     seen: list[object] = []
     monkeypatch.setattr(sys, "argv", list(sys.argv))  # main() rewrites it for the CLI
     monkeypatch.setattr(bomagent_migrations, "main", lambda: seen.append(list(sys.argv)))
-    monkeypatch.setattr(uvicorn, "run", lambda app, **kw: seen.append((app, kw["factory"])))
+    monkeypatch.setattr(shutdown, "serve", seen.append)  # graceful server (SSE, consumers)
     main(["migrate"])
     main(["bootstrap"])
     main([])
     assert seen == [
         ["bomagent-migrate", "upgrade"],
         ["bomagent-migrate", "bootstrap"],
-        ("bomagent_allinone.app:create_app", True),
+        entry.build_app,
     ]
     with pytest.raises(SystemExit, match="usage"):
         main(["deploy"])
@@ -516,6 +516,29 @@ async def test_worker_role_runs_consumers_serves_no_frontend_and_no_maintenance(
 
 
 @pytest.mark.integration
+async def test_sigterm_stops_the_consumers_claiming_before_connections_drain(
+    app_engine, platform_engine
+):
+    """uvicorn runs the lifespan teardown only after open connections close; the consumers
+    must stop taking new messages as soon as the shutdown is requested."""
+    import asyncio
+
+    from bomagent_common.shutdown import shutdown_of
+
+    app = create_app(
+        _settings(role="worker", queue_wait_seconds=1),
+        engine=app_engine,
+        platform_engine=platform_engine,
+        store=InMemoryObjectStore(),
+    )
+    async with running(app):
+        tasks = list(app.state.workers.tasks)
+        shutdown_of(app).request()
+        done, _ = await asyncio.wait(tasks, timeout=5)  # still inside the lifespan
+        assert len(done) == len(tasks)
+
+
+@pytest.mark.integration
 @pytest.mark.parametrize(("role", "expected_sweeps"), [("worker", False), ("web", True)])
 async def test_only_the_web_process_runs_the_maintenance_loop(
     app_engine, platform_engine, monkeypatch, role, expected_sweeps
@@ -540,3 +563,17 @@ async def test_only_the_web_process_runs_the_maintenance_loop(
     async with running(app):
         await asyncio.sleep(0.4)
     assert bool(calls) is expected_sweeps
+
+
+def test_interrupted_runs_are_resumed_before_the_reaper_can_fail_them():
+    """A run cancelled by a deploy is released for redelivery when it can be taken over;
+    the reaper waits for far longer idle time, so resume wins (no hour-long hang, no reap)."""
+    from bomagent_agent_worker.handler import RunWorker
+    from bomagent_allinone.app import RELEASE_DELAY_S
+    from bomagent_api.maintenance import RUNNING_REAP_GRACE_S
+    from bomagent_common.messaging import QUEUE_VISIBILITY_S
+
+    stale = RunWorker.resume_stale_after_s
+    assert RELEASE_DELAY_S["runs"] == stale
+    assert Settings(environment="test").run_timeout_s >= 2 * stale
+    assert QUEUE_VISIBILITY_S["runs"] + stale < RUNNING_REAP_GRACE_S  # hard-kill redelivery

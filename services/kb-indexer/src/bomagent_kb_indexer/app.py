@@ -10,8 +10,16 @@ from bomagent_common.config import ServiceSettings
 from bomagent_common.db import make_engine, ping
 from bomagent_common.health import ReadinessCheck
 from bomagent_common.logging import get_logger
-from bomagent_common.messaging import Handler, Message, Queue, consume_forever, consumer_queue
+from bomagent_common.messaging import (
+    Handler,
+    Message,
+    Queue,
+    consume_forever,
+    consumer_queue,
+    stop_consumer,
+)
 from bomagent_common.service import Lifespan, create_service_app
+from bomagent_common.shutdown import shutdown_of
 from bomagent_common.telemetry import shutdown_telemetry
 from bomagent_kb_indexer import __version__
 
@@ -27,6 +35,9 @@ class Settings(ServiceSettings):
     queue_url: str | None = None  # SQS queue with work for this worker
     queue_name: str = "kb"  # postgres queue backend: queue name in app.queue_messages
     queue_wait_seconds: int = 10
+    #: on shutdown the current message may finish for this long, then it is cancelled and
+    #: released (inside ECS's default 30 s stop timeout)
+    consumer_stop_grace_s: float = 20.0
     files_bucket: str = "bomagent-local-files"
     global_bucket: str | None = None
     llm_gateway_url: str | None = None
@@ -75,8 +86,9 @@ def build_handler(settings: Settings) -> Handler:
 
 def _make_lifespan(settings: Settings, queue: Queue | None, handler: Handler) -> Lifespan:
     @contextlib.asynccontextmanager
-    async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+    async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         stop = asyncio.Event()
+        shutdown_of(app).on_request(stop.set)  # SIGTERM: claim nothing new
         task: asyncio.Task[None] | None = None
         if queue is not None:
             task = asyncio.create_task(
@@ -86,9 +98,9 @@ def _make_lifespan(settings: Settings, queue: Queue | None, handler: Handler) ->
         try:
             yield
         finally:
-            stop.set()
             if task is not None:
-                await task
+                await stop_consumer(task, stop, grace_s=settings.consumer_stop_grace_s)
+            stop.set()
             shutdown_telemetry()
 
     return lifespan

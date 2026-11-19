@@ -1,9 +1,10 @@
 """ODB++ jobs (``.tgz`` / ``.tar.gz`` / ``.zip``) - component records of the PCB.
 
 The archive is untrusted and never extracted to disk. It is read in memory under hard
-limits (decompressed total, member count, member size) so a decompression bomb stops
-early; absolute paths, ``..`` segments and links make the whole archive invalid. Only
-the files the parser needs are read:
+limits (decompressed total counted on the bytes actually inflated, member count) so a
+decompression bomb stops early, whatever sizes the archive declares; absolute paths,
+``..`` segments and links make the whole archive invalid. Only the files the parser
+needs are read:
 
 * ``<job>/steps/<step>/layers/comp_+_top|comp_+_bot/components`` - ``CMP`` records
   (package index, position, designator, part name) followed by ``PRP`` properties
@@ -16,6 +17,7 @@ Members stored with Unix ``compress`` (``.Z``) are reported, not guessed.
 
 from __future__ import annotations
 
+import copy
 import io
 import posixpath
 import re
@@ -32,7 +34,8 @@ from bomagent_cad.base import FileRef, ParseError, valid_refdes
 MAX_TOTAL_BYTES = 128 * 1024 * 1024  # decompressed archive
 MAX_MEMBERS = 20_000
 MAX_COMPONENTS = 100_000
-SNIFF_BYTES = 16 * 1024 * 1024  # decompressed prefix scanned by sniff()
+SNIFF_BYTES = 16 * 1024 * 1024
+_ZIP_CHUNK = 64 * 1024  # decompressed prefix scanned by sniff()
 SUFFIXES = (".tgz", ".tar.gz", ".zip")
 _COMPONENTS = re.compile(r"^(?:.*/)?steps/([^/]+)/layers/comp_\+_(top|bot)/components(\.z)?$")
 _EDA = re.compile(r"^(?:.*/)?steps/([^/]+)/eda/data$")
@@ -139,6 +142,42 @@ def read_members(file: FileRef, wanted: re.Pattern[str]) -> tuple[list[str], dic
         ) from exc
 
 
+def _read_zip_member(archive: zipfile.ZipFile, info: zipfile.ZipInfo, budget: list[int]) -> bytes:
+    """Inflate one member in bounded chunks, counting the bytes actually produced.
+
+    The sizes in the central directory are the attacker's: ``ZipExtFile.read()`` inflates a
+    whole member in one call and truncates to the declared size afterwards, so a member
+    declaring 1 KB can allocate gigabytes. Here the declared size is ignored while reading
+    (``probe.file_size``), every chunk is charged to ``budget`` and a mismatch with the
+    declared size is a damaged archive. Only stored and deflated members are read: zipfile
+    inflates a bzip2/LZMA input chunk without an output bound.
+    """
+    if info.compress_type not in (zipfile.ZIP_STORED, zipfile.ZIP_DEFLATED):
+        raise ParseError(
+            f"{info.filename!r}: unsupported zip compression (use deflate)",
+            code="archive.unsupported",
+        )
+    probe = copy.copy(info)
+    # never truncate (that would end in a CRC error first): read until the stream really ends;
+    # the loop below bounds memory
+    probe.file_size = 1 << 62
+    out = bytearray()
+    with archive.open(probe) as handle:
+        while chunk := handle.read(_ZIP_CHUNK):
+            out += chunk
+            if len(out) > budget[0]:
+                raise ParseError(
+                    "archive larger than the limit when decompressed", code="archive.too_large"
+                )
+    if len(out) != info.file_size:
+        raise ParseError(
+            f"{info.filename!r}: size differs from the archive directory",
+            code="archive.malformed",
+        )
+    budget[0] -= len(out)
+    return bytes(out)
+
+
 def _read_members(file: FileRef, wanted: re.Pattern[str]) -> tuple[list[str], dict[str, bytes]]:
     names: list[str] = []
     out: dict[str, bytes] = {}
@@ -149,11 +188,12 @@ def _read_members(file: FileRef, wanted: re.Pattern[str]) -> tuple[list[str], di
             infos = archive.infolist()
             if len(infos) > MAX_MEMBERS:
                 raise ParseError(f"{file.name}: too many entries", code="archive.too_large")
-            if sum(i.file_size for i in infos) > MAX_TOTAL_BYTES:
+            if sum(i.file_size for i in infos) > MAX_TOTAL_BYTES:  # cheap early refusal
                 raise ParseError(
                     f"{file.name}: larger than the limit when decompressed",
                     code="archive.too_large",
                 )
+            budget = [MAX_TOTAL_BYTES]  # real decompressed bytes still allowed
             for info in infos:
                 name = _safe(info.filename)
                 if info.is_dir():
@@ -162,7 +202,7 @@ def _read_members(file: FileRef, wanted: re.Pattern[str]) -> tuple[list[str], di
                     raise ParseError(f"link in archive: {name!r}", code="archive.unsafe_path")
                 names.append(name)
                 if wanted.match(name.lower()):
-                    out[name] = archive.read(info)
+                    out[name] = _read_zip_member(archive, info, budget)
         return names, out
     raw = _gunzip(file.data)
     with tarfile.open(fileobj=io.BytesIO(raw), mode="r:") as tar:

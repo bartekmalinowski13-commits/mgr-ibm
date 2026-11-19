@@ -57,7 +57,10 @@ python tools/restore_drill.py --dump bomagent-<date>.dump \
 Point it at a **separate** scratch server or a throwaway Supabase project, never the production
 server (the script cannot tell them apart, so this is on the operator). It prints row counts of
 `tenancy.tenants` and `audit.events` and runs `audit.verify_chain` for every tenant; exit 0 only when
-every chain verifies. Compare the counts with production, allowing for the dump's age. Record each
+every chain verifies, each checked in its own tenant context (`SET app.tenant_id`). The drill **fails** when
+no tenant is visible (an empty dump, or an admin role that RLS hides rows from: use a superuser or a
+BYPASSRLS role) unless `--allow-empty` is given, when a tenant has no audit events, or when the chains
+do not cover every audit event. Compare the counts with production, allowing for the dump's age. Record each
 drill (date, dump age, duration, result) in the ops log; the duration is the measured RTO.
 
 Not covered by the script: restoring Storage objects, and checking the chain **against the anchors**

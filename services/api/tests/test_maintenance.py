@@ -119,6 +119,87 @@ async def test_stuck_runs_are_reaped(app_engine, platform_engine, make_tenant):
     assert actions == ["run.failed"]
 
 
+async def test_a_running_run_with_a_recent_checkpoint_is_not_reaped(
+    app_engine, platform_engine, make_tenant
+):
+    """The reaper must not race the resume of an interrupted run: a run counts as stuck when
+    it has been idle (no start, takeover or checkpoint) for ``run_timeout_s``, so takeover
+    (after ``resume_stale_after_s`` idle) always comes first."""
+    tenant = await make_tenant()
+    pid, busy, idle = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
+    async with tenant_transaction(app_engine, tenant.tenant_id) as conn:
+        await conn.execute(
+            text(
+                "INSERT INTO projects.projects (id, tenant_id, name, created_by)"
+                " VALUES (:i, :t, 'p', 'u')"
+            ),
+            {"i": pid, "t": tenant.tenant_id},
+        )
+        for rid in (busy, idle):
+            await conn.execute(
+                text(
+                    "INSERT INTO runs.runs (id, tenant_id, project_id, variant, runtime,"
+                    " model_id, created_by, status, started_at) VALUES (:r, :t, :p, 'A',"
+                    " 'langgraph_a', 'fake-closed', 'u', 'running', now() - interval '2 hours')"
+                ),
+                {"r": rid, "t": tenant.tenant_id, "p": pid},
+            )
+        for rid, age in ((busy, "1 minute"), (idle, "90 minutes")):
+            await conn.execute(
+                text(
+                    "INSERT INTO runs.graph_checkpoints (tenant_id, run_id, checkpoint_id,"
+                    " checkpoint_type, checkpoint, metadata_type, metadata, created_at)"
+                    " VALUES (:t, :r, 'c1', 'json', '\\x00', 'json', '\\x00',"
+                    " now() - CAST(:age AS interval))"
+                ),
+                {"t": tenant.tenant_id, "r": rid, "age": age},
+            )
+    await sweep(app_engine, platform_engine, {}, run_timeout_s=3600)
+    async with tenant_transaction(app_engine, tenant.tenant_id) as conn:
+        states = {
+            r.id: r.status for r in await conn.execute(text("SELECT id, status FROM runs.runs"))
+        }
+    assert states == {busy: "running", idle: "failed"}
+
+
+async def test_a_hard_killed_run_is_left_to_its_redelivery_before_it_is_reaped(
+    app_engine, platform_engine, make_tenant
+):
+    """Worker killed without a hand-back: the message comes back after the queue's visibility
+    timeout and is taken over once the run is stale. The reaper must not fail the run inside
+    visibility timeout + resume threshold of its start (they would fall due together)."""
+    from bomagent_api.maintenance import RUNNING_REAP_GRACE_S
+    from bomagent_common.messaging import QUEUE_VISIBILITY_S, RUN_RESUME_STALE_S
+
+    assert QUEUE_VISIBILITY_S["runs"] + RUN_RESUME_STALE_S <= RUNNING_REAP_GRACE_S
+    tenant = await make_tenant()
+    pid, killed, long_dead = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
+    async with tenant_transaction(app_engine, tenant.tenant_id) as conn:
+        await conn.execute(
+            text(
+                "INSERT INTO projects.projects (id, tenant_id, name, created_by)"
+                " VALUES (:i, :t, 'p', 'u')"
+            ),
+            {"i": pid, "t": tenant.tenant_id},
+        )
+        for rid, age_s in ((killed, 3900), (long_dead, RUNNING_REAP_GRACE_S + 60)):
+            await conn.execute(
+                text(
+                    "INSERT INTO runs.runs (id, tenant_id, project_id, variant, runtime,"
+                    " model_id, created_by, status, started_at) VALUES (:r, :t, :p, 'A',"
+                    " 'langgraph_a', 'fake-closed', 'u', 'running',"
+                    " now() - make_interval(secs => :age))"
+                ),
+                {"r": rid, "t": tenant.tenant_id, "p": pid, "age": age_s},
+            )
+    await sweep(app_engine, platform_engine, {}, run_timeout_s=3600)
+    async with tenant_transaction(app_engine, tenant.tenant_id) as conn:
+        states = {
+            r.id: r.status for r in await conn.execute(text("SELECT id, status FROM runs.runs"))
+        }
+    assert states == {killed: "running", long_dead: "failed"}
+
+
 async def test_stale_queued_runs_are_reaped(app_engine, platform_engine, make_tenant):
     tenant = await make_tenant()
     pid, rid = uuid.uuid4(), uuid.uuid4()
@@ -142,6 +223,112 @@ async def test_stale_queued_runs_are_reaped(app_engine, platform_engine, make_te
     async with tenant_transaction(app_engine, tenant.tenant_id) as conn:
         status = (
             await conn.execute(text("SELECT status FROM runs.runs WHERE id = :i"), {"i": rid})
+        ).scalar()
+    assert status == "failed"
+
+
+async def test_files_and_documents_left_by_a_dead_letter_are_failed(
+    app_engine, platform_engine, make_tenant
+):
+    """Ingest review I5: a message that dead-lettered leaves its files ``uploaded`` and its
+    KB document ``pending`` for good - the sweep fails them with a reason and an audit event."""
+    from bomagent_common.db import platform_transaction
+    from bomagent_common.tenancy import tenant_scope
+    from bomagent_kb import DocumentMeta, Scope
+
+    tenant = await make_tenant()
+    kb = make_kb()
+    pid, stale, fresh = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
+    async with tenant_transaction(app_engine, tenant.tenant_id) as conn:
+        await conn.execute(
+            text(
+                "INSERT INTO projects.projects (id, tenant_id, name, created_by)"
+                " VALUES (:i, :t, 'p', 'u')"
+            ),
+            {"i": pid, "t": tenant.tenant_id},
+        )
+        for fid, name, age in (
+            (stale, "a.kicad_sch", "10 hours"),
+            (fresh, "b.kicad_sch", "1 minute"),
+        ):
+            await conn.execute(
+                text(
+                    "INSERT INTO projects.files (id, tenant_id, project_id, name, object_key,"
+                    " sha256, size_bytes, created_by, created_at) VALUES (:f, :t, :p, :n, :k,"
+                    " repeat('a', 64), 1, 'u', now() - CAST(:age AS interval))"
+                ),
+                {
+                    "f": fid,
+                    "t": tenant.tenant_id,
+                    "p": pid,
+                    "n": name,
+                    "k": f"x/{name}",
+                    "age": age,
+                },
+            )
+    docs = {}
+    with tenant_scope(tenant):
+        async with tenant_transaction(app_engine) as conn:
+            for label in ("stale", "fresh"):
+                docs[label] = await kb.add_document(
+                    conn,
+                    DocumentMeta(
+                        title=label,
+                        mime_type="text/plain",
+                        sha256=uuid.uuid4().hex * 2,
+                        size_bytes=1,
+                    ),
+                    scope=Scope.TENANT,
+                    created_by="u",
+                )
+            await conn.execute(
+                text("UPDATE kb.documents SET created_at = now() - interval '1 day' WHERE id = :i"),
+                {"i": docs["stale"]},
+            )
+    async with platform_transaction(platform_engine) as conn:
+        global_doc = await kb.add_document(
+            conn,
+            DocumentMeta(
+                title="g", mime_type="text/plain", sha256=uuid.uuid4().hex * 2, size_bytes=1
+            ),
+            scope=Scope.GLOBAL,
+            created_by="pipeline",
+        )
+        await conn.execute(
+            text("UPDATE kb.documents SET created_at = now() - interval '1 day' WHERE id = :i"),
+            {"i": global_doc},
+        )
+
+    result = await sweep(app_engine, platform_engine, {}, run_timeout_s=3600)
+    assert result["stale_files"] >= 1
+    assert result["stale_documents"] >= 2
+
+    async with tenant_transaction(app_engine, tenant.tenant_id) as conn:
+        files = {
+            r.id: r
+            for r in await conn.execute(text("SELECT id, status, summary FROM projects.files"))
+        }
+        documents = {
+            r.id: r
+            for r in await conn.execute(
+                text("SELECT id, status, error FROM kb.documents WHERE scope = 'tenant'")
+            )
+        }
+        actions = (await conn.execute(text("SELECT action FROM audit.events"))).scalars().all()
+    assert files[stale].status == "failed"
+    assert files[stale].summary["error"] == "ingest.timeout"
+    assert files[stale].summary["message"]  # a reason the UI can show
+    assert files[fresh].status == "uploaded"
+    assert documents[docs["stale"]].status == "failed"
+    assert "did not finish" in documents[docs["stale"]].error
+    assert documents[docs["fresh"]].status == "pending"
+    assert "project.files_failed" in actions
+    assert "kb.document.failed" in actions
+    async with platform_transaction(platform_engine) as conn:
+        status = (
+            await conn.execute(
+                text("SELECT status FROM kb.documents WHERE id = :i"), {"i": global_doc}
+            )
         ).scalar()
     assert status == "failed"
 

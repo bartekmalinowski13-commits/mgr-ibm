@@ -11,6 +11,7 @@ dependencies = [
     "bomagent-platform-common",
     "bomagent-kb",
     "bomagent-llm",
+    "bomagent-cad-parsers",  # resource-limited sandbox for untrusted documents
 ]
 
 [build-system]
@@ -24,3 +25,4 @@ packages = ["src/bomagent_kb_indexer"]
 bomagent-platform-common = { workspace = true }
 bomagent-kb = { workspace = true }
 bomagent-llm = { workspace = true }
+bomagent-cad-parsers = { workspace = true }
