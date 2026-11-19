@@ -6,7 +6,7 @@ import json
 import logging
 import time
 import uuid
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Iterable
 from contextvars import ContextVar
 from dataclasses import dataclass, field
 from typing import Any, TypeVar
@@ -235,6 +235,14 @@ class AgentContext:
                 await self.on_step(marker, self.budget.usage.model_copy())
             except Exception:
                 log.warning("resume marker callback failed", exc_info=True)
+
+
+def line_key(refdes: Iterable[str]) -> frozenset[str]:
+    """Stable identity of a BOM line across steps: its set of designators.
+
+    Line numbers are positions, and renumbering or an agent's compose step reorders them,
+    so state that follows a line from one step to the next is keyed by this instead."""
+    return frozenset(refdes)
 
 
 def agent_provenance(

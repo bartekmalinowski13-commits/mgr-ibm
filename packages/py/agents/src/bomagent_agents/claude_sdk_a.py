@@ -26,7 +26,7 @@ from bomagent_agents.contracts import RunInput, RunOutput, TraceStep
 from bomagent_agents.prompts import data_block, load_prompt
 from bomagent_agents.runtime_base import AgentContext, agent_provenance
 from bomagent_agents.schemas import GroupedLines
-from bomagent_agents.variant_a import lines_to_items
+from bomagent_agents.variant_a import attribute_mpns, lines_to_items
 from bomagent_bom.model import BomVersion, Finding, Severity, Usage
 
 TOOL_NAMES = ["mcp__bom__get_components", "mcp__bom__search_kb", "mcp__bom__submit_bom"]
@@ -226,7 +226,13 @@ class ClaudeAgentSdkVariantA:
             )
         prov = agent_provenance("claude_agent_sdk", prompt, ctx.model, "Claude Agent SDK loop")
         items = (
-            ctx.guard_mpns(lines_to_items(ctx, sink["bom"].lines, prov, "submit_bom"), "submit_bom")
+            attribute_mpns(
+                ctx.guard_mpns(
+                    lines_to_items(ctx, sink["bom"].lines, prov, "submit_bom"), "submit_bom"
+                ),
+                run.design,
+                prov,
+            )
             if "bom" in sink
             else []
         )

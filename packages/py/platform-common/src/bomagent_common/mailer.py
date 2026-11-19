@@ -10,6 +10,7 @@ processing is the operator's responsibility, ADR-0002). The relay connection alw
 from __future__ import annotations
 
 import asyncio
+import re
 import smtplib
 import ssl
 from dataclasses import dataclass, field
@@ -67,10 +68,13 @@ class SmtpMailer:
     def _deliver(self, mail: Mail) -> None:
         c = self._c
         msg = EmailMessage()
-        msg["From"] = c.sender
-        msg["To"] = mail.to
-        msg["Subject"] = mail.subject
-        msg.set_content(mail.text)
+        try:
+            msg["From"] = c.sender
+            msg["To"] = mail.to
+            msg["Subject"] = mail.subject
+            msg.set_content(mail.text)
+        except ValueError as exc:  # e.g. CR/LF in a header value: never sent, never a 500
+            raise MailError("invalid message headers") from exc
         ctx = ssl.create_default_context()
         try:
             if c.implicit_tls:
@@ -109,6 +113,15 @@ def mailer_from_settings(
     return SmtpMailer(SmtpConfig(host, port, username, password, sender, implicit_tls))
 
 
+_HEADER_BREAKS = re.compile(r"[\x00-\x1f\x7f-\x9f\u2028\u2029]+")
+
+
+def header_text(value: str) -> str:
+    """One line of text safe for a mail header: control characters and line breaks become a
+    single space (header injection, review M-1)."""
+    return _HEADER_BREAKS.sub(" ", value).strip()
+
+
 def invitation_mail(*, to: str, org_name: str, inviter: str, link: str, days: int) -> Mail:
     """Bilingual (PL + EN) invitation; the invitee's language is not known before sign-up."""
     pl = (
@@ -125,6 +138,6 @@ def invitation_mail(*, to: str, org_name: str, inviter: str, link: str, days: in
     )
     return Mail(
         to=to,
-        subject=f"Zaproszenie do {org_name} / Invitation to {org_name} - BOM Agent",
+        subject=header_text(f"Zaproszenie do {org_name} / Invitation to {org_name} - BOM Agent"),
         text=f"{pl}\n\n--\n\n{en}\n",
     )

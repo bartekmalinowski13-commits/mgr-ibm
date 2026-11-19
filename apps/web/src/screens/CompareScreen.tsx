@@ -65,8 +65,15 @@ export function CompareScreen() {
   const lang = i18n.language;
 
   if (runs.isPending) return <Skeleton />;
-  if (runs.isError) return <LoadError error={runs.error} />;
-  if (done.length < 2) return <p className="max-w-[70ch] text-muted">{t("compare.needTwo")}</p>;
+  if (runs.isError) return <LoadError error={runs.error} onRetry={() => void runs.refetch()} />;
+  if (done.length < 2 || !runA || !runB)
+    return <p className="max-w-[70ch] text-muted">{t("compare.needTwo")}</p>;
+  // a BOM that failed to load must never read as "no differences" (wrong thesis result)
+  const bomError = bomA.isError ? bomA.error : bomB.isError ? bomB.error : undefined;
+  const retryBoms = () => {
+    if (bomA.isError) void bomA.refetch();
+    if (bomB.isError) void bomB.refetch();
+  };
 
   const pick = (side: "a" | "b", id: string) =>
     void navigate({
@@ -129,104 +136,110 @@ export function CompareScreen() {
         ))}
       </div>
 
-      <div className="overflow-x-auto rounded-card border border-line bg-surface">
-        <table className="w-full min-w-[480px] text-left">
-          <caption className="sr-only">{t("compare.metrics")}</caption>
-          <thead className="border-b border-line text-sm text-muted">
-            <tr>
-              <th scope="col" className="px-4 py-2.5 font-medium">
-                {t("compare.metric")}
-              </th>
-              <th scope="col" className="px-4 py-2.5 font-medium">
-                {t("run.variant", { variant: runA?.variant })}
-              </th>
-              <th scope="col" className="px-4 py-2.5 font-medium">
-                {t("run.variant", { variant: runB?.variant })}
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r) => (
-              <tr key={r.label} className="border-b border-line last:border-0">
-                <th scope="row" className="px-4 py-2.5 font-normal">
-                  {r.label}
-                </th>
-                <td className="px-4 py-2.5 font-display text-lg font-bold tabular-nums">
-                  {r.fmt(r.a)}
-                </td>
-                <td className="px-4 py-2.5 font-display text-lg font-bold tabular-nums">
-                  {r.fmt(r.b)}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      <section aria-labelledby="diff-title" className="flex flex-col gap-3">
-        <h2 id="diff-title" className="font-display text-2xl font-bold">
-          {t("compare.differences", { count: disagree.length })}
-        </h2>
-        {bomA.isPending || bomB.isPending ? (
-          <Skeleton rows={4} />
-        ) : disagree.length === 0 ? (
-          <p className="text-muted">{t("compare.same")}</p>
-        ) : (
+      {bomError ? (
+        <LoadError error={bomError} onRetry={retryBoms} />
+      ) : (
+        <>
           <div className="overflow-x-auto rounded-card border border-line bg-surface">
-            <table className="w-full min-w-[720px] text-left text-[14px]">
-              <thead className="border-b border-line text-[13px] text-muted">
+            <table className="w-full min-w-[480px] text-left">
+              <caption className="sr-only">{t("compare.metrics")}</caption>
+              <thead className="border-b border-line text-sm text-muted">
                 <tr>
-                  <th scope="col" className="px-3 py-2.5 font-medium">
-                    {t("bom.columns.refdes")}
+                  <th scope="col" className="px-4 py-2.5 font-medium">
+                    {t("compare.metric")}
                   </th>
-                  <th scope="col" className="px-3 py-2.5 font-medium">
+                  <th scope="col" className="px-4 py-2.5 font-medium">
                     {t("run.variant", { variant: runA?.variant })}
                   </th>
-                  <th scope="col" className="px-3 py-2.5 font-medium">
+                  <th scope="col" className="px-4 py-2.5 font-medium">
                     {t("run.variant", { variant: runB?.variant })}
                   </th>
                 </tr>
               </thead>
               <tbody>
-                {disagree.map((d) => (
-                  <tr key={d.refdes} className="border-b border-line align-top last:border-0">
-                    <th scope="row" className="px-3 py-2.5 font-mono text-[13px] font-normal">
-                      {d.refdes}
+                {rows.map((r) => (
+                  <tr key={r.label} className="border-b border-line last:border-0">
+                    <th scope="row" className="px-4 py-2.5 font-normal">
+                      {r.label}
                     </th>
-                    {[d.a, d.b].map((item, i) => (
-                      // biome-ignore lint/suspicious/noArrayIndexKey: two fixed columns
-                      <td key={i} className="px-3 py-2.5">
-                        {item ? (
-                          <div className="flex gap-2">
-                            <span
-                              aria-hidden
-                              className={`mt-1.5 size-2.5 shrink-0 rounded-full ${PROVENANCE_COLOR[lineProvenance(item)]}`}
-                            />
-                            <dl className="grid grid-cols-[auto_1fr] gap-x-3">
-                              {FIELDS.map((f) => (
-                                <div key={f} className="contents">
-                                  <dt className="text-muted">{t(`bom.columns.${f}`)}</dt>
-                                  <dd
-                                    className={`${f === "mpn" ? "font-mono text-[13px]" : ""} ${d.changed.includes(f) ? "font-semibold" : ""}`}
-                                  >
-                                    {item[f] || "–"}
-                                  </dd>
-                                </div>
-                              ))}
-                            </dl>
-                          </div>
-                        ) : (
-                          <span className="text-muted">{t("compare.missing")}</span>
-                        )}
-                      </td>
-                    ))}
+                    <td className="px-4 py-2.5 font-display text-lg font-bold tabular-nums">
+                      {r.fmt(r.a)}
+                    </td>
+                    <td className="px-4 py-2.5 font-display text-lg font-bold tabular-nums">
+                      {r.fmt(r.b)}
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-        )}
-      </section>
+
+          <section aria-labelledby="diff-title" className="flex flex-col gap-3">
+            <h2 id="diff-title" className="font-display text-2xl font-bold">
+              {t("compare.differences", { count: disagree.length })}
+            </h2>
+            {bomA.isLoading || bomB.isLoading ? (
+              <Skeleton rows={4} />
+            ) : disagree.length === 0 ? (
+              <p className="text-muted">{t("compare.same")}</p>
+            ) : (
+              <div className="overflow-x-auto rounded-card border border-line bg-surface">
+                <table className="w-full min-w-[720px] text-left text-[14px]">
+                  <thead className="border-b border-line text-[13px] text-muted">
+                    <tr>
+                      <th scope="col" className="px-3 py-2.5 font-medium">
+                        {t("bom.columns.refdes")}
+                      </th>
+                      <th scope="col" className="px-3 py-2.5 font-medium">
+                        {t("run.variant", { variant: runA?.variant })}
+                      </th>
+                      <th scope="col" className="px-3 py-2.5 font-medium">
+                        {t("run.variant", { variant: runB?.variant })}
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {disagree.map((d) => (
+                      <tr key={d.refdes} className="border-b border-line align-top last:border-0">
+                        <th scope="row" className="px-3 py-2.5 font-mono text-[13px] font-normal">
+                          {d.refdes}
+                        </th>
+                        {[d.a, d.b].map((item, i) => (
+                          // biome-ignore lint/suspicious/noArrayIndexKey: two fixed columns
+                          <td key={i} className="px-3 py-2.5">
+                            {item ? (
+                              <div className="flex gap-2">
+                                <span
+                                  aria-hidden
+                                  className={`mt-1.5 size-2.5 shrink-0 rounded-full ${PROVENANCE_COLOR[lineProvenance(item)]}`}
+                                />
+                                <dl className="grid grid-cols-[auto_1fr] gap-x-3">
+                                  {FIELDS.map((f) => (
+                                    <div key={f} className="contents">
+                                      <dt className="text-muted">{t(`bom.columns.${f}`)}</dt>
+                                      <dd
+                                        className={`${f === "mpn" ? "font-mono text-[13px]" : ""} ${d.changed.includes(f) ? "font-semibold" : ""}`}
+                                      >
+                                        {item[f] || "–"}
+                                      </dd>
+                                    </div>
+                                  ))}
+                                </dl>
+                              </div>
+                            ) : (
+                              <span className="text-muted">{t("compare.missing")}</span>
+                            )}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+        </>
+      )}
     </div>
   );
 }

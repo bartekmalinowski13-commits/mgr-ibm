@@ -22,12 +22,33 @@ export interface ClientOptions {
   fetch?: typeof fetch;
 }
 
+/**
+ * Any error body as an RFC 9457 problem. Proxies and gateways answer with HTML pages, empty
+ * bodies or plain JSON (a 502/504, or a 413 at the edge), so only an object with a string
+ * `type` and `title` is taken as it is; anything else becomes an `about:blank` problem for
+ * the HTTP status.
+ */
+export function toProblem(status: number, statusText: string, body: unknown): Problem {
+  if (
+    body &&
+    typeof body === "object" &&
+    typeof (body as Problem).type === "string" &&
+    typeof (body as Problem).title === "string"
+  ) {
+    return { ...(body as Problem), status: (body as Problem).status ?? status };
+  }
+  return { type: "about:blank", title: statusText || `HTTP ${status}`, status };
+}
+
 export class ApiError extends Error {
+  readonly problem: Problem;
   constructor(
     readonly status: number,
-    readonly problem: Problem,
+    problem: unknown,
   ) {
-    super(problem.detail ?? problem.title);
+    const normalised = toProblem(status, "", problem);
+    super(normalised.detail ?? normalised.title);
+    this.problem = normalised;
     this.name = "ApiError";
   }
 }
@@ -52,7 +73,8 @@ export function createApiClient(options: ClientOptions) {
 /** Unwraps an openapi-fetch result: returns data or throws ApiError with the RFC 9457 body. */
 export function unwrap<T>(result: { data?: T; error?: unknown; response: Response }): T {
   if (result.data !== undefined && result.response.ok) return result.data;
-  throw new ApiError(result.response.status, result.error as Problem);
+  const { status, statusText } = result.response;
+  throw new ApiError(status, toProblem(status, statusText, result.error));
 }
 
 /** A fresh idempotency key for creating POSTs (retry-safe). */

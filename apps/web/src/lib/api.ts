@@ -1,4 +1,4 @@
-import { ApiError, type components, createApiClient, type Problem } from "@bomagent/api-client";
+import { ApiError, type components, createApiClient, toProblem } from "@bomagent/api-client";
 import i18n from "./i18n";
 import { auth } from "./session";
 
@@ -17,11 +17,21 @@ export async function call<T>(
 ): Promise<T> {
   const result = await promise;
   if (result.response.ok) return result.data as T;
-  const problem = (result.error ?? {
-    title: result.response.statusText,
-    status: result.response.status,
-  }) as Problem;
-  throw new ApiError(result.response.status, problem);
+  const { status, statusText } = result.response;
+  throw new ApiError(status, toProblem(status, statusText, result.error));
+}
+
+/**
+ * The ApiError for a failed raw `fetch` response. The body is parsed only when it is JSON:
+ * a gateway's HTML page (502/504, or a 413 for a large upload) must not surface as a
+ * `SyntaxError` from `resp.json()`.
+ */
+async function failure(resp: Response): Promise<ApiError> {
+  let body: unknown;
+  if (/^application\/(problem\+)?json/i.test(resp.headers.get("content-type") ?? "")) {
+    body = await resp.json().catch(() => undefined);
+  }
+  return new ApiError(resp.status, toProblem(resp.status, resp.statusText, body));
 }
 
 function headers(): Record<string, string> {
@@ -39,9 +49,8 @@ export async function uploadFile(projectId: string, file: File): Promise<Schemas
     headers: headers(),
     body,
   });
-  const json = await resp.json();
-  if (!resp.ok) throw new ApiError(resp.status, json as Problem);
-  return json as Schemas["FileInfo"];
+  if (!resp.ok) throw await failure(resp);
+  return (await resp.json()) as Schemas["FileInfo"];
 }
 
 export async function uploadKbDocument(
@@ -54,9 +63,8 @@ export async function uploadKbDocument(
   body.append("kind", kind);
   body.append("manufacturer", manufacturer);
   const resp = await fetch("/v1/kb/documents", { method: "POST", headers: headers(), body });
-  const json = await resp.json();
-  if (!resp.ok) throw new ApiError(resp.status, json as Problem);
-  return json as Schemas["KbDocument"];
+  if (!resp.ok) throw await failure(resp);
+  return (await resp.json()) as Schemas["KbDocument"];
 }
 
 export async function evaluateRun(runId: string, file: File): Promise<Schemas["Evaluation"]> {
@@ -67,20 +75,19 @@ export async function evaluateRun(runId: string, file: File): Promise<Schemas["E
     headers: headers(),
     body,
   });
-  const json = await resp.json();
-  if (!resp.ok) throw new ApiError(resp.status, json as Problem);
-  return json as Schemas["Evaluation"];
+  if (!resp.ok) throw await failure(resp);
+  return (await resp.json()) as Schemas["Evaluation"];
 }
 
 export async function downloadCsv(runId: string): Promise<Blob> {
   const resp = await fetch(`/v1/runs/${runId}/bom.csv`, { headers: headers() });
-  if (!resp.ok) throw new ApiError(resp.status, (await resp.json()) as Problem);
+  if (!resp.ok) throw await failure(resp);
   return resp.blob();
 }
 
 export async function downloadXlsx(runId: string): Promise<Blob> {
   const resp = await fetch(`/v1/runs/${runId}/bom.xlsx`, { headers: headers() });
-  if (!resp.ok) throw new ApiError(resp.status, (await resp.json()) as Problem);
+  if (!resp.ok) throw await failure(resp);
   return resp.blob();
 }
 
@@ -135,13 +142,22 @@ export async function streamRun(
   return final;
 }
 
+/** A localised message for an HTTP status when the body says nothing more useful. */
+function statusMessage(status: number): string {
+  if (status === 413 || status === 429) return i18n.t(`httpErrors.${status}`);
+  if (status >= 500) return i18n.t("httpErrors.5xx");
+  return i18n.t("httpErrors.generic", { status });
+}
+
 export function problemMessage(error: unknown): string {
   if (error instanceof ApiError) {
-    // Localised by problem slug (the last segment of `type`); the server detail is the fallback.
-    const slug = error.problem.type.split("/problems/")[1];
+    // Localised by problem slug (the last segment of `type`); the server detail is the
+    // fallback, and a localised message for the status when there is no detail either.
+    const problem: Partial<Schemas["Problem"]> | undefined = error.problem;
+    const slug = typeof problem?.type === "string" ? problem.type.split("/problems/")[1] : "";
     const key = `errors.${slug}`;
     if (slug && i18n.exists(key)) return i18n.t(key);
-    return error.problem.detail ?? error.problem.title;
+    return problem?.detail || statusMessage(error.status);
   }
   return error instanceof Error ? error.message : String(error);
 }

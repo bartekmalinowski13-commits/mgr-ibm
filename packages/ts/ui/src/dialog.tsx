@@ -53,6 +53,46 @@ export function DialogContent({
   );
 }
 
+/**
+ * A modal panel sliding in from the left (navigation drawer on narrow screens). Radix gives
+ * the focus trap, Escape to close, focus return to the trigger and an inert page behind.
+ */
+export function SheetContent({
+  title,
+  children,
+  className,
+  closeLabel,
+}: {
+  /** accessible name of the panel (visually hidden) */
+  title: string;
+  children: ReactNode;
+  className?: string;
+  closeLabel: string;
+}) {
+  return (
+    <D.Portal>
+      <D.Overlay className="fixed inset-0 z-40 bg-ink/30 motion-safe:animate-[fade_120ms_ease-out]" />
+      <D.Content
+        aria-describedby={undefined}
+        className={cn(
+          "fixed inset-y-0 left-0 z-50 w-[min(280px,calc(100vw-48px))] overflow-y-auto bg-surface shadow-dialog",
+          "focus-visible:outline-none",
+          className,
+        )}
+      >
+        <D.Title className="sr-only">{title}</D.Title>
+        <D.Close
+          aria-label={closeLabel}
+          className="absolute right-2 top-2 z-10 rounded-control p-1.5 text-muted hover:bg-paper hover:text-ink focus-visible:outline-2 focus-visible:outline-focus"
+        >
+          <X size={18} aria-hidden />
+        </D.Close>
+        {children}
+      </D.Content>
+    </D.Portal>
+  );
+}
+
 export function DialogFooter({ children }: { children: ReactNode }) {
   return <div className="mt-6 flex justify-end gap-3 border-t border-line pt-4">{children}</div>;
 }

@@ -31,6 +31,7 @@ from bomagent_api.routers.projects import MAX_UPLOAD
 from bomagent_api.routers.runs import MAX_REFERENCE
 from bomagent_api.sso import (
     CognitoIdentityProviders,
+    Connection,
     DnsTxtResolver,
     InMemoryIdentityProviders,
     StaticTxtResolver,
@@ -114,7 +115,7 @@ class Settings(ServiceSettings):
     #: the identity provider's user endpoint instead of a token claim (Supabase:
     #: ``<url>/auth/v1/user`` + the anon key) - for providers whose claim the user can edit
     oidc_userinfo_url: str | None = None
-    oidc_userinfo_apikey: str | None = None
+    oidc_userinfo_apikey: str | None = Field(default=None, repr=False)
 
     #: invitation e-mail (UX-02). Off unless ``smtp_host`` is set (no default host: the EU
     #: relay is the operator's choice); ``invite_base_url`` is the web origin used for the
@@ -160,7 +161,7 @@ class Settings(ServiceSettings):
     runs_queue_url: str | None = None
     kb_queue_url: str | None = None
     llm_gateway_url: str | None = None
-    llm_gateway_key: str | None = None
+    llm_gateway_key: str | None = Field(default=None, repr=False)
     #: run without a gateway on non-semantic hashing embeddings (explicit opt-in outside
     #: local/test, ARCH-07); never set this for real customer data
     allow_fake_llm: bool | None = None
@@ -262,6 +263,20 @@ def _install_mfa(app: FastAPI, settings: Settings) -> None:
     app.add_exception_handler(MfaRequiredError, mfa_required_handler)
 
 
+class UnavailableIdentityProviders:
+    """Hosted deployment without an identity broker (review M-4): a connection is never
+    federated, so saving one is recorded as ``status='failed'`` with this reason instead of
+    being reported as active."""
+
+    REASON = "SSO is not available on this deployment (no identity broker is configured)"
+
+    async def apply(self, connection: Connection, client_secret: str | None) -> None:
+        raise RuntimeError(self.REASON)
+
+    async def remove(self, provider_name: str) -> None:
+        return None
+
+
 def create_app(
     settings: Settings | None = None,
     *,
@@ -335,8 +350,11 @@ def create_app(
             settings.cognito_user_pool_id, settings.cognito_client_id, settings.aws_region
         )
         app.state.txt_resolver = DnsTxtResolver()
-    else:
+    elif local:
         app.state.identity_providers = InMemoryIdentityProviders()
+        app.state.txt_resolver = StaticTxtResolver()
+    else:  # hosted without Cognito (e.g. the Supabase pilot): nothing can be federated
+        app.state.identity_providers = UnavailableIdentityProviders()
         app.state.txt_resolver = StaticTxtResolver()
     _install_flags(app, settings)
     if settings.auth_mode == "local":

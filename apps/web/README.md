@@ -11,6 +11,10 @@ Tailwind, components from `@bomagent/ui`), following `docs/design/UX_GUIDELINES.
   correction as a new version), CSV export, audit log with chain verification, settings
   (members, invitations, API keys, usage and limits, SSO placeholder). PL + EN.
 - **Talks to:** only the `/v1` API through the typed `@bomagent/api-client`.
+- **Errors and retries:** `problemMessage()` localises problems by slug, else the server detail,
+  else a message for the HTTP status (413, 429, 5xx, generic). Creating requests reuse one
+  idempotency key per user intent (`lib/idempotency.ts`): a retry of the same form replays, a
+  changed form or a submit after success gets a new key. Destructive admin actions confirm first.
 - **Design tokens:** `src/styles.css` (colours of provenance: violet = LLM agent, green =
   rule, grey = design file, ink = person; Bricolage Grotesque for the greeting and page
   titles, IBM Plex Sans/Mono). Plan and design notes: `docs/plans/M5-frontend.md`.

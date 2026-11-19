@@ -34,3 +34,24 @@ async def create_with_owner(
         },
     )
     await conn.execute(text("SELECT set_config('app.tenant_id', :t, true)"), {"t": str(org_id)})
+
+
+async def lock_owner(conn: AsyncConnection, owner_sub: str) -> None:
+    """Serialise organisation creation per user until ``conn``'s transaction ends, so the
+    owned-organisation quota is counted and enforced atomically (review M-2)."""
+    await conn.execute(
+        text("SELECT pg_advisory_xact_lock(hashtextextended('org-owner:' || :s, 0))"),
+        {"s": owner_sub},
+    )
+
+
+async def count_owned(conn: AsyncConnection, owner_sub: str) -> int:
+    """Organisations ``owner_sub`` owns; ``conn`` is a ``user_transaction`` of that user."""
+    return int(
+        (
+            await conn.execute(
+                text("SELECT count(*) FROM tenancy.memberships_of(:s) WHERE 'owner' = ANY(roles)"),
+                {"s": owner_sub},
+            )
+        ).scalar_one()
+    )

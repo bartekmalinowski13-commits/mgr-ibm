@@ -122,18 +122,28 @@ function Members() {
                   id={`role-${m.user_sub}`}
                   className="w-44"
                   value={m.roles[0]}
-                  onChange={(e) =>
+                  onChange={(e) => {
+                    const next = e.target.value;
+                    const roleName = t(`settings.roles.${next}`);
+                    const question =
+                      m.user_sub === session?.sub
+                        ? t("settings.confirmOwnRole", { role: roleName })
+                        : t("settings.confirmRoleChange", {
+                            name: m.display_name || m.email,
+                            role: roleName,
+                          });
+                    if (!window.confirm(question)) return;
                     void act(
                       () =>
                         call(
                           api.PATCH("/v1/members/{user_sub}", {
                             params: { path: { user_sub: m.user_sub } },
-                            body: { roles: [e.target.value as "viewer"] },
+                            body: { roles: [next as "viewer"] },
                           }),
                         ),
                       t("settings.rolesChanged"),
-                    )
-                  }
+                    );
+                  }}
                 >
                   {ROLES.map((r) => (
                     <option key={r} value={r}>
@@ -145,7 +155,9 @@ function Members() {
                   <Button
                     variant="danger"
                     size="sm"
-                    onClick={() =>
+                    onClick={() => {
+                      const name = m.display_name || m.email;
+                      if (!window.confirm(t("settings.confirmRemoveMember", { name }))) return;
                       void act(
                         () =>
                           call(
@@ -154,8 +166,8 @@ function Members() {
                             }),
                           ),
                         t("settings.removed"),
-                      )
-                    }
+                      );
+                    }}
                   >
                     {t("settings.removeMember")}
                   </Button>
@@ -208,7 +220,9 @@ function Members() {
                 <Button
                   variant="secondary"
                   size="sm"
-                  onClick={() =>
+                  onClick={() => {
+                    if (!window.confirm(t("settings.confirmRevokeInvite", { email: i.email })))
+                      return;
                     void act(
                       () =>
                         call(
@@ -216,9 +230,9 @@ function Members() {
                             params: { path: { invitation_id: i.id } },
                           }),
                         ),
-                      t("settings.revoke"),
-                    )
-                  }
+                      t("settings.invitationRevoked"),
+                    );
+                  }}
                 >
                   {t("settings.revoke")}
                 </Button>
@@ -347,15 +361,19 @@ function SsoSettings() {
                   <Button
                     size="sm"
                     variant="secondary"
-                    onClick={() =>
-                      void run(() =>
-                        call(
-                          api.DELETE("/v1/sso/domains/{domain}", {
-                            params: { path: { domain: d.domain } },
-                          }),
-                        ),
-                      )
-                    }
+                    onClick={() => {
+                      if (!window.confirm(t("sso.confirmRemoveDomain", { domain: d.domain })))
+                        return;
+                      void run(
+                        () =>
+                          call(
+                            api.DELETE("/v1/sso/domains/{domain}", {
+                              params: { path: { domain: d.domain } },
+                            }),
+                          ),
+                        t("sso.domainRemoved"),
+                      );
+                    }}
                   >
                     {t("common.remove")}
                   </Button>
@@ -498,12 +516,13 @@ function SsoSettings() {
             <Button
               type="button"
               variant="secondary"
-              onClick={() =>
+              onClick={() => {
+                if (!window.confirm(t("sso.confirmRemoveProvider"))) return;
                 void run(async () => {
                   await call(api.DELETE("/v1/sso"));
                   setLoaded(false);
-                })
-              }
+                }, t("sso.providerRemoved"));
+              }}
             >
               {t("sso.removeProvider")}
             </Button>
@@ -589,6 +608,7 @@ function Keys() {
                 variant="secondary"
                 size="sm"
                 onClick={async () => {
+                  if (!window.confirm(t("settings.confirmRotate", { name: k.name }))) return;
                   try {
                     const r = await call(
                       api.POST("/v1/api-keys/{key_id}/rotate", {
@@ -609,11 +629,12 @@ function Keys() {
                 variant="danger"
                 size="sm"
                 onClick={async () => {
+                  if (!window.confirm(t("settings.confirmRevokeKey", { name: k.name }))) return;
                   try {
                     await call(
                       api.DELETE("/v1/api-keys/{key_id}", { params: { path: { key_id: k.id } } }),
                     );
-                    toast(t("settings.revoke"));
+                    toast(t("settings.keyRevoked"));
                     await refresh();
                   } catch (err) {
                     toast(problemMessage(err), "error");
