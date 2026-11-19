@@ -57,7 +57,8 @@ regenerate with `just openapi`; a test fails when it drifts).
 - **Event streams:** open run-progress streams (`GET /v1/runs/{id}/events`) are capped per
   API process (`sse_limits.StreamLimiter`: 5 per user, 25 per organisation) -> 429
   `rate-limited` with `Retry-After`; a slot is freed when the stream ends, the client
-  disconnects or the unread body is collected.
+  disconnects or the unread body is collected. With N API instances the effective cap is
+  N x 5 per user and N x 25 per organisation (no shared counter).
 - **Invitation e-mail:** organisation names reject control characters and line breaks (422);
   the subject is reduced to one line, and any mailer error after the invitation commit is
   audited as `outcome: failed` (never a 500).
