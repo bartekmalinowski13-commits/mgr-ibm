@@ -43,7 +43,7 @@ export function RunTable({
             {projects ? <th className="px-4 py-2.5 font-medium">{t("newRun.project")}</th> : null}
             <th className="px-4 py-2.5 font-medium">{t("newRun.model")}</th>
             <th className="px-4 py-2.5 font-medium">{t("audit.when")}</th>
-            <th className="px-4 py-2.5 font-medium">Status</th>
+            <th className="px-4 py-2.5 font-medium">{t("run.statusColumn")}</th>
           </tr>
         </thead>
         <tbody>

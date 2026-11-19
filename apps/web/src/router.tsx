@@ -94,6 +94,8 @@ export const runRoute = createRoute({
   getParentRoute: () => app,
   path: "/runs/$runId",
   component: lazyRouteComponent(() => import("./screens/RunScreen"), "RunScreen"),
+  // a new run (e.g. after Rerun) starts with fresh live/selection state, not the previous run's
+  remountDeps: ({ params }) => params.runId,
 });
 const kb = createRoute({
   getParentRoute: () => app,
