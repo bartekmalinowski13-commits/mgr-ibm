@@ -25,7 +25,7 @@ ADMIN = frozenset({"owner", "admin"})
 POLICIES: dict[str, frozenset[str]] = {
     "project.read": READ,
     "project.create": WRITE,
-    "project.delete": ADMIN,  # sample projects only
+    "project.delete": ADMIN,  # any project, sample or own (UX-03)
     "samples.add": frozenset({"owner"}),
     "file.upload": WRITE,
     "run.read": READ,
