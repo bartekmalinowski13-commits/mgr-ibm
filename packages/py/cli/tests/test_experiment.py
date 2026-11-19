@@ -9,6 +9,7 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import pytest
+import typer
 import yaml
 from typer.testing import CliRunner
 
@@ -455,8 +456,9 @@ def test_resume_refuses_code_drift_unless_allowed_and_reports_commits(tmp_path, 
     assert old in report
     assert resumed["commit"] in report
     # the CLI flag reaches the resume check
-    res = CliRunner().invoke(app, ["experiment", "run", "--help"])
-    assert "--allow-code-drift" in res.output
+    # inspect the command's options, not --help text (Rich adds ANSI styling in CI)
+    run_cmd = typer.main.get_command(app).commands["experiment"].commands["run"]  # type: ignore[attr-defined]
+    assert any("--allow-code-drift" in p.opts for p in run_cmd.params)
 
 
 @pytest.mark.parametrize("where", ["injection", "run"])
