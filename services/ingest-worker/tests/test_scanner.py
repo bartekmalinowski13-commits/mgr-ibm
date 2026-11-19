@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 
 from bomagent_cad import FileRef
-from bomagent_ingest.handler import IngestWorker
+from bomagent_ingest.handler import SCAN_BUDGET_S, SCAN_CONCURRENCY, IngestWorker
 from bomagent_ingest.scanner import (
     EICAR_SIGNATURE,
     ClamdScanner,
@@ -18,6 +18,7 @@ from bomagent_ingest.scanner import (
     MalwareDetectedError,
     NoopScanner,
     ScannerError,
+    ScanRejectedError,
     ScanResult,
     scanner_from_env,
 )
@@ -171,3 +172,74 @@ async def test_worker_propagates_scanner_errors() -> None:
     worker = IngestWorker(engine=None, store=None, scanner=Broken())  # type: ignore[arg-type]
     with pytest.raises(ScannerError):
         await worker._scan_all([FileRef("a", b"x")])
+
+
+# --- ingest review I5, M1: permanent scanner errors, bounded scan time --------------------
+
+
+@pytest.mark.parametrize(
+    "reply",
+    [
+        b"INSTREAM size limit exceeded. ERROR\0",
+        b"stream: INSTREAM size limit exceeded. ERROR\0",
+    ],
+)
+async def test_clamd_size_limit_is_a_permanent_rejection(reply: bytes) -> None:
+    """The file can never be scanned (StreamMaxLength): retrying it five times is useless."""
+    fake = FakeClamd(reply=reply)
+    server = await asyncio.start_server(fake.handle, "127.0.0.1", 0)
+    port = server.sockets[0].getsockname()[1]
+    async with server:
+        with pytest.raises(ScanRejectedError) as caught:
+            await ClamdScanner(f"tcp://127.0.0.1:{port}").scan("a", b"data")
+    assert isinstance(caught.value, ScannerError)  # still never "clean"
+
+
+async def test_other_clamd_errors_stay_transient() -> None:
+    fake = FakeClamd(reply=b"stream: Can't allocate memory ERROR\0")
+    server = await asyncio.start_server(fake.handle, "127.0.0.1", 0)
+    port = server.sockets[0].getsockname()[1]
+    async with server:
+        with pytest.raises(ScannerError) as caught:
+            await ClamdScanner(f"tcp://127.0.0.1:{port}").scan("a", b"data")
+    assert not isinstance(caught.value, ScanRejectedError)
+
+
+async def test_scanning_a_project_has_an_overall_deadline() -> None:
+    class Hanging:
+        async def scan(self, name: str, data: bytes) -> ScanResult:
+            await asyncio.sleep(60)
+            return ScanResult(clean=True)
+
+    worker = IngestWorker(engine=None, store=None, scanner=Hanging(), scan_budget_s=0.2)  # type: ignore[arg-type]
+    started = asyncio.get_running_loop().time()
+    with pytest.raises(ScannerError, match="deadline"):
+        await worker._scan_all([FileRef(f"f{i}", b"x") for i in range(10)])
+    assert asyncio.get_running_loop().time() - started < 2
+
+
+async def test_files_are_scanned_with_bounded_concurrency() -> None:
+    active = peak = 0
+
+    class Slow:
+        async def scan(self, name: str, data: bytes) -> ScanResult:
+            nonlocal active, peak
+            active += 1
+            peak = max(peak, active)
+            await asyncio.sleep(0.02)
+            active -= 1
+            return ScanResult(clean=True)
+
+    worker = IngestWorker(engine=None, store=None, scanner=Slow())  # type: ignore[arg-type]
+    await worker._scan_all([FileRef(f"f{i}", b"x") for i in range(20)])
+    assert 1 < peak <= SCAN_CONCURRENCY
+
+
+def test_worst_case_handling_fits_in_the_visibility_timeout() -> None:
+    """Scan budget + sandbox wall clock + margin for downloads and the DB stay below the
+    ingest queue's visibility timeout, so a slow message is not handed to a second worker."""
+    from bomagent_cad.sandbox import SandboxLimits
+    from bomagent_common.messaging import QUEUE_VISIBILITY_S
+
+    worst = SCAN_BUDGET_S + SandboxLimits().timeout_seconds + 120
+    assert worst < QUEUE_VISIBILITY_S["ingest"]

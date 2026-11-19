@@ -11,7 +11,8 @@ Scanners implement :class:`FileScanner`:
 * :class:`ClamdScanner` - ``clamd`` over TCP or a unix socket (``INSTREAM``). Off unless
   ``BOMAGENT_MALWARE_SCAN_CLAMD_ADDR`` is set. Fails closed: when clamd is unreachable or
   answers with an error the file is *not* treated as clean (:class:`ScannerError`, the queue
-  message is retried).
+  message is retried). Errors caused by the file itself (clamd's size limit) are
+  :class:`ScanRejectedError`: permanent, the project fails without retries.
 """
 
 from __future__ import annotations
@@ -40,6 +41,17 @@ EICAR_SIGNATURE = b"X5O!P%@AP[4\\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-F
 
 class ScannerError(RuntimeError):
     """The scan could not be completed; the file must not be treated as clean."""
+
+
+class ScanRejectedError(ScannerError):
+    """The scanner can *never* scan this file (e.g. larger than clamd's ``StreamMaxLength``).
+
+    Still not clean, but retrying is useless: the worker fails the project permanently
+    (``file.scan_failed``) instead of letting the message dead-letter."""
+
+
+#: clamd error replies that depend on the file, not on the scanner's health
+_PERMANENT_CLAMD_ERRORS = ("size limit exceeded",)
 
 
 class MalwareDetectedError(Exception):
@@ -123,6 +135,10 @@ class ClamdScanner:
 
 
 def _parse_reply(reply: str) -> ScanResult:
+    # "stream: <verdict>", but some errors come without the prefix
+    # ("INSTREAM size limit exceeded. ERROR")
+    if any(marker in reply.lower() for marker in _PERMANENT_CLAMD_ERRORS):
+        raise ScanRejectedError(f"clamd refused the file: {reply.strip()[:120]}")
     verdict = reply.partition(":")[2].strip()
     if verdict == "OK":
         return ScanResult(clean=True)
