@@ -19,6 +19,9 @@ the message forever.
 Limits come from ``SandboxLimits`` (defaults overridable with ``BOMAGENT_PARSE_MEMORY_MB``,
 ``BOMAGENT_PARSE_CPU_SECONDS``, ``BOMAGENT_PARSE_TIMEOUT_SECONDS``). Setting
 ``BOMAGENT_PARSE_SANDBOX=inprocess`` runs in the calling process (unit tests only).
+``run_sandboxed`` is the generic runner: other untrusted-input work (knowledge-base
+extraction in the kb-indexer) uses it with its own child module built on
+``_sandbox_child.serve``.
 Memory and CPU limits need the POSIX ``resource`` module; elsewhere only the timeout applies.
 """
 
@@ -32,14 +35,16 @@ import subprocess
 import sys
 from collections.abc import Mapping
 from dataclasses import dataclass
+from typing import Any
 
 from bomagent_bom.model import ParsedDesign
 from bomagent_cad.base import FileRef, ParseError
 from bomagent_cad.registry import parse_files
 
 MiB = 1024 * 1024
-#: cap on the child's reply (a ParsedDesign is small; anything bigger is a misbehaving child)
-MAX_REPLY_BYTES = 128 * MiB
+#: cap on the child's reply: about 600 bytes per component at MAX_COMPONENTS; anything bigger
+#: is a misbehaving child (the parent has no memory limit of its own)
+MAX_REPLY_BYTES = 64 * MiB
 _ENV_KEEP = ("LANG", "LC_ALL", "TZ")
 log = logging.getLogger(__name__)
 _reported: set[tuple[bool, bool]] = set()
@@ -116,13 +121,15 @@ class SandboxLimits:
     timeout_seconds: float = 90.0
 
     @classmethod
-    def from_env(cls, env: Mapping[str, str] | None = None) -> SandboxLimits:
+    def from_env(
+        cls, env: Mapping[str, str] | None = None, *, prefix: str = "BOMAGENT_PARSE_"
+    ) -> SandboxLimits:
         env = os.environ if env is None else env
         d = cls()
         return cls(
-            memory_bytes=int(env.get("BOMAGENT_PARSE_MEMORY_MB", d.memory_bytes // MiB)) * MiB,
-            cpu_seconds=int(env.get("BOMAGENT_PARSE_CPU_SECONDS", d.cpu_seconds)),
-            timeout_seconds=float(env.get("BOMAGENT_PARSE_TIMEOUT_SECONDS", d.timeout_seconds)),
+            memory_bytes=int(env.get(f"{prefix}MEMORY_MB", d.memory_bytes // MiB)) * MiB,
+            cpu_seconds=int(env.get(f"{prefix}CPU_SECONDS", d.cpu_seconds)),
+            timeout_seconds=float(env.get(f"{prefix}TIMEOUT_SECONDS", d.timeout_seconds)),
         )
 
 
@@ -153,25 +160,22 @@ def killed_error(returncode: int, stderr: bytes) -> ParseError:
     )
 
 
-def parse_files_sandboxed(
-    files: list[FileRef], limits: SandboxLimits | None = None
-) -> ParsedDesign:
-    if os.environ.get("BOMAGENT_PARSE_SANDBOX", "").lower() == "inprocess":
-        return parse_files(files)
-    limits = limits or SandboxLimits.from_env()
+def sandbox_disabled() -> bool:
+    """``BOMAGENT_PARSE_SANDBOX=inprocess``: run in the calling process (unit tests only)."""
+    return os.environ.get("BOMAGENT_PARSE_SANDBOX", "").lower() == "inprocess"
+
+
+def run_sandboxed(module: str, payload: bytes, limits: SandboxLimits) -> dict[str, Any]:
+    """Run ``python -I -m <module> <memory> <cpu>`` under ``limits`` with ``payload`` on
+    stdin and return its JSON reply (see ``_sandbox_child.serve``). A child that is killed,
+    times out, exceeds a limit or answers garbage is a ``ParseError``
+    (``parse.resource_limit`` / ``parse.timeout`` / ``parse.internal``)."""
     harden_parent()
-    cmd = [
-        sys.executable,
-        "-I",
-        "-m",
-        "bomagent_cad._sandbox_child",
-        str(limits.memory_bytes),
-        str(limits.cpu_seconds),
-    ]
+    cmd = [sys.executable, "-I", "-m", module, str(limits.memory_bytes), str(limits.cpu_seconds)]
     try:
         proc = subprocess.run(  # noqa: S603 - fixed argv, no shell
             cmd,
-            input=_encode(files),
+            input=payload,
             capture_output=True,
             timeout=limits.timeout_seconds,
             env=child_env(),
@@ -190,7 +194,25 @@ def parse_files_sandboxed(
         raise killed_error(proc.returncode, proc.stderr)
     try:
         reply = json.loads(proc.stdout.splitlines()[-1])
-        _report_hardening(reply)
+    except Exception as exc:
+        raise ParseError(
+            f"the parser returned an invalid reply ({type(exc).__name__})", code="parse.internal"
+        ) from exc
+    if not isinstance(reply, dict) or not isinstance(reply.get("ok"), bool):
+        raise ParseError("the parser returned an invalid reply", code="parse.internal")
+    _report_hardening(reply)
+    return reply
+
+
+def parse_files_sandboxed(
+    files: list[FileRef], limits: SandboxLimits | None = None
+) -> ParsedDesign:
+    if sandbox_disabled():
+        return parse_files(files)
+    reply = run_sandboxed(
+        "bomagent_cad._sandbox_child", _encode(files), limits or SandboxLimits.from_env()
+    )
+    try:
         failure = (
             None
             if reply["ok"]

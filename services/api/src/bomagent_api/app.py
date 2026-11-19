@@ -168,6 +168,8 @@ class Settings(ServiceSettings):
     embedding_model: str = "fake-embedding"
     cors_origins: list[str] = Field(default_factory=list)
     maintenance_interval_s: float = 30.0  # outbox relay + stuck-run reaper; 0 disables
+    #: a running run idle this long (no start/takeover/checkpoint) is failed by the reaper;
+    #: keep it well above the agent worker's ``run_resume_stale_s`` (resume comes first)
     run_timeout_s: float = 3600.0
     sse_interval_s: float = 1.0
     sse_timeout_s: float = 900.0

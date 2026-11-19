@@ -10,24 +10,31 @@ Message types:
 * ``kb.global_document.uploaded`` (global corpus) - accepted only from the platform
   pseudo-tenant with ``actor_type == "system"``; uses the platform role.
 
-Permanent failures (unsupported/corrupt file) mark the document ``failed`` and are
-acknowledged; transient failures raise, so SQS retries and finally dead-letters them.
+Documents are untrusted customer files: text is extracted in the resource-limited sandbox
+child (``bomagent_kb_indexer.sandbox``), off the event loop. Permanent failures
+(unsupported, corrupt or hostile file, a limit or timeout) mark the document ``failed``
+with the reason, are audited (tenant scope) and acknowledged; transient failures (storage,
+database) raise, so the queue retries them and finally dead-letters them - the API's
+maintenance sweep then fails documents still ``pending`` past the retry window.
 """
 
 from __future__ import annotations
 
+import asyncio
 import uuid
 from dataclasses import dataclass
 
 from sqlalchemy.ext.asyncio import AsyncEngine
 
+from bomagent_common.audit import AuditEvent, emit_audit
 from bomagent_common.db import platform_transaction, tenant_transaction
 from bomagent_common.logging import get_logger
 from bomagent_common.messaging import Message
 from bomagent_common.org_export import EXPORT_REQUESTED
 from bomagent_common.storage import ObjectStore, key_belongs_to
-from bomagent_kb import ExtractionError, KnowledgeBase, extract
+from bomagent_kb import ExtractionError, KnowledgeBase
 from bomagent_kb_indexer.export import OrgExporter
+from bomagent_kb_indexer.sandbox import extract_sandboxed
 
 log = get_logger(__name__)
 PLATFORM_TENANT = uuid.UUID(int=0)
@@ -66,12 +73,25 @@ class KbIndexer:
             raise RejectedMessageError("object key outside the tenant prefix")
         data = await self.tenant_store.get(key)
         try:
-            extracted = extract(
-                str(message.payload["filename"]), data, use_docling=self.use_docling
+            # untrusted file: resource-limited child process, off the event loop
+            extracted = await asyncio.to_thread(
+                extract_sandboxed,
+                str(message.payload["filename"]),
+                data,
+                use_docling=self.use_docling,
             )
         except ExtractionError as exc:
             async with tenant_transaction(self.app_engine, message.tenant_id) as conn:
                 await self.kb.mark_failed(conn, doc_id, str(exc))
+                await emit_audit(
+                    conn,
+                    AuditEvent(
+                        action="kb.document.failed",
+                        object_type="kb_document",
+                        object_id=str(doc_id),
+                        after={"error": str(exc)[:200]},
+                    ),
+                )
             log.info("kb_document_failed", document_id=str(doc_id), reason=str(exc))
             return
         async with tenant_transaction(self.app_engine, message.tenant_id) as conn:
@@ -85,6 +105,17 @@ class KbIndexer:
             raise RejectedMessageError("this worker is not configured for the global corpus")
         doc_id = uuid.UUID(message.payload["document_id"])
         data = await self.global_store.get(str(message.payload["object_key"]))
-        extracted = extract(str(message.payload["filename"]), data, use_docling=self.use_docling)
+        try:
+            extracted = await asyncio.to_thread(
+                extract_sandboxed,
+                str(message.payload["filename"]),
+                data,
+                use_docling=self.use_docling,
+            )
+        except ExtractionError as exc:
+            async with platform_transaction(self.platform_engine) as conn:
+                await self.kb.mark_failed(conn, doc_id, str(exc))
+            log.info("kb_global_document_failed", document_id=str(doc_id), reason=str(exc))
+            return
         async with platform_transaction(self.platform_engine) as conn:
             await self.kb.index_document(conn, doc_id, extracted)

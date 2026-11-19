@@ -20,11 +20,23 @@ health-only mode.
 **Resume (ARCH-05):** a redelivered `run.requested` for a run still `running` whose last
 checkpoint/state write is older than `BOMAGENT_RUN_RESUME_STALE_S` (default 1200 s, above the longest single LLM call) is taken
 over (compare-and-swap on `started_at`, audit `run.resumed`) and continued from the last
-checkpoint; a younger one raises `RunInProgressError` (not acked, retried later). After
-`BOMAGENT_RUN_MAX_RESUMES` (3) resumes the run is failed. The final audit event and the
-trace carry the resume record. Limits without a migration: no heartbeat column (liveness is
-the newest `runs.graph_checkpoints.created_at`), and the reaper still fails runs by
-`started_at` (reset on takeover).
+checkpoint; a younger one raises `RunInProgressError` (a `RetryLaterError`: the message is
+released and redelivered when the run would count as stale, not after the queue's 1 h
+visibility timeout). After `BOMAGENT_RUN_MAX_RESUMES` (3) resumes the run is failed. The final
+audit event and the trace carry the resume record.
+
+**Shutdown (deploys):** SIGTERM stops the consumer claiming new messages at once; the current
+run may continue for `BOMAGENT_CONSUMER_STOP_GRACE_S` (default 20 s, inside ECS's 30 s stop
+timeout), then it is cancelled and its message released with a delay of
+`BOMAGENT_RUN_RESUME_STALE_S`, so it is taken over and resumed as soon as it counts as stale.
+While a run is alive its message is kept invisible (extended to 15 min every 5 min), so a run
+longer than the 1 h visibility timeout is never redelivered; hand-backs (shutdown, a
+`RetryLaterError` for a run still alive elsewhere) do not count towards dead-lettering on the
+Postgres queue (SQS cannot take a receive back: its redrive `maxReceiveCount`, 5 in the data
+stack, bounds hand-backs). The API's reaper fails a `running` run only after `run_timeout_s`
+(1 h) without a start, takeover or checkpoint, and never within visibility timeout + resume
+threshold (+5 min) of its start, so a redelivery after a hard kill is resumed first. Limit without a migration: no
+heartbeat column (liveness is the newest `runs.graph_checkpoints.created_at`).
 
 **Metering of failed runs:** the spend so far is taken from every finished step (the
 `on_step` progress callback, also called by a step that raises), so a run that fails with a

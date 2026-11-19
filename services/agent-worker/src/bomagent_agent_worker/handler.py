@@ -45,7 +45,7 @@ from bomagent_common import metrics
 from bomagent_common.audit import AuditEvent, emit_audit
 from bomagent_common.db import tenant_transaction
 from bomagent_common.logging import get_logger
-from bomagent_common.messaging import Message
+from bomagent_common.messaging import RUN_RESUME_STALE_S, Message, RetryLaterError
 from bomagent_common.metering import record_usage
 from bomagent_common.storage import ObjectStore, key_belongs_to, tenant_key
 from bomagent_kb import KnowledgeBase
@@ -75,9 +75,16 @@ class RejectedRunError(ValueError):
     pass
 
 
-class RunInProgressError(RuntimeError):
+#: retry delay of a redelivery that raced another worker's takeover
+TAKEOVER_RACE_RETRY_S = 60.0
+#: never poll a live run more often than this
+MIN_RETRY_S = 30.0
+
+
+class RunInProgressError(RetryLaterError):
     """The run is ``running`` and its worker still looks alive (or another worker is taking
-    it over): the message is not acknowledged, so the queue redelivers it later."""
+    it over): the message is released and redelivered after ``retry_after_s`` - when the
+    run would count as stale - instead of after the queue's whole visibility timeout."""
 
 
 @dataclass
@@ -91,7 +98,7 @@ class RunWorker:
     #: a ``running`` run without a checkpoint/state write for this long is taken to have lost
     #: its worker and is resumed on redelivery (must exceed the longest single step: one LLM
     #: call may take up to ``bomagent_llm.chat.CALL_TIMEOUT_MAX_S``)
-    resume_stale_after_s: float = 1200.0
+    resume_stale_after_s: float = RUN_RESUME_STALE_S
     max_resumes: int = 3
     #: size cap of ``runs.trace`` (DATA-01/02); the full trace stays in ``trace.json``
     trace_max_bytes: int = DEFAULT_TRACE_MAX_BYTES
@@ -174,7 +181,10 @@ class RunWorker:
         last = await saver.last_activity(run_id)
         idle_s = (now - max(started_at, last or started_at)).total_seconds()
         if idle_s < self.resume_stale_after_s:
-            raise RunInProgressError(f"run {run_id} is running (idle {idle_s:.0f}s)")
+            raise RunInProgressError(
+                f"run {run_id} is running (idle {idle_s:.0f}s)",
+                retry_after_s=max(self.resume_stale_after_s - idle_s, MIN_RETRY_S),
+            )
         async with tenant_transaction(self.engine, message.tenant_id) as conn:
             row = (
                 await conn.execute(
@@ -190,7 +200,10 @@ class RunWorker:
                 )
             ).first()
             if row is None:  # finished, reaped or taken over by another worker meanwhile
-                raise RunInProgressError(f"run {run_id} changed while taking it over")
+                raise RunInProgressError(
+                    f"run {run_id} changed while taking it over",
+                    retry_after_s=TAKEOVER_RACE_RETRY_S,
+                )
             if row.resumes >= self.max_resumes:
                 params = None
             else:

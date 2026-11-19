@@ -18,6 +18,7 @@ dependencies = [
     "opentelemetry-instrumentation-sqlalchemy>=0.49b0",
     "opentelemetry-instrumentation-httpx>=0.49b0",
     "fastapi>=0.115",
+    "uvicorn>=0.32",
     "boto3>=1.35",
 ]
 
