@@ -72,6 +72,12 @@ _Updated by Claude Code after every milestone (see `docs/prompts/CLAUDE_CODE_MAS
   kept + rejected); the final-BOM `mpn_hallucination_rate` stays as the residual. Both are in the experiment
   tables/figures; `docs/thesis/METODYKA.md` states which deterministic parts A and B share.
 
+- **Fly process groups + observability assets (PR for the owner, `deploy/*`):** `fly.toml` runs `web`
+  (public, always on, maintenance) and `worker` (no public port, own `/readyz` check, smaller DB pool) as
+  groups of one app; `deploy/observability/` has a Grafana dashboard, Prometheus-style alert rules and the
+  owner steps (EU OTLP endpoint, uptime probe); a test keeps dashboards/alerts consistent with the metrics
+  the code defines. Metric names no longer carry OTel units, so exported names equal the code names.
+
 ## 2026-11-12 - deployment paths ready (AWS single-account dev, Supabase pilot); nothing deployed yet
 
 > **Owner: start with `docs/OWNER_CHECKLIST.md`** - what is ready and your steps in order.

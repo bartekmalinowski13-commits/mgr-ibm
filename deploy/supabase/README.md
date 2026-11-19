@@ -16,6 +16,20 @@ The image is host-agnostic: it only reads environment variables and listens on
 `BOMAGENT_PORT` (8000). Health: `GET /healthz` (liveness), `GET /readyz` (database and
 all queue consumers).
 
+## Process groups (Fly)
+
+`fly.toml` runs the image as two groups of one app (audit ARCH-02): **web** (`BOMAGENT_ROLE=web`:
+API, SPA, outbox relay, stuck-run reaper, audit anchors; the only public service; always on) and
+**worker** (`BOMAGENT_ROLE=worker`: the ingest, agent and KB consumers; no public port). A
+deploy of web no longer interrupts a running agent run, and a parse that runs out of memory
+restarts only the worker. Things to know: `release_command` (migrations) runs once per release;
+each process opens its own database pools (worker: `BOMAGENT_DB_POOL_SIZE=3`), so count
+connections per group against the Supavisor limit; the web `/readyz` cannot see a missing worker
+group - the worker group has its own `/readyz` check (`fly status` shows it); the worker process
+still serves the `/v1` API on its internal port, which is why it has no public service. First
+deploy after the split: `fly deploy ...` then `fly status` must show one web and one worker
+machine; `fly scale count web=2 worker=1` for zero-downtime web deploys (extra cost).
+
 ## Image and commands
 
 ```bash
@@ -82,7 +96,11 @@ Names only - values are project-specific. **Secret** = set with `fly secrets set
 | `BOMAGENT_EMBEDDING_MODEL` | no | gateway embedding model id (default `fake-embedding`) |
 | `BOMAGENT_STATIC_DIR` | no | set by the image (`/app/web`) |
 | `BOMAGENT_MAINTENANCE_INTERVAL_S`, `BOMAGENT_RUN_TIMEOUT_S` | no | outbox relay / stuck-run reaper (30 s, 3600 s) |
-| `BOMAGENT_OTEL_EXPORTER_OTLP_ENDPOINT` | no | optional, EU collector only |
+| `BOMAGENT_OTEL_EXPORTER_OTLP_ENDPOINT` | no | optional, EU collector only: traces to `<endpoint>/v1/traces`, metrics to `<endpoint>/v1/metrics`; auth headers with the standard `OTEL_EXPORTER_OTLP_HEADERS` (secret). Dashboards, alert rules and setup: `deploy/observability/README.md` |
+| `BOMAGENT_ROLE` | no | `all` (default), `web`, `worker`: set per Fly process group in `fly.toml` `[processes]`, never globally |
+| `BOMAGENT_CLIENT_IP_HEADER` | no | trusted edge header with the client address; selected automatically on Fly (`Fly-Client-IP`); never `X-Forwarded-For`. Without it the per-IP limits stay off and audit events record the proxy's address |
+| `BOMAGENT_IP_RATE_LIMIT` | no | `true`/`false` override of the per-IP limits (default: on outside local/test when a client IP header is known) |
+| `BOMAGENT_AUDIT_ANCHOR_DIR`, `BOMAGENT_AUDIT_ANCHOR_BUCKET`, `BOMAGENT_AUDIT_ANCHOR_ENDPOINT_URL` | no | where the daily audit-chain anchors are written (ADR-0011): a write-once directory, or an S3 / S3-compatible bucket with a write-once policy (+ endpoint for Supabase Storage); unset = no export. Keep a second copy off-platform |
 | `FORWARDED_ALLOW_IPS` | no | uvicorn: trusted proxies for `X-Forwarded-*` (`*` on Fly, whose proxy is the only route to the port). The client IP it yields is the leftmost `X-Forwarded-For` entry, which a client can set: nothing relies on it today; use Fly's `Fly-Client-IP` for any future IP-based rule |
 
 ### Migrations (`migrate`, Fly `release_command`)

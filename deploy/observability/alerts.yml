@@ -1,0 +1,66 @@
+# Prometheus-style alert rules for the pilot (audit OPS-01). Load them in Grafana Cloud
+# (Alerting -> Alert rules -> import) or any Prometheus-compatible ruler. Names are the
+# OpenTelemetry metric names as exported with Prometheus naming; check README.md if your
+# backend renames them. Rules that need an external probe (uptime, OOM) are in README.md.
+groups:
+  - name: bomagent
+    rules:
+      - alert: BomagentHigh5xxRate
+        expr: >
+          sum(rate(http_server_duration_milliseconds_count{http_status_code=~"5.."}[5m]))
+          / clamp_min(sum(rate(http_server_duration_milliseconds_count[5m])), 1e-9) > 0.05
+        for: 10m
+        labels: { severity: page }
+        annotations:
+          summary: More than 5 % of HTTP requests failed with 5xx for 10 minutes
+          runbook: docs/platform/runbooks/README.md
+
+      - alert: BomagentRunFailureRateHigh
+        expr: >
+          sum(rate(bomagent_runs_total{status="failed"}[30m]))
+          / clamp_min(sum(rate(bomagent_runs_total[30m])), 1e-9) > 0.3
+          and sum(increase(bomagent_runs_total[30m])) >= 5
+        for: 15m
+        labels: { severity: page }
+        annotations:
+          summary: More than 30 % of agent runs failed over 30 minutes (at least 5 runs)
+          runbook: docs/platform/runbooks/llm-gateway-pilot.md
+
+      - alert: BomagentQueueDeadLetter
+        expr: sum(increase(bomagent_queue_dead_total[15m])) > 0
+        labels: { severity: page }
+        annotations:
+          summary: A queue message was dead-lettered (an upload or run was lost)
+          runbook: docs/platform/runbooks/README.md#incident-messages-in-the-dlq
+
+      - alert: BomagentOutboxDead
+        expr: sum(increase(bomagent_outbox_dead_total[15m])) > 0
+        labels: { severity: page }
+        annotations:
+          summary: An outbox message was given up on (never reached its queue)
+          runbook: docs/platform/runbooks/README.md#incident-messages-in-the-dlq
+
+      - alert: BomagentParseFailuresSpike
+        expr: >
+          sum(increase(bomagent_parse_total{outcome="failed", code=~"parse.(timeout|resource_limit|internal)"}[30m])) >= 3
+        labels: { severity: ticket }
+        annotations:
+          summary: Several file parses hit a resource limit, timeout or internal error
+          runbook: docs/platform/runbooks/README.md
+
+      - alert: BomagentLlmSpendHigh
+        expr: sum(increase(bomagent_llm_cost_eur_total[1h])) > 10
+        labels: { severity: ticket }
+        annotations:
+          summary: More than 10 EUR of LLM spend within one hour
+          runbook: docs/platform/runbooks/key-rotation.md
+
+      - alert: BomagentNoRunsFinished
+        expr: >
+          sum(increase(bomagent_runs_total[1h])) == 0
+          and sum(increase(http_server_duration_milliseconds_count{http_route="/v1/runs"}[1h])) > 0
+        for: 30m
+        labels: { severity: ticket }
+        annotations:
+          summary: Runs are being requested but none finished in an hour (workers down?)
+          runbook: docs/platform/runbooks/README.md
