@@ -24,8 +24,9 @@ kill_timeout = "30s"
 
 # Deliberately no [http_service] and no [[services]]: nothing is exposed through Fly's
 # public proxy, so the app gets no public IP and is reachable only via .internal DNS.
-# No [checks]: Fly's checker connects over IPv4 and the gateway listens on IPv6 only (the 6PN
-# private network is IPv6; see the CMD in the Dockerfile). Probe it from the app VM instead:
+# The gateway listens dual-stack (IPv4 + IPv6, see the CMD in the Dockerfile): the 6PN private
+# network is IPv6, Fly's checker connects over IPv4. [checks] are still off until the owner has
+# seen the dual-stack image healthy on Fly; until then probe it from the app VM:
 #   fly ssh console -a mgr-ibm-bomagent -C "python3 -c 'import urllib.request as u;print(u.urlopen(\"http://mgr-ibm-llm-gateway.internal:4000/health/liveliness\").read())'"
 
 [[vm]]

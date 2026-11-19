@@ -213,6 +213,28 @@ jobs:
         run: uv run python -m bomagent_llm.gateway_config --region eu-central-1
       - name: build the gateway image (config rendered inside, no secrets)
         run: docker build -f deploy/docker/llm-gateway.Dockerfile -t bomagent-llm-gateway .
+      # the image must answer over IPv4 (AWS VPC, Service Connect) AND IPv6 (Fly 6PN), and its
+      # HEALTHCHECK must turn healthy; no provider is called (dummy key, liveliness only)
+      - name: start the gateway image and probe it over IPv4 and IPv6
+        run: |
+          docker network create --ipv6 --subnet fd00:b0a6:4000::/64 gw-net
+          docker run -d --name gw --network gw-net -e MISTRAL_API_KEY=ci-dummy-not-a-key \
+            bomagent-llm-gateway
+          probe() { docker run --rm --network gw-net curlimages/curl:8.11.1 -fsS -g --max-time 5 "$1"; }
+          for _ in $(seq 1 60); do
+            [ "$(docker inspect -f '{{.State.Health.Status}}' gw)" = healthy ] && break
+            sleep 3
+          done
+          [ "$(docker inspect -f '{{.State.Health.Status}}' gw)" = healthy ] \
+            || { echo "gateway image never became healthy"; exit 1; }
+          V4=$(docker inspect -f '{{(index .NetworkSettings.Networks "gw-net").IPAddress}}' gw)
+          V6=$(docker inspect -f '{{(index .NetworkSettings.Networks "gw-net").GlobalIPv6Address}}' gw)
+          echo "IPv4 ${V4}, IPv6 ${V6}"
+          probe "http://${V4}:4000/health/liveliness"
+          probe "http://[${V6}]:4000/health/liveliness"
+      - name: gateway logs
+        if: failure()
+        run: docker logs gw || true
 
   security:
     name: secrets + vulnerabilities
