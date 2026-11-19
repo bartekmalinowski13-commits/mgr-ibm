@@ -19,6 +19,24 @@ from pathlib import PurePosixPath
 from bomagent_kb.safety import sanitize
 
 MAX_PAGES = 2000
+#: same bound as a design file (``bomagent_cad.base.MAX_FILE_BYTES``)
+MAX_DOCUMENT_BYTES = 64 * 1024 * 1024
+#: what pypdf and the standard library raise on hostile or damaged input (PdfReadError and
+#: LimitReachedError are PyPdfErrors; deep nesting is a RecursionError)
+_PDF_ERRORS: tuple[type[BaseException], ...] = (
+    ValueError,
+    KeyError,
+    TypeError,
+    AttributeError,
+    IndexError,
+    RecursionError,
+    AssertionError,
+    ZeroDivisionError,
+    OverflowError,
+    NotImplementedError,
+    UnicodeError,
+    LookupError,
+)
 
 
 class ExtractionError(ValueError):
@@ -53,7 +71,7 @@ def mime_for(name: str) -> str:
 
 def _pdf(data: bytes) -> ExtractedDocument:
     from pypdf import PdfReader
-    from pypdf.errors import PdfReadError
+    from pypdf.errors import PyPdfError
 
     try:
         reader = PdfReader(io.BytesIO(data))
@@ -64,7 +82,7 @@ def _pdf(data: bytes) -> ExtractedDocument:
         pages = [
             Page(i + 1, sanitize(page.extract_text() or "")) for i, page in enumerate(reader.pages)
         ]
-    except (PdfReadError, ValueError, KeyError, TypeError) as exc:
+    except (PyPdfError, *_PDF_ERRORS) as exc:
         if isinstance(exc, ExtractionError):
             raise
         raise ExtractionError(f"unreadable PDF: {type(exc).__name__}") from exc
@@ -76,12 +94,25 @@ def _pdf(data: bytes) -> ExtractedDocument:
 
 
 def extract(name: str, data: bytes, *, use_docling: bool = False) -> ExtractedDocument:
+    """Text of a knowledge-base document. The file is untrusted: every failure on a hostile
+    or damaged input is an :class:`ExtractionError` (a permanent, user-visible ``failed``),
+    never an exception the queue would retry. Run it through
+    ``bomagent_kb_indexer.sandbox`` in services: this function has no memory or time limit."""
+    if len(data) > MAX_DOCUMENT_BYTES:
+        raise ExtractionError(f"document larger than {MAX_DOCUMENT_BYTES // (1024 * 1024)} MiB")
     mime = mime_for(name)
     if mime == "application/pdf":
         if use_docling:  # pragma: no cover - optional heavy dependency
             from bomagent_kb.docling_extract import extract_with_docling
 
-            return extract_with_docling(data)
+            try:
+                return extract_with_docling(data)
+            except ExtractionError:
+                raise
+            except MemoryError:
+                raise
+            except Exception as exc:
+                raise ExtractionError(f"unreadable PDF: {type(exc).__name__}") from exc
         return _pdf(data)
     if mime in {"text/plain", "text/markdown"}:
         try:
