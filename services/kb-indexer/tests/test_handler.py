@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
+import time
 import uuid
 
 import pytest
@@ -12,7 +14,7 @@ from bomagent_common.db import tenant_transaction
 from bomagent_common.messaging import InMemoryQueue, Message, process_one
 from bomagent_common.storage import InMemoryObjectStore, tenant_key
 from bomagent_common.tenancy import TenantContext, tenant_scope
-from bomagent_kb import DocumentMeta, Scope
+from bomagent_kb import DocumentMeta, ExtractedDocument, Page, Scope
 from bomagent_kb_indexer.app import Settings, build_handler
 from bomagent_kb_indexer.handler import (
     GLOBAL_UPLOAD,
@@ -22,7 +24,7 @@ from bomagent_kb_indexer.handler import (
     RejectedMessageError,
 )
 from bomagent_testing.kb import make_kb
-from bomagent_testing.pdf import make_pdf
+from bomagent_testing.pdf import make_nested_pdf, make_pdf
 
 pytestmark = pytest.mark.integration
 
@@ -176,3 +178,116 @@ def test_build_handler_requires_database_and_wires_gateway(db_urls):
     )
     assert handler.__self__.kb.embedder.model == "fake-embedding"
     assert handler.__self__.platform_engine is not None
+
+
+# --- ingest review I4/I5: hostile documents end as a permanent, audited ``failed`` ----------
+
+
+async def test_hostile_pdf_fails_the_document_once_with_an_audit_event(app_engine, make_tenant):
+    tenant = await make_tenant()
+    kb = make_kb()
+    data = make_nested_pdf()
+    doc, key = await _register(app_engine, tenant, kb, data, "nested.pdf")
+    store = InMemoryObjectStore(enforce_tenant=False)
+    store.objects[key] = data
+    indexer = KbIndexer(kb=kb, app_engine=app_engine, tenant_store=store)
+    queue = InMemoryQueue()
+    await queue.send(
+        Message.create(
+            TENANT_UPLOAD,
+            tenant,
+            {"document_id": str(doc), "object_key": key, "filename": "nested.pdf"},
+        )
+    )
+    (item,) = await queue.receive()
+    assert await process_one(queue, item, indexer.handle)  # acknowledged: no 5x retry
+    async with tenant_transaction(app_engine, tenant.tenant_id) as conn:
+        row = (
+            await conn.execute(
+                text("SELECT status, error FROM kb.documents WHERE id = :i"), {"i": doc}
+            )
+        ).one()
+        actions = set(
+            (
+                await conn.execute(
+                    text("SELECT action FROM audit.events WHERE object_id = :o"), {"o": str(doc)}
+                )
+            ).scalars()
+        )
+    assert row.status == "failed"
+    assert "unreadable PDF" in row.error
+    assert "kb.document.failed" in actions
+
+
+async def test_extraction_runs_off_the_event_loop(app_engine, make_tenant, monkeypatch):
+    def slow(name, data, *, use_docling=False):
+        time.sleep(0.5)
+        return ExtractedDocument([Page(1, "Ordering information SLOWPART-1")], "text/plain")
+
+    monkeypatch.setattr("bomagent_kb_indexer.handler.extract_sandboxed", slow)
+    tenant = await make_tenant()
+    kb = make_kb()
+    doc, key = await _register(app_engine, tenant, kb, b"x", "slow.txt")
+    store = InMemoryObjectStore(enforce_tenant=False)
+    store.objects[key] = b"x"
+    indexer = KbIndexer(kb=kb, app_engine=app_engine, tenant_store=store)
+    ticks = 0
+
+    async def ticker() -> None:
+        nonlocal ticks
+        while True:
+            await asyncio.sleep(0.02)
+            ticks += 1
+
+    task = asyncio.create_task(ticker())
+    with tenant_scope(tenant):  # as process_one would
+        await indexer.handle(
+            Message.create(
+                TENANT_UPLOAD,
+                tenant,
+                {"document_id": str(doc), "object_key": key, "filename": "slow.txt"},
+            )
+        )
+    task.cancel()
+    assert ticks >= 10  # the loop kept running while the document was extracted
+
+
+async def test_hostile_global_document_is_marked_failed(app_engine, platform_engine):
+    from bomagent_common.db import platform_transaction
+
+    kb = make_kb()
+    data = make_nested_pdf()
+    async with platform_transaction(platform_engine) as conn:
+        doc = await kb.add_document(
+            conn,
+            DocumentMeta(
+                title="g",
+                mime_type="application/pdf",
+                sha256=hashlib.sha256(data + uuid.uuid4().bytes).hexdigest(),
+                size_bytes=len(data),
+            ),
+            scope=Scope.GLOBAL,
+            created_by="pipeline",
+        )
+    store = InMemoryObjectStore(enforce_tenant=False)
+    store.objects["global/n.pdf"] = data
+    indexer = KbIndexer(
+        kb=kb,
+        app_engine=app_engine,
+        tenant_store=InMemoryObjectStore(),
+        platform_engine=platform_engine,
+        global_store=store,
+    )
+    system = TenantContext(tenant_id=PLATFORM_TENANT, actor_id="pipeline", actor_type="system")
+    await indexer.handle(  # no exception: a permanent failure is not retried
+        Message.create(
+            GLOBAL_UPLOAD,
+            system,
+            {"document_id": str(doc), "object_key": "global/n.pdf", "filename": "n.pdf"},
+        )
+    )
+    async with platform_transaction(platform_engine) as conn:
+        status = (
+            await conn.execute(text("SELECT status FROM kb.documents WHERE id = :i"), {"i": doc})
+        ).scalar()
+    assert status == "failed"

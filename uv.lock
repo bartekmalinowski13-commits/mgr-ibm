@@ -459,6 +459,7 @@ name = "bomagent-kb-indexer"
 version = "0.1.0"
 source = { editable = "services/kb-indexer" }
 dependencies = [
+    { name = "bomagent-cad-parsers" },
     { name = "bomagent-kb" },
     { name = "bomagent-llm" },
     { name = "bomagent-platform-common" },
@@ -468,6 +469,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
+    { name = "bomagent-cad-parsers", editable = "packages/py/cad-parsers" },
     { name = "bomagent-kb", editable = "packages/py/kb" },
     { name = "bomagent-llm", editable = "packages/py/llm" },
     { name = "bomagent-platform-common", editable = "packages/py/platform-common" },

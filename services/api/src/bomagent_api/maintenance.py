@@ -1,4 +1,5 @@
-"""Periodic maintenance in the API process: outbox relay and stuck-run reaper.
+"""Periodic maintenance in the API process: outbox relay, stuck-run reaper and the reaper of
+files / knowledge-base documents whose queue message dead-lettered.
 
 Tenants are listed with the platform role (allowed to read ``tenancy.tenants``); all
 tenant data is then touched only in that tenant's own RLS context. Several replicas may
@@ -10,6 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import json
 import uuid
 from collections.abc import AsyncIterator, Mapping
 from datetime import UTC, date, datetime
@@ -23,7 +25,12 @@ from bomagent_common.audit import AuditEvent, emit_audit
 from bomagent_common.audit_anchor import AnchorSink, export_anchor
 from bomagent_common.db import platform_transaction, tenant_transaction
 from bomagent_common.logging import get_logger
-from bomagent_common.messaging import QUEUE_VISIBILITY_S, RUN_RESUME_STALE_S, Queue
+from bomagent_common.messaging import (
+    MAX_RECEIVE_COUNT,
+    QUEUE_VISIBILITY_S,
+    RUN_RESUME_STALE_S,
+    Queue,
+)
 from bomagent_common.outbox import cleanup_sent, deliver
 from bomagent_common.tenancy import TenantContext
 
@@ -37,6 +44,16 @@ IDEMPOTENCY_TTL_S = 24 * 3600.0  # a retry after a day is a new request (SEC-17)
 #: timeout, and the redelivery takes the run over once it has been idle for the resume
 #: threshold - the reaper must not fall due in that same window (+ a sweep's margin)
 RUNNING_REAP_GRACE_S = QUEUE_VISIBILITY_S["runs"] + RUN_RESUME_STALE_S + 300.0
+#: a message is retried for at most visibility x receives before it dead-letters; an hour of
+#: grace covers a backlog before the first receive
+INGEST_TIMEOUT_S = QUEUE_VISIBILITY_S["ingest"] * MAX_RECEIVE_COUNT + 3600.0
+KB_INDEX_TIMEOUT_S = QUEUE_VISIBILITY_S["kb"] * MAX_RECEIVE_COUNT + 3600.0
+INGEST_TIMEOUT_ERROR = "ingest.timeout"
+INGEST_TIMEOUT_MESSAGE = (
+    "The file could not be processed in time and was not checked or parsed. Upload it again;"
+    " if this keeps happening, contact support."
+)
+KB_TIMEOUT_ERROR = "indexing did not finish in time; upload the document again"
 _anchored: dict[uuid.UUID, date] = {}  # tenant -> day its anchor was written (this process)
 
 
@@ -85,6 +102,107 @@ async def reap_stuck_runs(engine: AsyncEngine, tenant_id: uuid.UUID, timeout_s: 
     return len(reaped)
 
 
+async def fail_stale_ingest(
+    engine: AsyncEngine, tenant_id: uuid.UUID, timeout_s: float = INGEST_TIMEOUT_S
+) -> int:
+    """Files still ``uploaded`` long after their upload (the ingest message dead-lettered:
+    scanner outage, worker crash) become ``failed`` with a reason the UI shows, audited per
+    project. A late message for unchanged files still writes its verdict over this."""
+    ctx = TenantContext(tenant_id=tenant_id, actor_id="maintenance", actor_type="system")
+    async with tenant_transaction(engine, tenant_id) as conn:
+        failed = (
+            await conn.execute(
+                text(
+                    "UPDATE projects.files SET status = 'failed', detected_format = NULL,"
+                    " summary = CAST(:j AS jsonb) WHERE status = 'uploaded'"
+                    " AND created_at < now() - make_interval(secs => :t)"
+                    " RETURNING project_id, name"
+                ),
+                {
+                    "t": timeout_s,
+                    "j": json.dumps(
+                        {"error": INGEST_TIMEOUT_ERROR, "message": INGEST_TIMEOUT_MESSAGE}
+                    ),
+                },
+            )
+        ).all()
+        by_project: dict[uuid.UUID, list[str]] = {}
+        for project_id, name in failed:
+            by_project.setdefault(project_id, []).append(name)
+        for project_id, names in by_project.items():
+            await emit_audit(
+                conn,
+                AuditEvent(
+                    action="project.files_failed",
+                    object_type="project",
+                    object_id=str(project_id),
+                    after={"error": INGEST_TIMEOUT_ERROR, "files": names[:20], "by": "maintenance"},
+                ),
+                ctx,
+            )
+    for _ in failed:
+        metrics.record_parse("failed", INGEST_TIMEOUT_ERROR, duration_s=-1)
+    return len(failed)
+
+
+_STALE_DOCUMENTS = (
+    "UPDATE kb.documents SET status = 'failed', error = :e"
+    " WHERE scope = :scope AND status IN ('pending', 'indexing') AND superseded_at IS NULL"
+    " AND created_at < now() - make_interval(secs => :t) RETURNING id"
+)
+
+
+async def fail_stale_documents(
+    engine: AsyncEngine, tenant_id: uuid.UUID, timeout_s: float = KB_INDEX_TIMEOUT_S
+) -> int:
+    """The tenant's KB documents still ``pending``/``indexing`` past the retry window
+    become ``failed`` with a reason (shown in the KB list), audited."""
+    ctx = TenantContext(tenant_id=tenant_id, actor_id="maintenance", actor_type="system")
+    async with tenant_transaction(engine, tenant_id) as conn:
+        failed = (
+            (
+                await conn.execute(
+                    text(_STALE_DOCUMENTS),
+                    {"e": KB_TIMEOUT_ERROR, "scope": "tenant", "t": timeout_s},
+                )
+            )
+            .scalars()
+            .all()
+        )
+        for doc_id in failed:
+            await emit_audit(
+                conn,
+                AuditEvent(
+                    action="kb.document.failed",
+                    object_type="kb_document",
+                    object_id=str(doc_id),
+                    after={"error": "timeout", "by": "maintenance"},
+                ),
+                ctx,
+            )
+    return len(failed)
+
+
+async def fail_stale_global_documents(
+    platform_engine: AsyncEngine, timeout_s: float = KB_INDEX_TIMEOUT_S
+) -> int:
+    """Same for the global corpus (platform role; there is no tenant audit chain)."""
+    async with platform_transaction(platform_engine) as conn:
+        failed = (
+            (
+                await conn.execute(
+                    text(_STALE_DOCUMENTS),
+                    {"e": KB_TIMEOUT_ERROR, "scope": "global", "t": timeout_s},
+                )
+            )
+            .scalars()
+            .all()
+        )
+    for doc_id in failed:
+        log.warning("kb_global_document_timed_out", document_id=str(doc_id))
+    return len(failed)
+
+
 async def expire_idempotency_keys(
     engine: AsyncEngine, tenant_id: uuid.UUID, ttl_s: float = IDEMPOTENCY_TTL_S
 ) -> int:
@@ -129,7 +247,15 @@ async def sweep(
 ) -> dict[str, int]:
     async with platform_transaction(platform_engine) as conn:
         tenants = (await conn.execute(text("SELECT id FROM tenancy.tenants"))).scalars().all()
-    totals = {"sent": 0, "reaped": 0, "purged": 0, "expired_keys": 0, "expired_windows": 0}
+    totals = {
+        "sent": 0,
+        "reaped": 0,
+        "purged": 0,
+        "expired_keys": 0,
+        "expired_windows": 0,
+        "stale_files": 0,
+        "stale_documents": await fail_stale_global_documents(platform_engine),
+    }
     now = datetime.now(UTC)
     today = now.date()
     anchoring = anchor_sink is not None
@@ -150,6 +276,8 @@ async def sweep(
         totals["reaped"] += await reap_stuck_runs(engine, tenant_id, run_timeout_s)
         totals["expired_keys"] += await expire_idempotency_keys(engine, tenant_id)
         totals["expired_windows"] += await expire_rate_windows(engine, tenant_id)
+        totals["stale_files"] += await fail_stale_ingest(engine, tenant_id)
+        totals["stale_documents"] += await fail_stale_documents(engine, tenant_id)
     if any(totals.values()):
         log.info("maintenance_sweep", **totals)
     return totals

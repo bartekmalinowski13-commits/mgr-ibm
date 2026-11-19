@@ -238,6 +238,9 @@ async def upsert_file(
                 "size_bytes": excluded.size_bytes,
                 "status": "uploaded",
                 "summary": {},
+                # the upload time of the current bytes: the maintenance sweep measures how
+                # long a file waits for its ingest from here
+                "created_at": func.now(),
             },
         )
     )

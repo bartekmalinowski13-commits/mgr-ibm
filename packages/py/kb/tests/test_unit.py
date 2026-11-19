@@ -7,7 +7,7 @@ from bomagent_kb.chunking import chunk_document
 from bomagent_kb.parts import extract_part_numbers
 from bomagent_kb.safety import looks_like_injection, sanitize
 from bomagent_kb.store import Hit, LexicalReranker, _tsquery, _vector_literal
-from bomagent_testing.pdf import make_pdf
+from bomagent_testing.pdf import make_nested_pdf, make_pdf, make_raw_pdf
 
 
 def test_sanitize_strips_control_and_bidi_characters():
@@ -127,3 +127,34 @@ def test_lexical_reranker_puts_suspicious_last():
     )
     assert ranked[-1].injection_suspect
     assert ranked[0].content == "RC0603FR-0710KL"
+
+
+# --- ingest review I4: hostile PDFs end in ExtractionError, never in a retried crash -------
+
+
+def test_deeply_nested_content_stream_is_an_extraction_error():
+    with pytest.raises(ExtractionError):
+        extract("nested.pdf", make_nested_pdf())
+
+
+def test_flate_bomb_content_stream_is_an_extraction_error():
+    import zlib
+
+    import pypdf
+
+    bomb = zlib.compress(b"BT /F1 10 Tf (x) Tj ET\n" + b" " * (2 * 1024 * 1024), 9)
+    # pypdf's own output cap (LimitReachedError), lowered so the crafted bomb stays small
+    with (
+        pypdf.apply_configuration(zlib_maximum_output_length=64 * 1024),
+        pytest.raises(ExtractionError),
+    ):
+        extract("bomb.pdf", make_raw_pdf(bomb, flate=True))
+
+
+def test_oversized_document_is_refused_before_parsing(monkeypatch):
+    import importlib
+
+    # the package re-exports the function under the module's name
+    monkeypatch.setattr(importlib.import_module("bomagent_kb.extract"), "MAX_DOCUMENT_BYTES", 1024)
+    with pytest.raises(ExtractionError, match="larger than"):
+        extract("big.txt", b"a" * 2048)
