@@ -10,7 +10,6 @@ import {
   Languages,
   ListChecks,
   LogOut,
-  Menu as MenuIcon,
   Plus,
   ScrollText,
   Settings,
@@ -23,6 +22,7 @@ import { formatEur } from "../lib/provenance";
 import { useMe, useProjects, useUsage } from "../lib/queries";
 import { useSession } from "../lib/session";
 import { signOutRemote } from "../lib/supabase";
+import { NavDrawer } from "./NavDrawer";
 import { NewRunDialog } from "./NewRunDialog";
 import { QuotaChips } from "./QuotaChips";
 
@@ -186,29 +186,16 @@ export function Shell() {
         <aside className="hidden border-r border-line bg-surface lg:block">
           <div className="sticky top-0 h-screen overflow-y-auto">{sidebar}</div>
         </aside>
-        {navOpen ? (
-          <div className="fixed inset-0 z-40 lg:hidden">
-            <button
-              type="button"
-              aria-label={t("common.close")}
-              className="absolute inset-0 bg-ink/30"
-              onClick={() => setNavOpen(false)}
-            />
-            <aside className="absolute inset-y-0 left-0 w-[280px] overflow-y-auto bg-surface">
-              {sidebar}
-            </aside>
-          </div>
-        ) : null}
         <div className="min-w-0">
           <header className="flex items-center gap-3 border-b border-line bg-paper/90 px-4 py-3 backdrop-blur sm:px-8">
-            <button
-              type="button"
-              aria-label={t("nav.label")}
-              className="rounded-control p-2 hover:bg-surface lg:hidden"
-              onClick={() => setNavOpen(true)}
+            <NavDrawer
+              open={navOpen}
+              onOpenChange={setNavOpen}
+              label={t("nav.label")}
+              closeLabel={t("common.close")}
             >
-              <MenuIcon size={20} aria-hidden />
-            </button>
+              {sidebar}
+            </NavDrawer>
             <h1 className="min-w-0 flex-1 truncate font-display text-xl font-bold">{title}</h1>
             {usage.data ? (
               <QuotaChips usage={usage.data.usage} limits={usage.data.limits} scope={orgId} />
