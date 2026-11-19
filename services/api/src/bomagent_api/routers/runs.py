@@ -3,7 +3,6 @@ use cases are in ``services.runs``)."""
 
 from __future__ import annotations
 
-import asyncio
 import json
 import uuid
 from collections.abc import AsyncIterator
@@ -32,6 +31,7 @@ from bomagent_api.services import runs as service
 from bomagent_api.services.runs import ExportedBom, RunDeps
 from bomagent_api.sse_limits import StreamLimiter
 from bomagent_common.problems import ProblemError
+from bomagent_common.shutdown import shutdown_of
 
 router = APIRouter(
     prefix="/v1/runs",
@@ -153,6 +153,7 @@ async def run_events(request: Request, ctx: OrgContext, run_id: uuid.UUID) -> St
     if limiter is None:
         limiter = request.app.state.sse_streams = StreamLimiter()
     slot = limiter.acquire(ctx.tenant_id, ctx.actor_id)  # 429 beyond the cap (review M-3)
+    shutdown = shutdown_of(request.app)
 
     async def stream() -> AsyncIterator[str]:
         try:
@@ -170,7 +171,9 @@ async def run_events(request: Request, ctx: OrgContext, run_id: uuid.UUID) -> St
                 if status in service.TERMINAL:
                     yield f"event: end\ndata: {json.dumps({'status': status})}\n\n"
                     return
-                await asyncio.sleep(interval)
+                if await shutdown.sleep(interval):  # SIGTERM: free the connection at once
+                    yield 'event: end\ndata: {"status": "shutdown"}\n\n'
+                    return
         finally:
             slot.release()
 

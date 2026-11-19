@@ -12,8 +12,19 @@ from bomagent_common.config import ServiceSettings
 from bomagent_common.db import make_engine, ping
 from bomagent_common.health import ReadinessCheck
 from bomagent_common.logging import get_logger
-from bomagent_common.messaging import Handler, Message, Queue, consume_forever, consumer_queue
+from bomagent_common.messaging import (
+    RUN_RESUME_STALE_S,
+    RUNS_EXTEND_S,
+    RUNS_HEARTBEAT_S,
+    Handler,
+    Message,
+    Queue,
+    consume_forever,
+    consumer_queue,
+    stop_consumer,
+)
 from bomagent_common.service import Lifespan, create_service_app
+from bomagent_common.shutdown import shutdown_of
 from bomagent_common.telemetry import shutdown_telemetry
 
 log = get_logger(__name__)
@@ -24,13 +35,16 @@ class Settings(ServiceSettings):
     queue_url: str | None = None  # SQS queue with work for this worker
     queue_name: str = "runs"  # postgres queue backend: queue name in app.queue_messages
     queue_wait_seconds: int = 10
+    #: on shutdown the current message may finish for this long, then it is cancelled and
+    #: released (inside ECS's default 30 s stop timeout)
+    consumer_stop_grace_s: float = 20.0
     files_bucket: str = "bomagent-local-files"
     llm_gateway_url: str | None = None
     llm_gateway_key: str | None = None
     embedding_model: str = "fake-embedding"
     #: a running run idle for this long is resumed from its checkpoint on redelivery; must
     #: exceed the longest single LLM call (``bomagent_llm.chat.CALL_TIMEOUT_MAX_S``)
-    run_resume_stale_s: float = 1200.0
+    run_resume_stale_s: float = RUN_RESUME_STALE_S
     run_max_resumes: int = 3
     #: size cap of the ``runs.trace`` column in bytes (0 = off); ``trace.json`` stays complete
     run_trace_max_bytes: int = DEFAULT_TRACE_MAX_BYTES
@@ -72,8 +86,9 @@ def build_handler(settings: Settings) -> Handler:
 
 def _make_lifespan(settings: Settings, queue: Queue | None, handler: Handler) -> Lifespan:
     @contextlib.asynccontextmanager
-    async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+    async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         stop = asyncio.Event()
+        shutdown_of(app).on_request(stop.set)  # SIGTERM: claim nothing new
         task: asyncio.Task[None] | None = None
         if queue is not None:
             task = asyncio.create_task(
@@ -83,15 +98,20 @@ def _make_lifespan(settings: Settings, queue: Queue | None, handler: Handler) ->
                     stop=stop,
                     wait_seconds=settings.queue_wait_seconds,
                     max_messages=1,  # slow handlers: see consume_forever
+                    # an interrupted run comes back when it can be taken over (resume)
+                    release_delay_s=settings.run_resume_stale_s,
+                    # a live run is never redelivered; a dead worker's run is back quickly
+                    heartbeat_s=RUNS_HEARTBEAT_S,
+                    extend_s=RUNS_EXTEND_S,
                 )
             )
             log.info("consumer_started", queue="runs")
         try:
             yield
         finally:
-            stop.set()
             if task is not None:
-                await task
+                await stop_consumer(task, stop, grace_s=settings.consumer_stop_grace_s)
+            stop.set()
             shutdown_telemetry()
 
     return lifespan
