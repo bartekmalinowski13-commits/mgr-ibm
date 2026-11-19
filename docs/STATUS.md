@@ -287,3 +287,11 @@ domain) and the assumptions awaiting acceptance (`docs/DECISIONS_LOG.md`, last c
 
 - Merged: `runs.trace` size cap (#75, app level, `BOMAGENT_RUN_TRACE_MAX_BYTES`, default 256 KiB, 0 = off; full trace stays in object storage).
 - Open for the owner: #76 ARCH-04 remainder (only the CodeQL false positive on `auth.py:296` blocks it).
+
+## 2026-11-19 - overnight test run and code review
+
+- Six-area review and full local test run: `docs/review/NIGHT_2026-11-18.md`.
+- Merged: #85 (report), #86 (MPN choices keyed by designator set, C1), #87 (web), #88 (security),
+  #89 (API), #90 (experiment accounting and resume), #92 (ops) + #95 (runbook spec), #93 (ingest).
+- Open for the owner: #91 (SSO membership/update, auth.py/sso.py), #94 (gateway dual-stack,
+  deploy order, ADR-0019).
