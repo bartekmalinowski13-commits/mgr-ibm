@@ -409,6 +409,7 @@
     "slug-taken": "This organisation address is already taken. Choose another one.",
     "sso-not-ready": "Enforcing single sign-on needs a working connection and at least one verified domain.",
     "sso-required": "Your organisation requires single sign-on for this e-mail domain. Use the SSO button.",
+    "sso-update-failed": "The identity provider change failed. The previous connection stays active and enforced; check the settings and try again.",
     "unsupported-type": "Unsupported file type. Upload a PDF, Markdown or text file.",
     "user-token-required": "This action needs a signed-in user, not an API key."
   },

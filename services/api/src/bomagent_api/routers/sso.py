@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import asyncio
 import time
-from typing import Any
+from typing import Any, NoReturn
 
 from fastapi import APIRouter, Request, Response
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncEngine
 
 from bomagent_api.auth import OrgContext
 from bomagent_api.authz import require
@@ -38,7 +39,9 @@ from bomagent_common.db import tenant_transaction
 from bomagent_common.problems import ProblemError
 
 router = APIRouter(
-    prefix="/v1/sso", tags=["sso"], responses=problem_responses(400, 401, 403, 404, 409, 422, 429)
+    prefix="/v1/sso",
+    tags=["sso"],
+    responses=problem_responses(400, 401, 403, 404, 409, 422, 429, 502),
 )
 public = APIRouter(prefix="/v1/sso", tags=["sso"], responses=problem_responses(400, 422, 429))
 #: discovery answers take at least this long whatever the outcome (no timing oracle)
@@ -143,6 +146,8 @@ async def put_sso(request: Request, ctx: OrgContext, body: SsoConnectionIn) -> S
         status, error = "active", None
     except Exception as exc:  # the broker's message is shown to the admin, not raised
         status, error = "failed", safe_error(exc, body.oidc_client_secret)
+    if status == "failed" and before is not None and before.status == "active":
+        await _keep_active_connection(engine, name, connection, body.default_role, error)
     # whatever Cognito now holds is recorded and audited, even when the request is refused
     enforce = body.enforce and status == "active"
     async with tenant_transaction(engine) as conn:
@@ -193,6 +198,47 @@ async def put_sso(request: Request, ctx: OrgContext, body: SsoConnectionIn) -> S
     if body.enforce and not enforce:
         raise not_ready
     return await _settings(request)
+
+
+async def _keep_active_connection(
+    engine: AsyncEngine,
+    name: str,
+    attempted: Connection,
+    default_role: str,
+    error: str | None,
+) -> NoReturn:
+    """A change of an active connection failed in the broker (review I-2). Cognito still
+    holds the previous, working provider, so the stored connection - status, enforcement,
+    metadata and OIDC settings - stays as it is: switching it to ``failed`` would turn
+    enforcement off while the old provider keeps signing users in (fail open). Only the
+    error is recorded and audited, and the admin gets a 502."""
+    async with tenant_transaction(engine) as conn:
+        await conn.execute(
+            text("UPDATE tenancy.sso_connections SET error = :err, updated_at = now()"),
+            {"err": error},
+        )
+        await emit_audit(
+            conn,
+            AuditEvent(
+                action="sso.update_failed",
+                object_type="sso_connection",
+                object_id=name,
+                after={
+                    "protocol": attempted.protocol,
+                    "metadata_url": attempted.metadata_url,
+                    "oidc_issuer": attempted.oidc_issuer,
+                    "oidc_client_id": attempted.oidc_client_id,
+                    "default_role": default_role,
+                    "error": error,
+                },
+            ),
+        )
+    raise ProblemError(
+        502,
+        "Bad Gateway",
+        f"the identity provider change failed; the previous connection stays active: {error}",
+        slug="sso-update-failed",
+    )
 
 
 @router.delete("", status_code=204, summary="Remove the identity provider")

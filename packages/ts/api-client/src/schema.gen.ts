@@ -6651,6 +6651,16 @@ export interface operations {
                     "application/problem+json": unknown;
                 };
             };
+            /** @description Problem details (RFC 9457) */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
         };
     };
     put_sso_v1_sso_put: {
@@ -6748,6 +6758,16 @@ export interface operations {
                     "application/problem+json": unknown;
                 };
             };
+            /** @description Problem details (RFC 9457) */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
         };
     };
     delete_sso_v1_sso_delete: {
@@ -6831,6 +6851,16 @@ export interface operations {
             };
             /** @description Problem details (RFC 9457) */
             429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Problem details (RFC 9457) */
+            502: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -6990,6 +7020,16 @@ export interface operations {
                     "application/problem+json": unknown;
                 };
             };
+            /** @description Problem details (RFC 9457) */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
         };
     };
     delete_domain_v1_sso_domains__domain__delete: {
@@ -7075,6 +7115,16 @@ export interface operations {
             };
             /** @description Problem details (RFC 9457) */
             429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Problem details (RFC 9457) */
+            502: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -7170,6 +7220,16 @@ export interface operations {
             };
             /** @description Problem details (RFC 9457) */
             429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Problem details (RFC 9457) */
+            502: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -293,3 +293,90 @@ def test_broker_errors_never_carry_the_client_secret():
     assert "s3cr3t-value" not in msg
     assert safe_error(RuntimeError("x" * 900), None).startswith("RuntimeError: ")
     assert len(safe_error(RuntimeError("x" * 900), None)) == 500
+
+
+async def test_a_removed_sso_member_is_not_re_provisioned(client, app):
+    """Review I-1: removal sticks; just-in-time provisioning does not undo it until an
+    admin invites the user again."""
+    c, s = client, uuid.uuid4().hex[:6]
+    domain = f"removed-{s}.example"
+    admin = await _org(c, f"rm-{s}", f"owner@{domain}")
+    org_id = admin["X-Org-Id"]
+    await _verified_domain(c, app, admin, domain)
+    provider = (
+        await c.put(
+            "/v1/sso",
+            headers=admin,
+            json={"protocol": "saml", "metadata_url": "https://idp.example/m.xml"},
+        )
+    ).json()["connection"]["provider_name"]
+    user = await _token(c, f"r-{s}", f"rita@{domain}", provider)
+    as_member = user | {"X-Org-Id": org_id}
+    assert (await c.get("/v1/projects", headers=as_member)).status_code == 200  # JIT join
+
+    assert (await c.delete(f"/v1/members/r-{s}", headers=admin)).status_code == 204
+    assert (await c.get("/v1/projects", headers=as_member)).status_code == 403
+    assert (await c.get("/v1/me", headers=user)).json()["organizations"] == []
+    members = (await c.get("/v1/members", headers=admin)).json()["items"]
+    assert f"r-{s}" not in {m["user_sub"] for m in members}
+    audit = (await c.get("/v1/audit-events?limit=100", headers=admin)).json()["items"]
+    assert sum(e["action"] == "member.joined_via_sso" for e in audit) == 1
+
+    # an invitation from an admin brings the user back
+    invite = await c.post(
+        "/v1/invitations", headers=admin, json={"email": f"rita@{domain}", "roles": ["viewer"]}
+    )
+    assert invite.status_code == 201, invite.text
+    accepted = await c.post(
+        "/v1/invitations/accept", headers=user, json={"token": invite.json()["token"]}
+    )
+    assert accepted.status_code == 200, accepted.text
+    assert (await c.get("/v1/projects", headers=as_member)).status_code == 200
+
+
+async def test_a_failed_update_keeps_the_working_connection_and_enforcement(client, app):
+    """Review I-2: a failed change of an active connection must not fail open. Cognito
+    still holds the previous provider, so the stored connection stays as it was."""
+    c, s = client, uuid.uuid4().hex[:6]
+    domain = f"keep-{s}.example"
+    admin = await _org(c, f"kp-{s}", f"owner@{domain}")
+    org_id = admin["X-Org-Id"]
+    await _verified_domain(c, app, admin, domain)
+    good = {"protocol": "saml", "metadata_url": "https://idp.example/m.xml", "enforce": True}
+    first = await c.put("/v1/sso", headers=admin, json=good)
+    assert first.json()["connection"]["enforce"] is True
+    provider = first.json()["connection"]["provider_name"]
+    via_sso = await _token(c, f"k-{s}", f"kim@{domain}", provider)
+    assert (await c.get("/v1/projects", headers=via_sso | {"X-Org-Id": org_id})).status_code == 200
+    password = await _token(c, f"k-{s}", f"kim@{domain}")
+    assert (await c.get("/v1/projects", headers=password | {"X-Org-Id": org_id})).status_code == 403
+
+    app.state.identity_providers.fail_with = "metadata could not be fetched"
+    bad = await c.put(
+        "/v1/sso",
+        headers=admin,
+        json={"protocol": "saml", "metadata_url": "https://idp.example/typo.xml", "enforce": True},
+    )
+    app.state.identity_providers.fail_with = None
+    assert bad.status_code == 502, bad.text
+    assert bad.json()["type"].endswith("sso-update-failed")
+    assert "metadata could not be fetched" in bad.json()["detail"]
+
+    kept = (await c.get("/v1/sso", headers=admin)).json()["connection"]
+    assert kept["status"] == "active"
+    assert kept["enforce"] is True
+    assert kept["metadata_url"] == "https://idp.example/m.xml"
+    assert "metadata could not be fetched" in kept["error"]
+    # enforcement, discovery and first sign-in keep working
+    blocked = await c.get("/v1/projects", headers=password | {"X-Org-Id": org_id})
+    assert blocked.status_code == 403
+    assert (await c.post("/v1/sso/discover", json={"domain": domain})).json()["sso"] is True
+    audit = (await c.get("/v1/audit-events?limit=100", headers=admin)).json()["items"]
+    failed = [e for e in audit if e["action"] == "sso.update_failed"]
+    assert len(failed) == 1
+    assert failed[0]["after"]["metadata_url"] == "https://idp.example/typo.xml"
+
+    # a later successful change clears the error
+    fixed = await c.put("/v1/sso", headers=admin, json=good)
+    assert fixed.status_code == 200, fixed.text
+    assert fixed.json()["connection"]["error"] is None

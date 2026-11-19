@@ -411,6 +411,7 @@
     "slug-taken": "Ten adres organizacji jest już zajęty. Wybierz inny.",
     "sso-not-ready": "Wymuszenie logowania jednokrotnego wymaga działającego połączenia i co najmniej jednej zweryfikowanej domeny.",
     "sso-required": "Twoja organizacja wymaga logowania jednokrotnego dla tej domeny e-mail. Użyj przycisku SSO.",
+    "sso-update-failed": "Nie udało się zmienić dostawcy tożsamości. Poprzednie połączenie pozostaje aktywne i wymuszone; sprawdź ustawienia i spróbuj ponownie.",
     "unsupported-type": "Nieobsługiwany typ pliku. Wgraj plik PDF, Markdown lub tekstowy.",
     "user-token-required": "Ta czynność wymaga zalogowanego użytkownika, a nie klucza API."
   },
