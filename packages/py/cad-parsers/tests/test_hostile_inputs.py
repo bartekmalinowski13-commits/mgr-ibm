@@ -221,3 +221,158 @@ def test_registry_converts_unexpected_errors():
         parse_files([FileRef("x.bin", b"x")], [Exploding()])
     assert err.value.code == "parse.internal"
     assert detect([FileRef("x.bin", b"x")], [Exploding()]).format_id == "boom"
+
+
+# --- ingest review (I2, I3, M3): budgets on real counts and real decompressed bytes ---------
+
+
+def _kicad_sheet(body: str, uuid: str) -> bytes:
+    head = f'(kicad_sch (version 20231120) (generator "eeschema") (uuid "{uuid}")\n'
+    return (head + body + ")").encode()
+
+
+def _kicad_symbols(count: int) -> str:
+    # no instance data: the designator comes from the Reference field on every sheet instance
+    return "\n".join(
+        f'(symbol (lib_id "Device:R") (uuid "s{i}") (property "Reference" "R{i + 1}")'
+        f' (property "Value" "10k"))'
+        for i in range(count)
+    )
+
+
+def _kicad_entries(count: int) -> str:
+    return "\n".join(
+        f'(sheet (at 0 0) (size 1 1) (uuid "e{i}") (property "Sheetname" "ch{i}")'
+        f' (property "Sheetfile" "child.kicad_sch"))'
+        for i in range(count)
+    )
+
+
+def test_kicad_component_cap_counts_symbols_of_a_single_sheet(monkeypatch):
+    from bomagent_cad import kicad
+
+    monkeypatch.setattr(kicad, "MAX_COMPONENTS", 50)
+    flat = FileRef("flat.kicad_sch", _kicad_sheet(_kicad_symbols(51), "root"))
+    with pytest.raises(ParseError) as err:
+        parse_files([flat])
+    assert err.value.code == "kicad.too_complex"
+
+
+def test_kicad_component_cap_counts_repeated_instances_of_a_hierarchical_sheet(monkeypatch):
+    """A root with N sheet entries pointing at one child multiplies the child's symbols; every
+    repeated instance is a duplicate designator and counts against the budget."""
+    from bomagent_cad import kicad
+
+    monkeypatch.setattr(kicad, "MAX_COMPONENTS", 50)
+    root = FileRef("root.kicad_sch", _kicad_sheet(_kicad_entries(10), "root"))
+    child = FileRef("child.kicad_sch", _kicad_sheet(_kicad_symbols(10), "child"))
+    with pytest.raises(ParseError) as err:
+        parse_files([root, child])
+    assert err.value.code == "kicad.too_complex"
+
+
+def test_kicad_fan_out_stops_early_before_building_everything(monkeypatch):
+    """The abort happens while symbols are added, not after a whole sheet is built."""
+    from bomagent_cad import kicad
+
+    monkeypatch.setattr(kicad, "MAX_COMPONENTS", 100)
+    added: list[int] = []
+    original = kicad.KicadParser._add_symbol
+
+    def counting(self, ctx, sym, path, sheet_path):
+        added.append(1)
+        return original(self, ctx, sym, path, sheet_path)
+
+    monkeypatch.setattr(kicad.KicadParser, "_add_symbol", counting)
+    root = FileRef("root.kicad_sch", _kicad_sheet(_kicad_entries(2), "root"))
+    child = FileRef("child.kicad_sch", _kicad_sheet(_kicad_symbols(5_000), "child"))
+    with pytest.raises(ParseError) as err:
+        parse_files([root, child])
+    assert err.value.code == "kicad.too_complex"
+    assert len(added) <= 101
+
+
+def test_registry_rejects_designs_above_the_component_cap(monkeypatch):
+    from bomagent_bom.model import Component, ParsedDesign
+    from bomagent_cad import registry
+
+    monkeypatch.setattr(registry, "MAX_COMPONENTS", 3)
+
+    class Generous:
+        format_id = "generous"
+        version = "0"
+
+        def sniff(self, file):
+            return 1.0
+
+        def parse(self, files):
+            return ParsedDesign(
+                design_name="d",
+                source_format="generous",
+                components=[Component(refdes=f"R{i}", value="1k") for i in range(1, 5)],
+                confidence=1.0,
+            )
+
+    with pytest.raises(ParseError) as err:
+        parse_files([FileRef("x.bin", b"x")], [Generous()])
+    assert err.value.code == "file.too_large"
+
+
+def test_registry_enforces_the_file_size_limit_for_in_memory_files(monkeypatch):
+    from bomagent_cad import registry
+
+    monkeypatch.setattr(registry, "MAX_FILE_BYTES", 1024)
+    xml = b'<IPC-2581 xmlns="http://webstds.ipc.org/2581">' + b" " * 2048 + b"</IPC-2581>"
+    with pytest.raises(ParseError) as err:
+        parse_files([FileRef("big.xml", xml)])
+    assert err.value.code == "file.too_large"
+
+
+def _lie_about_size(data: bytes, name: str, declared: int) -> bytes:
+    """Patch the uncompressed size of member ``name`` in its local header and in the central
+    directory - the attacker controls both; the real deflate stream is unchanged."""
+    out = bytearray(data)
+    with zipfile.ZipFile(io.BytesIO(data)) as z:
+        offset = z.getinfo(name).header_offset
+    out[offset + 22 : offset + 26] = struct.pack("<I", declared)
+    central = out.index(b"PK\x01\x02")
+    while out[central : central + 4] == b"PK\x01\x02":
+        n_len, x_len, c_len = struct.unpack("<HHH", out[central + 28 : central + 34])
+        if bytes(out[central + 46 : central + 46 + n_len]) == name.encode():
+            out[central + 24 : central + 28] = struct.pack("<I", declared)
+        central += 46 + n_len + x_len + c_len
+    return bytes(out)
+
+
+_COMP = "job/steps/pcb/layers/comp_+_top/components"
+
+
+def test_zip_member_lying_about_its_size_is_stopped_on_real_bytes(monkeypatch):
+    """A member that declares 1000 bytes but inflates to megabytes stops at the budget,
+    counted on the bytes actually decompressed (not on the central directory)."""
+    from bomagent_cad import odbpp
+
+    monkeypatch.setattr(odbpp, "MAX_TOTAL_BYTES", 64 * 1024)
+    files = dict(ODB)
+    files[_COMP] = ODB[_COMP] + b" " * (4 * 1024 * 1024)
+    bomb = _lie_about_size(_zip(files), _COMP, 1000)
+    with pytest.raises(ParseError) as err:
+        parse_files([FileRef("bomb.zip", bomb)])
+    assert err.value.code == "archive.too_large"
+
+
+def test_zip_member_inflating_past_its_declared_size_is_malformed():
+    files = dict(ODB)
+    files[_COMP] = ODB[_COMP] + b" " * 4096
+    liar = _lie_about_size(_zip(files), _COMP, len(ODB[_COMP]))
+    with pytest.raises(ParseError) as err:
+        parse_files([FileRef("liar.zip", liar)])
+    assert err.value.code == "archive.malformed"
+
+
+@pytest.mark.parametrize("method", [zipfile.ZIP_BZIP2, zipfile.ZIP_LZMA])
+def test_zip_members_with_unbounded_decompressors_are_refused(method):
+    """``zipfile`` inflates a whole bzip2/LZMA input chunk at once: no streamed bound."""
+    with pytest.raises(ParseError) as err:
+        parse_files([FileRef("job.zip", _zip(ODB, method))])
+    assert err.value.code == "archive.unsupported"

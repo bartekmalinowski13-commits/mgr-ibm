@@ -18,7 +18,7 @@ from bomagent_agent_worker.handler import (
 from bomagent_agents.fake_responder import heuristic_responder
 from bomagent_agents.retrieval import InMemoryRetriever
 from bomagent_common.db import tenant_transaction
-from bomagent_common.messaging import InMemoryQueue, Message, process_one
+from bomagent_common.messaging import InMemoryQueue, Message, RetryLaterError, process_one
 from bomagent_common.storage import InMemoryObjectStore, tenant_key
 from bomagent_common.tenancy import tenant_scope
 from bomagent_llm.chat import FakeChat
@@ -369,8 +369,11 @@ async def test_crashed_run_is_resumed_from_its_checkpoint_and_says_so(app_engine
     worker = await _worker(app_engine, store)
     worker.allow_unregistered = False
     # the worker still looks alive: the message is retried, nothing changes
-    with tenant_scope(tenant), pytest.raises(RunInProgressError):
+    with tenant_scope(tenant), pytest.raises(RunInProgressError) as busy:
         await worker.execute(message)
+    # ... once it would be stale, not after the rest of the queue's hour-long visibility
+    assert 0 < busy.value.retry_after_s <= worker.resume_stale_after_s
+    assert isinstance(busy.value, RetryLaterError)
     assert (await _state(app_engine, tenant, rid))[0] == "running"
 
     worker.resume_stale_after_s = 0.0  # the heartbeat went quiet
@@ -439,6 +442,45 @@ def test_a_run_is_not_taken_for_dead_while_one_long_llm_call_is_in_flight():
 
     assert RunWorker.resume_stale_after_s > CALL_TIMEOUT_MAX_S
     assert Settings.model_fields["run_resume_stale_s"].default > CALL_TIMEOUT_MAX_S
+
+
+async def test_an_interrupted_run_is_handed_back_once_it_can_be_resumed(monkeypatch):
+    """Shutdown cancels the handler after a grace period: its message is released for
+    redelivery once the run counts as stale (takeover then succeeds at once), not after the
+    queue's 1 h visibility timeout; SIGTERM stops the consumer claiming new messages."""
+    import asyncio
+
+    from fastapi import FastAPI
+
+    from bomagent_agent_worker import app as worker_app
+    from bomagent_common.shutdown import shutdown_of
+
+    seen: dict[str, object] = {}
+    running = asyncio.Event()
+
+    async def fake_consume(queue, handler, *, stop, release_delay_s, heartbeat_s, extend_s, **kw):
+        seen["release_delay_s"] = release_delay_s
+        seen["heartbeat"] = (heartbeat_s, extend_s)
+        running.set()
+        await stop.wait()
+        seen["stopped_by_signal"] = True
+        await asyncio.sleep(60)  # a handler that does not finish within the grace
+
+    monkeypatch.setattr(worker_app, "consume_forever", fake_consume)
+    settings = Settings(run_resume_stale_s=600, consumer_stop_grace_s=0.1)
+    app = FastAPI()
+    lifespan = worker_app._make_lifespan(settings, InMemoryQueue(), lambda m: None)  # type: ignore[arg-type]
+    async with lifespan(app):
+        await running.wait()
+        shutdown_of(app).request()
+        await asyncio.sleep(0.05)
+        assert seen.get("stopped_by_signal") is True
+    assert seen["release_delay_s"] == 600
+    # a live run keeps its message invisible: never redelivered, never dead-lettered
+    from bomagent_common.messaging import QUEUE_VISIBILITY_S, RUNS_EXTEND_S, RUNS_HEARTBEAT_S
+
+    assert seen["heartbeat"] == (RUNS_HEARTBEAT_S, RUNS_EXTEND_S)
+    assert RUNS_HEARTBEAT_S < RUNS_EXTEND_S <= QUEUE_VISIBILITY_S["runs"]
 
 
 def test_a_run_that_ends_failed_inside_the_graph_says_why():

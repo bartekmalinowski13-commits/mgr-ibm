@@ -22,6 +22,7 @@ SERVICES = {
 }
 GATEWAY_URL = os.environ.get("SMOKE_GATEWAY_URL", "http://localhost:4000")
 TEMPO_URL = os.environ.get("SMOKE_TEMPO_URL")  # e.g. http://localhost:3200
+API_KEY = os.environ.get("SMOKE_API_KEY")  # key of the dedicated smoke tenant (never a customer)
 
 
 @pytest.mark.parametrize("name", sorted(SERVICES))
@@ -30,6 +31,22 @@ def test_service_health_and_readiness(name: str) -> None:
     assert httpx.get(f"{base}/healthz", timeout=5).json()["status"] == "ok"
     ready = httpx.get(f"{base}/readyz", timeout=10)
     assert ready.status_code == 200, ready.text
+    body = ready.json()
+    assert body["status"] == "ok", body
+    assert all(body.get("checks", {}).values()), body  # every dependency, not only the process
+
+
+@pytest.mark.skipif(not API_KEY, reason="SMOKE_API_KEY not set (no smoke tenant)")
+def test_api_serves_tenant_data_with_the_smoke_key() -> None:
+    """Readiness through the whole request path: auth, tenant context, RLS-bound queries."""
+    resp = httpx.get(
+        f"{SERVICES['api']}/v1/projects",
+        params={"limit": 1},
+        headers={"Authorization": f"Bearer {API_KEY}"},
+        timeout=10,
+    )
+    assert resp.status_code == 200, resp.text
+    assert "items" in resp.json()
 
 
 def test_sandboxed_ingest_worker_is_healthy() -> None:

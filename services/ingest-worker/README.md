@@ -28,7 +28,15 @@ event `project.file_malware_detected` records the file names and signatures, and
 - ClamAV: set `BOMAGENT_MALWARE_SCAN_CLAMD_ADDR` to `tcp://host[:3310]` or
   `unix:///path/to/clamd.sock` (optional `BOMAGENT_MALWARE_SCAN_TIMEOUT_S`, default 30).
   Unset = off. Running clamd is a deployment concern; this repository does not ship it.
-- Fail closed: if clamd is unreachable, times out or errors (e.g. the file exceeds clamd's
-  `StreamMaxLength`), nothing is parsed and the queue message is retried / dead-lettered.
+- Fail closed: if clamd is unreachable, times out or errors, nothing is parsed and the
+  queue message is retried / dead-lettered (the API's maintenance sweep then fails the files
+  with `ingest.timeout`). A file clamd can never scan (`size limit exceeded`, i.e. larger
+  than `StreamMaxLength`) is permanent: the project fails with `file.scan_failed`, a
+  message for the UI and the audit event `project.file_scan_failed`, without retries.
+- Files are scanned 4 at a time within a 300 s budget per project (`SCAN_BUDGET_S`), so
+  scan + parse (90 s sandbox) stay inside the 600 s visibility timeout.
+- Write-back: only the rows this message loaded and scanned (id, object key, hash) get the
+  verdict; a file replaced meanwhile stays `uploaded` until its own message scans it.
+  A malware rejection counts as a failed parse (`file.rejected`) in the parse metric.
 - Tests: `services/ingest-worker/tests/test_scanner.py` (EICAR + fake clamd, no database) and
   `test_ingest_malware.py` (PostgreSQL, `integration`).
