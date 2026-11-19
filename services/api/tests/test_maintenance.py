@@ -146,6 +146,112 @@ async def test_stale_queued_runs_are_reaped(app_engine, platform_engine, make_te
     assert status == "failed"
 
 
+async def test_files_and_documents_left_by_a_dead_letter_are_failed(
+    app_engine, platform_engine, make_tenant
+):
+    """Ingest review I5: a message that dead-lettered leaves its files ``uploaded`` and its
+    KB document ``pending`` for good - the sweep fails them with a reason and an audit event."""
+    from bomagent_common.db import platform_transaction
+    from bomagent_common.tenancy import tenant_scope
+    from bomagent_kb import DocumentMeta, Scope
+
+    tenant = await make_tenant()
+    kb = make_kb()
+    pid, stale, fresh = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
+    async with tenant_transaction(app_engine, tenant.tenant_id) as conn:
+        await conn.execute(
+            text(
+                "INSERT INTO projects.projects (id, tenant_id, name, created_by)"
+                " VALUES (:i, :t, 'p', 'u')"
+            ),
+            {"i": pid, "t": tenant.tenant_id},
+        )
+        for fid, name, age in (
+            (stale, "a.kicad_sch", "10 hours"),
+            (fresh, "b.kicad_sch", "1 minute"),
+        ):
+            await conn.execute(
+                text(
+                    "INSERT INTO projects.files (id, tenant_id, project_id, name, object_key,"
+                    " sha256, size_bytes, created_by, created_at) VALUES (:f, :t, :p, :n, :k,"
+                    " repeat('a', 64), 1, 'u', now() - CAST(:age AS interval))"
+                ),
+                {
+                    "f": fid,
+                    "t": tenant.tenant_id,
+                    "p": pid,
+                    "n": name,
+                    "k": f"x/{name}",
+                    "age": age,
+                },
+            )
+    docs = {}
+    with tenant_scope(tenant):
+        async with tenant_transaction(app_engine) as conn:
+            for label in ("stale", "fresh"):
+                docs[label] = await kb.add_document(
+                    conn,
+                    DocumentMeta(
+                        title=label,
+                        mime_type="text/plain",
+                        sha256=uuid.uuid4().hex * 2,
+                        size_bytes=1,
+                    ),
+                    scope=Scope.TENANT,
+                    created_by="u",
+                )
+            await conn.execute(
+                text("UPDATE kb.documents SET created_at = now() - interval '1 day' WHERE id = :i"),
+                {"i": docs["stale"]},
+            )
+    async with platform_transaction(platform_engine) as conn:
+        global_doc = await kb.add_document(
+            conn,
+            DocumentMeta(
+                title="g", mime_type="text/plain", sha256=uuid.uuid4().hex * 2, size_bytes=1
+            ),
+            scope=Scope.GLOBAL,
+            created_by="pipeline",
+        )
+        await conn.execute(
+            text("UPDATE kb.documents SET created_at = now() - interval '1 day' WHERE id = :i"),
+            {"i": global_doc},
+        )
+
+    result = await sweep(app_engine, platform_engine, {}, run_timeout_s=3600)
+    assert result["stale_files"] >= 1
+    assert result["stale_documents"] >= 2
+
+    async with tenant_transaction(app_engine, tenant.tenant_id) as conn:
+        files = {
+            r.id: r
+            for r in await conn.execute(text("SELECT id, status, summary FROM projects.files"))
+        }
+        documents = {
+            r.id: r
+            for r in await conn.execute(
+                text("SELECT id, status, error FROM kb.documents WHERE scope = 'tenant'")
+            )
+        }
+        actions = (await conn.execute(text("SELECT action FROM audit.events"))).scalars().all()
+    assert files[stale].status == "failed"
+    assert files[stale].summary["error"] == "ingest.timeout"
+    assert files[stale].summary["message"]  # a reason the UI can show
+    assert files[fresh].status == "uploaded"
+    assert documents[docs["stale"]].status == "failed"
+    assert "did not finish" in documents[docs["stale"]].error
+    assert documents[docs["fresh"]].status == "pending"
+    assert "project.files_failed" in actions
+    assert "kb.document.failed" in actions
+    async with platform_transaction(platform_engine) as conn:
+        status = (
+            await conn.execute(
+                text("SELECT status FROM kb.documents WHERE id = :i"), {"i": global_doc}
+            )
+        ).scalar()
+    assert status == "failed"
+
+
 async def test_sweep_exports_one_anchor_per_tenant_and_day_and_verify_uses_it(
     app_engine, platform_engine, make_tenant, tmp_path
 ):
