@@ -15,7 +15,6 @@ extraction agent reads parsed components rather than raw CAD files - DECISIONS_L
 
 from __future__ import annotations
 
-import operator
 import time
 from typing import Annotated, Any, TypedDict
 
@@ -25,10 +24,24 @@ from langgraph.types import Send
 
 from bomagent_agents import resume
 from bomagent_agents.contracts import RunInput, RunOutput
-from bomagent_agents.runtime_base import AgentContext, agent_provenance
+from bomagent_agents.runtime_base import AgentContext, agent_provenance, line_key
 from bomagent_agents.schemas import GroupedLines, LineOut, ValidationOut
-from bomagent_agents.variant_b import apply_choices, choose_mpn, finish, record_rejections
-from bomagent_bom.model import BomItem, Finding, Provenance, Requirements, Severity
+from bomagent_agents.variant_b import (
+    apply_choices,
+    choose_mpn,
+    finish,
+    merge_choices,
+    record_rejections,
+)
+from bomagent_bom.grouping import MPN_FIELDS
+from bomagent_bom.model import (
+    BomItem,
+    Finding,
+    ParsedDesign,
+    Provenance,
+    Requirements,
+    Severity,
+)
 from bomagent_bom.packages import package_from_footprint
 from bomagent_bom.refdes import kind_of
 
@@ -75,7 +88,7 @@ async def llm_validate(
 
 class AState(TypedDict, total=False):
     items: list[dict[str, Any]]
-    choices: Annotated[list[dict[str, Any]], operator.add]
+    choices: Annotated[list[dict[str, Any]] | None, merge_choices]
     findings: list[dict[str, Any]]
 
 
@@ -119,6 +132,40 @@ def lines_to_items(
     return items
 
 
+def attribute_mpns(
+    items: list[BomItem],
+    design: ParsedDesign,
+    agent: Provenance,
+    previous: list[BomItem] | None = None,
+) -> list[BomItem]:
+    """Record where every MPN of agent-written lines comes from (review I6).
+
+    * the same MPN the line (same designator set) had before keeps that provenance
+      (``mpn_select`` with its citations, or the parser),
+    * an MPN that every component of the line carries in the design file is the parser's,
+    * anything else was decided by ``agent`` (extract_group, compose, submit_bom).
+
+    So every agent MPN counts in the H2 denominator (METODYKA §2), as in variant B."""
+    parser = Provenance.from_parser(design.source_format)
+    in_file = {c.refdes: c.field(*MPN_FIELDS).strip().upper() for c in design.components}
+    before = {line_key(i.refdes): i for i in previous or []}
+    out: list[BomItem] = []
+    for item in items:
+        prov = {k: v for k, v in item.provenance.items() if k not in {"mpn", "manufacturer"}}
+        if item.mpn:
+            mpn = item.mpn.strip().upper()
+            old = before.get(line_key(item.refdes))
+            if old is not None and old.mpn.strip().upper() == mpn and "mpn" in old.provenance:
+                source = old.provenance["mpn"]
+            elif all(in_file.get(r) == mpn for r in item.refdes):
+                source = parser
+            else:
+                source = agent
+            prov |= {"mpn": source, "manufacturer": source}
+        out.append(item.model_copy(update={"provenance": prov}))
+    return out
+
+
 class LangGraphVariantA:
     name = "langgraph_a"
 
@@ -138,10 +185,9 @@ class LangGraphVariantA:
             if result is None:
                 return {"items": []}
             out, prompt, model = result
-            items = lines_to_items(
-                ctx, out.lines, agent_provenance("extract_group", prompt, model), "extract_group"
-            )
-            items = ctx.guard_mpns(items, "extract_group")
+            prov = agent_provenance("extract_group", prompt, model)
+            items = lines_to_items(ctx, out.lines, prov, "extract_group")
+            items = attribute_mpns(ctx.guard_mpns(items, "extract_group"), run.design, prov)
             return {"items": [i.model_dump(mode="json") for i in items]}
 
         def fan_out(state: AState) -> list[Send] | str:
@@ -156,12 +202,12 @@ class LangGraphVariantA:
             return {"choices": [choice] if choice else []}
 
         async def validate_node(state: AState) -> AState:
-            record_rejections(ctx, state.get("choices", []))
-            items = apply_choices(state["items"], state.get("choices", []))
+            record_rejections(ctx, state.get("choices") or [])
+            items = apply_choices(state["items"], state.get("choices"))
             findings = await llm_validate(ctx, items, run.requirements)
             return {
                 "items": [i.model_dump(mode="json") for i in items],
-                "choices": [],
+                "choices": None,  # applied: clear, so finish does not apply them again
                 "findings": [f.model_dump(mode="json") for f in findings],
             }
 
@@ -183,27 +229,10 @@ class LangGraphVariantA:
                 return {}  # keep the validated items
             out, prompt, model = result
             prov = agent_provenance("compose", prompt, model)
-            previous = {tuple(i["refdes"]): BomItem.model_validate(i) for i in state["items"]}
-            items: list[BomItem] = []
-            for composed in ctx.guard_mpns(
-                lines_to_items(ctx, out.lines, prov, "compose"), "compose"
-            ):
-                before = previous.get(tuple(composed.refdes))
-                keep = (
-                    before is not None and composed.mpn == before.mpn and "mpn" in before.provenance
-                )
-                item = composed
-                if keep and before is not None:  # MPN unchanged: keep its citations
-                    item = composed.model_copy(
-                        update={
-                            "provenance": {
-                                **composed.provenance,
-                                "mpn": before.provenance["mpn"],
-                                "manufacturer": before.provenance["mpn"],
-                            }
-                        }
-                    )
-                items.append(item)
+            composed = ctx.guard_mpns(lines_to_items(ctx, out.lines, prov, "compose"), "compose")
+            previous = [BomItem.model_validate(i) for i in state["items"]]
+            # an unchanged MPN keeps its citations; a changed or added one is compose's
+            items = attribute_mpns(composed, run.design, prov, previous)
             return {"items": [i.model_dump(mode="json") for i in items]}
 
         g = StateGraph(AState)

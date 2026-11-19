@@ -20,6 +20,14 @@ only the architecture differs (`docs/thesis/ARCHITEKTURA_WARIANTOW.md`).
   untrusted; KB chunks flagged as prompt injection are never sent.
 - An MPN is accepted only if it appears among the retrieved evidence candidates;
   anything else is discarded (anti-hallucination by construction).
+- MPN choices follow a line by its designator set (`runtime_base.line_key`), never by
+  line number: `validate` applies them once and clears them, so renumbering (B) or a
+  compose that reorders lines (A) cannot move a part onto another line, and later
+  compose/repair changes are not overwritten.
+- Every MPN in an agent-written line has provenance (`variant_a.attribute_mpns`): kept
+  from the line's previous MPN, `parser` if every component carries it in the design
+  file, otherwise the agent that wrote it (`extract_group`, `compose`, `submit_bom`),
+  so it counts in the `attempted_mpn_hallucination_rate` denominator as in variant B.
 - Budgets per run: LLM calls, tokens, wall time (`RunConfig`); exceeding them stops the
   graph and returns the partial BOM with a `run.budget` finding.
 - Checkpointer: `TenantCheckpointSaver` (`checkpoint.py`) keeps LangGraph checkpoints and

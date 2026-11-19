@@ -14,7 +14,6 @@ and the run returns what it has (same handling as variant A).
 
 from __future__ import annotations
 
-import operator
 import time
 from typing import Annotated, Any, Literal, TypedDict
 
@@ -24,7 +23,7 @@ from langgraph.types import Send
 
 from bomagent_agents import resume
 from bomagent_agents.contracts import RunInput, RunOutput
-from bomagent_agents.runtime_base import AgentContext, agent_provenance
+from bomagent_agents.runtime_base import AgentContext, agent_provenance, line_key
 from bomagent_agents.schemas import MpnChoice, RepairOut
 from bomagent_bom.grouping import group_components, renumber
 from bomagent_bom.model import BomItem, BomVersion, Finding, Provenance, Severity
@@ -35,9 +34,21 @@ MPN_KINDS_SKIPPED = {"test_point", "mechanical"}
 Status = Literal["completed", "budget_exceeded", "failed"]
 
 
+def merge_choices(
+    current: list[dict[str, Any]] | None, update: list[dict[str, Any]] | None
+) -> list[dict[str, Any]]:
+    """Reducer of the pending MPN choices: fan-out branches append, ``None`` clears.
+
+    ``validate`` applies the choices and clears them, so no later step re-applies a stale
+    choice over what compose (A) or repair (B) did since (review C1)."""
+    if update is None:
+        return []
+    return [*(current or []), *update]
+
+
 class BState(TypedDict, total=False):
     items: list[dict[str, Any]]
-    choices: Annotated[list[dict[str, Any]], operator.add]
+    choices: Annotated[list[dict[str, Any]] | None, merge_choices]
     findings: list[dict[str, Any]]
     iterations: int
 
@@ -119,14 +130,21 @@ def apply_choice(item: BomItem, choice: dict[str, Any]) -> BomItem:
     )
 
 
-def apply_choices(items: list[dict[str, Any]], choices: list[dict[str, Any]]) -> list[BomItem]:
-    by_line = {c["line"]: c for c in choices}
-    return [
-        apply_choice(BomItem.model_validate(i), by_line[i["line"]])
-        if i["line"] in by_line
-        else BomItem.model_validate(i)
-        for i in items
-    ]
+def apply_choices(
+    items: list[dict[str, Any]], choices: list[dict[str, Any]] | None
+) -> list[BomItem]:
+    """Apply each choice to the line it was made for, identified by its designators.
+
+    Line numbers are not an identity: renumbering (B) and compose (A) reorder lines, so a
+    choice keyed by number would land on another part (review C1). A choice whose
+    designator set no longer exists as a line (regrouped since) is not applied."""
+    by_line = {line_key(c["refdes"]): c for c in choices or []}
+    out: list[BomItem] = []
+    for raw in items:
+        item = BomItem.model_validate(raw)
+        choice = by_line.get(line_key(item.refdes))
+        out.append(apply_choice(item, choice) if choice else item)
+    return out
 
 
 def finish(
@@ -138,7 +156,8 @@ def finish(
     start: float,
     **bom_fields: Any,
 ) -> RunOutput:
-    """Shared output assembly: applies pending choices, adds run issues, sets status."""
+    """Shared output assembly: applies choices still pending (none once validate ran),
+    adds run issues, sets status."""
     items = apply_choices(state.get("items", []), state.get("choices", []))
     items = ctx.guard_mpns(items, "output")
     findings = [Finding.model_validate(f) for f in state.get("findings", [])] + ctx.issues
@@ -192,12 +211,12 @@ class LangGraphVariantB:
             return {"choices": [choice] if choice else []}
 
         async def validate_node(state: BState) -> BState:
-            record_rejections(ctx, state.get("choices", []))
-            items = apply_choices(state["items"], state.get("choices", []))
+            record_rejections(ctx, state.get("choices") or [])
+            items = apply_choices(state["items"], state.get("choices"))
             report = await ctx.step("validate", _async(lambda: validate(items, run.requirements)))
             return {
                 "items": [i.model_dump(mode="json") for i in items],
-                "choices": [],
+                "choices": None,  # applied: clear, so finish does not apply them again
                 "findings": [f.model_dump(mode="json") for f in report.findings],
             }
 
