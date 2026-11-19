@@ -23,7 +23,7 @@ MAX_PAGES = 2000
 MAX_DOCUMENT_BYTES = 64 * 1024 * 1024
 #: what pypdf and the standard library raise on hostile or damaged input (PdfReadError and
 #: LimitReachedError are PyPdfErrors; deep nesting is a RecursionError)
-_PDF_ERRORS: tuple[type[BaseException], ...] = (
+_PDF_ERRORS: tuple[type[Exception], ...] = (
     ValueError,
     KeyError,
     TypeError,
@@ -73,6 +73,8 @@ def _pdf(data: bytes) -> ExtractedDocument:
     from pypdf import PdfReader
     from pypdf.errors import PyPdfError
 
+    errors: tuple[type[Exception], ...] = (PyPdfError, *_PDF_ERRORS)
+
     try:
         reader = PdfReader(io.BytesIO(data))
         if reader.is_encrypted:
@@ -82,7 +84,7 @@ def _pdf(data: bytes) -> ExtractedDocument:
         pages = [
             Page(i + 1, sanitize(page.extract_text() or "")) for i, page in enumerate(reader.pages)
         ]
-    except (PyPdfError, *_PDF_ERRORS) as exc:
+    except errors as exc:
         if isinstance(exc, ExtractionError):
             raise
         raise ExtractionError(f"unreadable PDF: {type(exc).__name__}") from exc
