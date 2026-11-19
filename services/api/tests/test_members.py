@@ -387,3 +387,104 @@ async def test_no_email_without_base_url(app_engine, platform_engine) -> None:
     owner = await env.org(await env.login("nomail-owner"), "nomail-org")
     assert (await env.invite(owner, "n@x.eu", ["viewer"])).status_code == 201
     assert mailer.sent == []
+
+
+@pytest.mark.parametrize(
+    "name", ["Acme\r\nBcc: x@evil.example", "Acme\nX", "Acme\x00", "A\u2028B", "A\x7fB"]
+)
+async def test_organisation_names_reject_control_characters(env, name) -> None:
+    """Review M-1: names go into e-mail headers; control characters are a 422, not a 500."""
+    auth = await env.login(f"ctl-{uuid.uuid4().hex[:8]}")
+    resp = await env.c.post(
+        "/v1/organizations",
+        headers=auth,
+        json={"name": name, "slug": f"ctl-{uuid.uuid4().hex[:8]}"},
+    )
+    assert resp.status_code == 422, resp.text
+
+
+async def test_unexpected_mailer_error_keeps_the_invitation_and_audits_failure(
+    app_engine, platform_engine
+) -> None:
+    class Broken:
+        async def send(self, mail) -> None:
+            raise ValueError("Header values may not contain linefeed or carriage return")
+
+    env = Env(app_engine, platform_engine)
+    env.app.state.mailer = Broken()
+    env.app.state.invite_base_url = "https://app.example.eu"
+    owner = await env.org(await env.login("brokenmail-owner"), "brokenmail-org")
+    resp = await env.invite(owner, "b@x.eu", ["viewer"])
+    assert resp.status_code == 201, resp.text
+    assert resp.json()["token"]
+    events = (await env.c.get("/v1/audit-events?limit=100", headers=owner)).json()["items"]
+    emailed = [e for e in events if e["action"] == "member.invitation_emailed"]
+    assert [e["after"]["outcome"] for e in emailed] == ["failed"]
+
+
+async def test_open_event_streams_are_capped_per_user_and_tenant(env):
+    """Review M-3: each open stream polls the shared pool; a user (and a tenant) may hold
+    only a bounded number at once, and a finished stream frees its slot."""
+    import asyncio
+
+    from bomagent_api.sse_limits import StreamLimiter
+    from bomagent_common.messaging import InMemoryQueue
+
+    env.app.state.queues = {"ingest": InMemoryQueue(), "runs": InMemoryQueue()}
+    env.app.state.sse_interval_s = 0.01
+    env.app.state.sse_timeout_s = 0.6
+    env.app.state.sse_streams = StreamLimiter(per_actor=1, per_tenant=2)
+    s = uuid.uuid4().hex[:6]
+    owner = await env.org(await env.login(f"o-{s}"), f"ssecap-{s}")
+    viewer = await env.join(owner, f"v-{s}", ["viewer"])
+    reviewer = await env.join(owner, f"r-{s}", ["reviewer"])
+    pid = (await env.c.post("/v1/projects", headers=owner, json={"name": "p"})).json()["id"]
+    await env.c.post(
+        f"/v1/projects/{pid}/files", headers=owner, files={"file": ("a.kicad_sch", b"x")}
+    )
+    await mark_files_parsed(env.app.state.engine, owner["X-Org-Id"])
+    run_id = (
+        await env.c.post("/v1/runs", headers=owner, json={"project_id": pid, "variant": "B"})
+    ).json()["id"]  # stays queued: the stream runs until its timeout
+    url = f"/v1/runs/{run_id}/events"
+
+    first = asyncio.create_task(env.c.get(url, headers=owner))
+    second = asyncio.create_task(env.c.get(url, headers=viewer))
+    await asyncio.sleep(0.15)
+    same_user = await env.c.get(url, headers=owner)
+    assert same_user.status_code == 429, same_user.text
+    assert same_user.json()["type"].endswith("rate-limited")
+    assert "retry-after" in same_user.headers
+    same_tenant = await env.c.get(url, headers=reviewer)
+    assert same_tenant.status_code == 429, same_tenant.text
+    assert (await first).status_code == 200
+    assert (await second).status_code == 200
+    again = await env.c.get(url, headers=owner)  # the slot was released
+    assert again.status_code == 200
+
+
+def test_stream_limiter_releases_once_and_on_garbage_collection():
+    import gc
+
+    from bomagent_api.sse_limits import StreamLimiter
+    from bomagent_common.problems import ProblemError
+
+    tenant = uuid.uuid4()
+    limiter = StreamLimiter(per_actor=1, per_tenant=5)
+    slot = limiter.acquire(tenant, "u")
+    with pytest.raises(ProblemError):
+        limiter.acquire(tenant, "u")
+    slot.release()
+    slot.release()  # idempotent: does not free someone else's slot
+    other = limiter.acquire(tenant, "u")
+    with pytest.raises(ProblemError):
+        limiter.acquire(tenant, "u")
+
+    async def never_started():
+        yield ""
+
+    gen = never_started()
+    other.release_with(gen)
+    del gen
+    gc.collect()
+    limiter.acquire(tenant, "u")  # the never-iterated stream freed its slot

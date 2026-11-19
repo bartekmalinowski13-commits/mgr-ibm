@@ -30,6 +30,7 @@ from bomagent_api.schemas import (
 )
 from bomagent_api.services import runs as service
 from bomagent_api.services.runs import ExportedBom, RunDeps
+from bomagent_api.sse_limits import StreamLimiter
 from bomagent_common.problems import ProblemError
 
 router = APIRouter(
@@ -148,26 +149,35 @@ async def run_events(request: Request, ctx: OrgContext, run_id: uuid.UUID) -> St
     engine = request.app.state.engine
     await service.ensure_run_visible(engine, run_id)
     interval = request.app.state.sse_interval_s
+    limiter = getattr(request.app.state, "sse_streams", None)
+    if limiter is None:
+        limiter = request.app.state.sse_streams = StreamLimiter()
+    slot = limiter.acquire(ctx.tenant_id, ctx.actor_id)  # 429 beyond the cap (review M-3)
 
     async def stream() -> AsyncIterator[str]:
-        last = None
-        recheck_every = max(1, int(SSE_RECHECK_S / interval))
-        for tick in range(int(request.app.state.sse_timeout_s / interval)):
-            due = tick and tick % recheck_every == 0
-            if due and not await still_authorized(request, ctx):
-                yield 'event: end\ndata: {"status": "forbidden"}\n\n'
-                return
-            status, snapshot = await service.progress(engine, ctx.tenant_id, run_id)
-            if snapshot != last:
-                yield f"event: progress\ndata: {json.dumps(snapshot)}\n\n"
-                last = snapshot
-            if status in service.TERMINAL:
-                yield f"event: end\ndata: {json.dumps({'status': status})}\n\n"
-                return
-            await asyncio.sleep(interval)
+        try:
+            last = None
+            recheck_every = max(1, int(SSE_RECHECK_S / interval))
+            for tick in range(int(request.app.state.sse_timeout_s / interval)):
+                due = tick and tick % recheck_every == 0
+                if due and not await still_authorized(request, ctx):
+                    yield 'event: end\ndata: {"status": "forbidden"}\n\n'
+                    return
+                status, snapshot = await service.progress(engine, ctx.tenant_id, run_id)
+                if snapshot != last:
+                    yield f"event: progress\ndata: {json.dumps(snapshot)}\n\n"
+                    last = snapshot
+                if status in service.TERMINAL:
+                    yield f"event: end\ndata: {json.dumps({'status': status})}\n\n"
+                    return
+                await asyncio.sleep(interval)
+        finally:
+            slot.release()
 
+    body = stream()
+    slot.release_with(body)  # a body that is never iterated still frees the slot
     return StreamingResponse(
-        stream(), media_type="text/event-stream", headers={"Cache-Control": "no-store"}
+        body, media_type="text/event-stream", headers={"Cache-Control": "no-store"}
     )
 
 

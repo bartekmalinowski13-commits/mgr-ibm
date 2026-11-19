@@ -73,3 +73,26 @@ async def test_smtp_uses_starttls_login_and_wraps_errors(monkeypatch):
     monkeypatch.setattr(smtplib, "SMTP", boom)
     with pytest.raises(MailError):
         await mailer.send(Mail("a@x.eu", "s", "t"))
+
+
+def test_invitation_subject_never_carries_line_breaks():
+    """Review M-1: a CR/LF in an organisation name must not reach a mail header."""
+    mail = invitation_mail(
+        to="a@x.eu",
+        org_name="Acme\r\nBcc: victim@evil.example\u2028X",
+        inviter="Ann",
+        link="https://app.example/invite/T",
+        days=7,
+    )
+    assert not any(ch in mail.subject for ch in "\r\n\u2028")
+    assert "Bcc: victim@evil.example" in mail.subject  # kept as text, on one line
+
+
+async def test_smtp_reports_unsendable_headers_as_mail_error(monkeypatch):
+    def never(*a, **k):  # the message must be refused before any connection
+        raise AssertionError("connected")
+
+    monkeypatch.setattr(smtplib, "SMTP", never)
+    mailer = mailer_from_settings("smtp.example.eu", sender="noreply@example.eu")
+    with pytest.raises(MailError):
+        await mailer.send(Mail("a@x.eu", "evil\r\nBcc: x@evil.example", "t"))

@@ -52,6 +52,23 @@ regenerate with `just openapi`; a test fails when it drifts).
 - **Concurrency:** idempotency keys are per user and serialised; BOM edits lock the run.
   The stored request hash covers method, path and body: the same key and body on another
   endpoint -> 422 `idempotency-mismatch`.
+  Organisation creation re-counts the owned-organisation quota under a per-user advisory
+  lock (`pg_advisory_xact_lock`), so concurrent requests cannot exceed it.
+- **Event streams:** open run-progress streams (`GET /v1/runs/{id}/events`) are capped per
+  API process (`sse_limits.StreamLimiter`: 5 per user, 25 per organisation) -> 429
+  `rate-limited` with `Retry-After`; a slot is freed when the stream ends, the client
+  disconnects or the unread body is collected. With N API instances the effective cap is
+  N x 5 per user and N x 25 per organisation (no shared counter).
+- **Invitation e-mail:** organisation names reject control characters and line breaks (422);
+  the subject is reduced to one line, and any mailer error after the invitation commit is
+  audited as `outcome: failed` (never a 500).
+- **SSO without Cognito:** outside local/test, a deployment without Cognito settings (the
+  Supabase pilot) uses `UnavailableIdentityProviders`: saving a connection is stored as
+  `status: failed` with the reason, never reported as active.
+- Secret settings (`smtp_password`, `oidc_userinfo_apikey`, `llm_gateway_key`, DB URLs) use
+  `Field(repr=False)`.
+- **Sample seeding** runs under the new organisation's tenant scope (`seed_samples` enters
+  it), so the tenant-enforcing object store accepts the sample files.
 - **Queues:** `BOMAGENT_QUEUE_BACKEND=sqs` (default; `BOMAGENT_{INGEST,RUNS,KB}_QUEUE_URL`,
   in-memory when unset in local/test) or `postgres` (`PostgresQueue` on
   `app.queue_messages`; the API only inserts, with the app role in the tenant's context).

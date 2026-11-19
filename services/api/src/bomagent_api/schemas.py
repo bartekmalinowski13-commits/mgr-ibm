@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import uuid
 from datetime import datetime
 from typing import Any, Literal
@@ -48,9 +49,21 @@ class Me(_M):
     organizations: list[Membership]
 
 
+_CONTROL = re.compile(r"[\x00-\x1f\x7f-\x9f\u2028\u2029]")
+
+
 class OrganizationCreate(_M):
     name: str = Field(min_length=1, max_length=200)
     slug: str = Field(pattern=r"^[a-z0-9][a-z0-9-]{1,62}$")
+
+    @field_validator("name")
+    @classmethod
+    def _single_line(cls, value: str) -> str:
+        """The name goes into e-mail subjects (invitations): no control characters or line
+        breaks, which would break or inject mail headers (review M-1)."""
+        if _CONTROL.search(value):
+            raise ValueError("control characters and line breaks are not allowed")
+        return value
 
 
 class Organization(_M):
