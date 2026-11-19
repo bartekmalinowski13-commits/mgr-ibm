@@ -190,6 +190,8 @@ def test_detection_is_variant_neutral_and_needs_new_findings():
     assert (rep.false_alarms, rep.new_findings) == (1, 2)
     assert rep.by_kind == {"drop_footprint": (1, 1)}
     assert detection_report(errors, [noise]).by_kind == {"drop_footprint": (1, 0)}
+    # M3: no new findings - the false-discovery proportion is undefined, not a perfect 0
+    assert math.isnan(detection_report(errors, []).false_alarm_rate)
     with pytest.raises(ValueError, match="at least one"):
         detection_rate([], [])
 

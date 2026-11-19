@@ -373,6 +373,9 @@ class RunWorker:
         progress_lock = asyncio.Lock()
 
         async def on_step(step: TraceStep, usage: Usage) -> None:
+            # spend so far, so a run that raises inside the runtime still meters its calls
+            # (a step that raises reports here too, from ``AgentContext.step``'s finally)
+            spent["usage"] = usage
             async with progress_lock:
                 await self._progress(message.tenant_id, run_id, step, usage)
 

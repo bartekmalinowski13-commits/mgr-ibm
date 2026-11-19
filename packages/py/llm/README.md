@@ -20,7 +20,12 @@ gateway (ADR-0006).
   Pydantic schema (one retry); `FakeChat` replays cassettes (`record_cassette`) or a
   scripted responder - CI never calls a real model. `RecordingChat` wraps a real client and
   stores responses + usage under `tests/cassettes/<model>/` (`bomagent record`, owner-run);
-  replay with `bomagent run --cassettes`. The nightly real-model job is
+  replay with `bomagent run --cassettes` (any catalogue model: for a real model the replay is
+  replay-only, `FakeChat(None, ...)`, and a missing recording raises `CassetteMissError`
+  instead of falling back to a heuristic answer). Failed calls carry `LlmError.billing`:
+  `metered` (provider usage), `estimated` (timeout/408 - the provider bills it, prompt tokens
+  estimated and priced, a lower bound) or `unbilled` (rejected/undelivered - an explicit 0);
+  an empty or `finish_reason=length` reply is a paid failure. The nightly real-model job is
   `.github/workflows/nightly-evals.yml` (no-op without the gateway secrets).
 
 - `eu_guard` - EU-only enforcement: `check_catalog` (enabled entries) and

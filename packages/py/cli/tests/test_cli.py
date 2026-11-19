@@ -53,6 +53,68 @@ def test_record_then_replay_with_fake_provider(tmp_path):
     assert replay.exit_code == 0, replay.output
 
 
+@pytest.mark.parametrize("variant", ["A", "B"])
+def test_record_then_replay_with_a_real_catalogue_model(tmp_path, monkeypatch, variant):
+    """I4: cassettes recorded with a real model replay with that model, without the gateway,
+    byte-identical; nothing falls back to the heuristic fake."""
+    import bomagent_llm.chat as chat_mod
+    from bomagent_agents.fake_responder import heuristic_responder
+
+    def answer(request):  # distinguishable from the heuristic responder's answers
+        data = heuristic_responder(request)
+        if request.prompt_id == "mpn_select":
+            data = {**data, "rationale": "RECORDED"}
+        return data
+
+    class StubGateway(chat_mod.FakeChat):
+        def __init__(self, *_args, **_kwargs) -> None:
+            super().__init__(answer)
+
+    cass = tmp_path / "cassettes"
+    monkeypatch.setenv("BOMAGENT_LLM_GATEWAY_URL", "http://gw")
+    monkeypatch.setenv("BOMAGENT_LLM_GATEWAY_KEY", "k")
+    monkeypatch.setattr(chat_mod, "GatewayChat", StubGateway)
+    model = ["--model", "mistral-large-eu", "--variant", variant]
+    live_out, replay_out = tmp_path / "live.json", tmp_path / "replay.json"
+    rec = runner.invoke(app, ["record", str(ECG), *model, "--cassettes", str(cass)])
+    assert rec.exit_code == 0, rec.output
+    assert list((cass / "mistral-large-eu").glob("*.json"))
+    live = runner.invoke(app, ["run", str(ECG), *model, "--cassettes", str(cass)])
+    assert live.exit_code == 0, live.output
+
+    # replay: no gateway at all - a gateway call would fail the run
+    monkeypatch.delenv("BOMAGENT_LLM_GATEWAY_URL")
+    monkeypatch.delenv("BOMAGENT_LLM_GATEWAY_KEY")
+    monkeypatch.setattr(chat_mod, "GatewayChat", None)
+    for out in (live_out, replay_out):
+        res = runner.invoke(
+            app, ["run", str(ECG), *model, "--cassettes", str(cass), "--out", str(out)]
+        )
+        assert res.exit_code == 0, res.output
+        assert "completed" in res.output
+    first = BomVersion.model_validate_json(live_out.read_text())
+    second = BomVersion.model_validate_json(replay_out.read_text())
+    assert [i.model_dump(exclude={"provenance"}) for i in first.items] == [
+        i.model_dump(exclude={"provenance"}) for i in second.items
+    ]
+    rationales = {
+        p.rationale for i in first.items for p in i.provenance.values() if p.agent == "mpn_select"
+    }
+    assert rationales == {"RECORDED"}
+
+
+def test_replay_of_a_real_model_fails_loudly_on_a_missing_cassette(tmp_path, monkeypatch):
+    from bomagent_llm.chat import CassetteMissError
+
+    monkeypatch.delenv("BOMAGENT_LLM_GATEWAY_URL", raising=False)
+    (tmp_path / "mistral-large-eu").mkdir()
+    res = runner.invoke(
+        app, ["run", str(ECG), "--model", "mistral-large-eu", "--cassettes", str(tmp_path)]
+    )
+    assert res.exit_code != 0
+    assert isinstance(res.exception, CassetteMissError) or "no cassette" in res.output
+
+
 def test_run_regression_thresholds_fail_the_command():
     ref = str(ECG / "reference_bom.csv")
     ok = runner.invoke(app, ["run", str(ECG), "--reference", ref, "--min-f1", "0.0"])

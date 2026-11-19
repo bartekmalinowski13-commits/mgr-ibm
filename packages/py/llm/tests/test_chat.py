@@ -285,3 +285,103 @@ def test_the_mistral_large_entry_is_pinned_and_reserves_reasoning_tokens():
     spec = load_catalog().get("mistral-large-eu")
     assert not spec.gateway_model.endswith("-latest")  # experiments need a fixed model
     assert spec.reasoning_tokens >= 4096
+
+
+def _mistral_request(content: str = "hello " * 400) -> ChatRequest:
+    return dataclasses.replace(_request(content), model=load_catalog().get("mistral-large-eu"))
+
+
+def _gateway(handler) -> GatewayChat:
+    return GatewayChat(
+        "http://gw",
+        "k",
+        backoff_s=0.0,
+        max_retries=0,
+        client=httpx.AsyncClient(transport=httpx.MockTransport(handler), base_url="http://gw"),
+    )
+
+
+@pytest.mark.parametrize("failure", ["read_timeout", "status_408"])
+async def test_a_timed_out_call_is_charged_an_estimate_and_flagged(failure):
+    """I3: the provider bills a generation the gateway cut off, so a timeout is one call
+    with (at least) the prompt tokens priced - flagged as an estimate, never silently 0."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if failure == "read_timeout":
+            raise httpx.ReadTimeout("slow", request=request)
+        return httpx.Response(408, json={"error": "timeout"})
+
+    request = _mistral_request()
+    with pytest.raises(LlmError) as info:
+        await _gateway(handler).complete(request)
+    exc = info.value
+    assert exc.billing == "estimated"
+    prompt_chars = sum(len(m.content) for m in request.messages)
+    assert exc.usage.llm_calls == 1
+    assert exc.usage.input_tokens == prompt_chars // 4
+    assert exc.usage.cost_eur == request.model.cost(prompt_chars // 4, 0) > 0
+    # the flag survives the structured-output wrapper
+    with pytest.raises(LlmError) as wrapped:
+        await structured(_gateway(handler), request, Answer)
+    assert wrapped.value.billing == "estimated"
+    assert wrapped.value.usage.llm_calls == 1
+
+
+@pytest.mark.parametrize("status", [400, 401, 422, 500])
+async def test_a_rejected_call_is_an_explicit_unbilled_zero(status):
+    request = _mistral_request()
+    with pytest.raises(LlmError) as info:
+        await _gateway(lambda r: httpx.Response(status, json={"error": "x"})).complete(request)
+    assert info.value.billing == "unbilled"
+    assert info.value.usage.llm_calls == 1
+    assert (info.value.usage.input_tokens, info.value.usage.cost_eur) == (0, 0.0)
+
+
+async def test_a_failed_call_with_usage_is_metered():
+    def bad_json(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "choices": [{"message": {"content": "not json"}}],
+                "usage": {"prompt_tokens": 10, "completion_tokens": 3},
+            },
+        )
+
+    with pytest.raises(LlmError) as info:
+        await _gateway(bad_json).complete(_mistral_request())
+    assert info.value.billing == "metered"
+    assert (info.value.usage.input_tokens, info.value.usage.output_tokens) == (10, 3)
+
+
+@pytest.mark.parametrize(
+    ("content", "finish_reason"), [("", "stop"), (None, "stop"), ('{"mpn": "X', "length")]
+)
+async def test_an_empty_or_truncated_answer_is_a_paid_failure(content, finish_reason):
+    """M6: an empty or length-cut reply is not an all-default answer ("no MPN")."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "choices": [{"message": {"content": content}, "finish_reason": finish_reason}],
+                "usage": {"prompt_tokens": 7, "completion_tokens": 9},
+            },
+        )
+
+    with pytest.raises(LlmError, match=r"empty|truncated") as info:
+        await _gateway(handler).complete(_mistral_request())
+    assert info.value.usage.output_tokens == 9
+    assert info.value.billing == "metered"
+
+
+async def test_replay_only_fake_raises_on_a_cassette_miss(tmp_path):
+    """I4: replaying a real model's cassettes must never fall back to a scripted answer."""
+    from bomagent_llm.chat import CassetteMissError
+
+    recorded = _mistral_request("recorded")
+    record_cassette(tmp_path / "mistral-large-eu", recorded, {"mpn": "REAL"})
+    replay = FakeChat(None, cassette_dir=tmp_path)
+    assert (await replay.complete(recorded)).data == {"mpn": "REAL"}
+    with pytest.raises(CassetteMissError, match="mpn_select"):
+        await replay.complete(_mistral_request("never recorded"))
+    assert not issubclass(CassetteMissError, LlmError)  # a broken replay is not a model failure
