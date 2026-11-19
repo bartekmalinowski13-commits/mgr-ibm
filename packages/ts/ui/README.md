@@ -3,7 +3,8 @@
 Component base of the web app in the shadcn/ui style (ADR-0014): Radix primitives,
 Tailwind classes against the design tokens defined in `apps/web/src/styles.css`.
 
-- **Public interface:** `Button`, `Dialog`/`DialogContent`/`DialogFooter`, `Field` (label
+- **Public interface:** `Button`, `Dialog`/`DialogContent`/`DialogFooter`, `SheetContent` (left drawer, e.g. mobile
+  navigation, with focus trap and Escape), `Field` (label
   left, control right), `Input`, `Select`, `Textarea`, `StatusBadge` (icon + text, never
   colour alone), `Menu`, `cn`.
 - **Test:** `pnpm --filter @bomagent/ui typecheck lint`; behaviour and accessibility are

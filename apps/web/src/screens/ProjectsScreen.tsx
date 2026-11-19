@@ -1,11 +1,11 @@
-import { idempotencyKey } from "@bomagent/api-client";
 import { Button, Input } from "@bomagent/ui";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { api, call, problemMessage } from "../lib/api";
 import { formatDate } from "../lib/format";
+import { useIntentKeys } from "../lib/idempotency";
 import { usePageTitle } from "../lib/layout";
 import { useIsOwner, useProjects } from "../lib/queries";
 import { useToast } from "../lib/toast";
@@ -20,24 +20,35 @@ export function ProjectsScreen() {
   const toast = useToast();
   const [name, setName] = useState("");
   const [error, setError] = useState<string>();
+  const [busy, setBusy] = useState(false);
+  const pending = useRef(false);
+  const keys = useIntentKeys();
   const isOwner = useIsOwner();
   const noSamples = !!projects.data && !projects.data.items.some((p) => p.is_sample);
 
   const create = async (e: FormEvent) => {
     e.preventDefault();
+    if (pending.current) return;
+    pending.current = true;
+    setBusy(true);
     setError(undefined);
     try {
+      const body = { name: name.trim(), description: "" };
       const p = await call(
         api.POST("/v1/projects", {
-          body: { name: name.trim(), description: "" },
-          headers: { "Idempotency-Key": idempotencyKey() },
+          body,
+          headers: { "Idempotency-Key": keys.keyFor("project", body) },
         }),
       );
+      keys.done("project");
       await queryClient.invalidateQueries({ queryKey: ["projects"] });
       toast(t("projects.created"));
       await navigate({ to: "/projects/$projectId", params: { projectId: p.id } });
     } catch (err) {
       setError(problemMessage(err));
+    } finally {
+      pending.current = false;
+      setBusy(false);
     }
   };
 
@@ -57,7 +68,9 @@ export function ProjectsScreen() {
             aria-invalid={!!error}
           />
         </label>
-        <Button type="submit">{t("projects.create")}</Button>
+        <Button type="submit" disabled={busy}>
+          {t("projects.create")}
+        </Button>
         {error ? (
           <p role="alert" className="text-sm text-error sm:basis-full">
             {error}

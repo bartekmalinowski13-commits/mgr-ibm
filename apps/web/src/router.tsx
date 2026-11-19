@@ -8,6 +8,7 @@ import {
   redirect,
 } from "@tanstack/react-router";
 import { captureFragmentReturn } from "./lib/authReturn";
+import { LoadError } from "./screens/common";
 import { DemoBanner } from "./screens/DemoBanner";
 import { LoginScreen } from "./screens/LoginScreen";
 import { Shell } from "./screens/Shell";
@@ -93,6 +94,8 @@ export const runRoute = createRoute({
   getParentRoute: () => app,
   path: "/runs/$runId",
   component: lazyRouteComponent(() => import("./screens/RunScreen"), "RunScreen"),
+  // a new run (e.g. after Rerun) starts with fresh live/selection state, not the previous run's
+  remountDeps: ({ params }) => params.runId,
 });
 const kb = createRoute({
   getParentRoute: () => app,
@@ -131,6 +134,8 @@ export const router = createRouter({
     ]),
   ]),
   defaultPreload: "intent",
+  // a render error shows the localised error state with a retry, not the router's default
+  defaultErrorComponent: ({ error, reset }) => <LoadError error={error} onRetry={reset} />,
 });
 
 declare module "@tanstack/react-router" {

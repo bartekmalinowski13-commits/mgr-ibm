@@ -163,12 +163,10 @@
     "drop": "Przeciągnij tutaj pliki projektu (KiCad .kicad_sch/.kicad_pro/.kicad_pcb, IPC-2581 .xml, EDIF .edf, ODB++ .tgz/.zip, DXF z listą części, BOM w PDF/CSV) albo",
     "browse": "wybierz z dysku",
     "dropHint": "Do 64 MB na plik. Pliki są sprawdzane w izolowanym środowisku przed użyciem.",
-    "uploaded": "Wgrano {{count}} plików",
     "noFiles": "Brak plików. Wgraj schemat KiCad, żeby uruchomić przebieg.",
     "runs": "Przebiegi projektu",
     "noRuns": "Ten projekt nie ma jeszcze przebiegu.",
     "startRun": "Uruchom przebieg",
-    "components": "{{count}} komponentów",
     "fileStatus": {
       "uploaded": "Sprawdzanie",
       "parsed": "Gotowy",
@@ -181,7 +179,15 @@
     "deleted": "Projekt usunięty",
     "deleteFile": "Usuń plik {{name}}",
     "confirmDeleteFile": "Usunąć {{name}}? Tej operacji nie można cofnąć.",
-    "fileDeleted": "Plik usunięty"
+    "fileDeleted": "Plik usunięty",
+    "components_one": "{{count}} komponent",
+    "components_few": "{{count}} komponenty",
+    "components_many": "{{count}} komponentów",
+    "components_other": "{{count}} komponentu",
+    "uploaded_one": "Wgrano {{count}} plik",
+    "uploaded_few": "Wgrano {{count}} pliki",
+    "uploaded_many": "Wgrano {{count}} plików",
+    "uploaded_other": "Wgrano {{count}} pliku"
   },
   "newRun": {
     "title": "Nowy przebieg",
@@ -216,7 +222,8 @@
     },
     "defib": "Odporność na defibrylację",
     "submit": "Uruchom przebieg",
-    "started": "Uruchomiono przebieg"
+    "started": "Uruchomiono przebieg",
+    "partlyStarted": "Wariant {{variants}} został już uruchomiony; ponowna próba uruchomi tylko pozostałe."
   },
   "run": {
     "title": "Przebieg",
@@ -239,7 +246,6 @@
     "export": "Eksportuj CSV",
     "exported": "Wyeksportowano CSV",
     "version": "Wersja {{version}}",
-    "findings": "{{count}} uwag walidacji",
     "lastStep": "Ostatni zakończony krok: {{step}}",
     "starting": "Uruchamianie agentów…",
     "timeline": "Kroki przebiegu",
@@ -255,7 +261,12 @@
     "cancelled": "Przebieg anulowany",
     "cancelledHelp": "Ten przebieg został anulowany. Możesz uruchomić go ponownie z tymi samymi ustawieniami.",
     "rerun": "Uruchom ponownie",
-    "rerunStarted": "Uruchomiono nowy przebieg z tymi samymi ustawieniami"
+    "rerunStarted": "Uruchomiono nowy przebieg z tymi samymi ustawieniami",
+    "findings_one": "{{count}} uwaga walidacji",
+    "findings_few": "{{count}} uwagi walidacji",
+    "findings_many": "{{count}} uwag walidacji",
+    "findings_other": "{{count}} uwagi walidacji",
+    "statusColumn": "Status"
   },
   "bom": {
     "title": "Zestawienie BOM",
@@ -284,8 +295,11 @@
     "columnsMenu": "Kolumny",
     "copyCsv": "Kopiuj CSV",
     "count": "{{shown}} z {{total}} linii",
-    "csvCopied": "Skopiowano CSV ({{count}} linii)",
-    "csvFailed": "Nie udało się skopiować do schowka"
+    "csvFailed": "Nie udało się skopiować do schowka",
+    "csvCopied_one": "Skopiowano CSV ({{count}} linia)",
+    "csvCopied_few": "Skopiowano CSV ({{count}} linie)",
+    "csvCopied_many": "Skopiowano CSV ({{count}} linii)",
+    "csvCopied_other": "Skopiowano CSV ({{count}} linii)"
   },
   "panel": {
     "title": "Pozycja {{line}}",
@@ -319,10 +333,13 @@
     "when": "Kiedy",
     "action": "Zdarzenie",
     "verify": "Sprawdź integralność",
-    "verifyOk": "Łańcuch audytu jest nienaruszony ({{count}} zdarzeń).",
     "verifyBroken": "Łańcuch audytu jest przerwany od zdarzenia #{{seq}}. Zgłoś to administratorowi bezpieczeństwa.",
     "more": "Pokaż starsze",
-    "empty": "Brak zdarzeń dla tych filtrów."
+    "empty": "Brak zdarzeń dla tych filtrów.",
+    "verifyOk_one": "Łańcuch audytu jest nienaruszony ({{count}} zdarzenie).",
+    "verifyOk_few": "Łańcuch audytu jest nienaruszony ({{count}} zdarzenia).",
+    "verifyOk_many": "Łańcuch audytu jest nienaruszony ({{count}} zdarzeń).",
+    "verifyOk_other": "Łańcuch audytu jest nienaruszony ({{count}} zdarzenia)."
   },
   "settings": {
     "title": "Ustawienia organizacji",
@@ -371,7 +388,15 @@
     "of": "z {{limit}}",
     "sso": "Logowanie jednokrotne (SSO)",
     "ssoLead": "Logowanie przez dostawcę tożsamości organizacji (SAML 2.0 lub OpenID Connect), federowane w Amazon Cognito w UE.",
-    "ssoUnavailable": "Logowanie jednokrotne jest dostępne tylko we wdrożeniu AWS. To wdrożenie loguje e-mailem i hasłem."
+    "ssoUnavailable": "Logowanie jednokrotne jest dostępne tylko we wdrożeniu AWS. To wdrożenie loguje e-mailem i hasłem.",
+    "confirmRemoveMember": "Usunąć {{name}} z organizacji? Ta osoba od razu straci dostęp do wszystkich projektów.",
+    "confirmRoleChange": "Zmienić rolę {{name}} na „{{role}}”?",
+    "confirmOwnRole": "Zmienić swoją rolę na „{{role}}”? Możesz stracić dostęp do tych ustawień.",
+    "confirmRevokeInvite": "Unieważnić zaproszenie dla {{email}}? Token zaproszenia przestanie działać.",
+    "invitationRevoked": "Unieważniono zaproszenie",
+    "confirmRotate": "Wymienić klucz „{{name}}”? Obecny klucz od razu przestanie działać; zaktualizuj integracje nowym kluczem.",
+    "confirmRevokeKey": "Unieważnić klucz „{{name}}”? Integracje, które go używają, przestaną działać.",
+    "keyRevoked": "Unieważniono klucz"
   },
   "errors": {
     "already-member": "Ta osoba jest już członkiem organizacji.",
@@ -514,7 +539,11 @@
     "entityId": "Identyfikator encji (audience)",
     "saved": "Dostawca tożsamości zapisany",
     "failed": "Nie udało się skonfigurować dostawcy – zobacz stan poniżej",
-    "removeProvider": "Usuń dostawcę tożsamości"
+    "removeProvider": "Usuń dostawcę tożsamości",
+    "confirmRemoveDomain": "Usunąć domenę {{domain}}? Osoby z tej domeny nie zalogują się już przez jednokrotne logowanie.",
+    "domainRemoved": "Usunięto domenę",
+    "confirmRemoveProvider": "Usunąć dostawcę tożsamości? Członkowie nie zalogują się już przez jednokrotne logowanie.",
+    "providerRemoved": "Usunięto dostawcę tożsamości"
   },
   "samples": {
     "badge": "Przykład",
@@ -569,13 +598,22 @@
   "history": {
     "title": "Historia wersji",
     "generated": "Wygenerowana przez agentów",
-    "lines": "{{count}} pozycji",
     "line": "Pozycja {{line}}",
     "from": "Porównaj",
     "to": "z",
     "pickTwo": "Wybierz dwie różne wersje, aby zobaczyć zmiany.",
     "noChanges": "Brak różnic między tymi wersjami.",
     "added": "Dodano pozycję {{line}}",
-    "removed": "Usunięto pozycję {{line}}"
+    "removed": "Usunięto pozycję {{line}}",
+    "lines_one": "{{count}} pozycja",
+    "lines_few": "{{count}} pozycje",
+    "lines_many": "{{count}} pozycji",
+    "lines_other": "{{count}} pozycji"
+  },
+  "httpErrors": {
+    "413": "Plik jest za duży, by serwer go przyjął. Wgraj mniejszy plik albo podziel projekt na części.",
+    "429": "Zbyt wiele żądań w krótkim czasie. Odczekaj chwilę i spróbuj ponownie.",
+    "5xx": "Serwer jest chwilowo niedostępny. Spróbuj ponownie za chwilę.",
+    "generic": "Żądanie nie powiodło się (HTTP {{status}}). Spróbuj ponownie; jeśli błąd się powtarza, skontaktuj się z administratorem."
   }
 }

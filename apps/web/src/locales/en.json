@@ -163,12 +163,10 @@
     "drop": "Drag the project files here (KiCad .kicad_sch/.kicad_pro/.kicad_pcb, IPC-2581 .xml, EDIF .edf, ODB++ .tgz/.zip, DXF parts list, PDF/CSV BOM) or",
     "browse": "choose from disk",
     "dropHint": "Up to 64 MB per file. Files are checked in an isolated environment before use.",
-    "uploaded": "Uploaded {{count}} files",
     "noFiles": "No files yet. Upload a KiCad schematic to start a run.",
     "runs": "Runs of this project",
     "noRuns": "This project has no runs yet.",
     "startRun": "Start run",
-    "components": "{{count}} components",
     "fileStatus": {
       "uploaded": "Checking",
       "parsed": "Ready",
@@ -181,7 +179,11 @@
     "deleted": "Project deleted",
     "deleteFile": "Delete file {{name}}",
     "confirmDeleteFile": "Delete {{name}}? This cannot be undone.",
-    "fileDeleted": "File deleted"
+    "fileDeleted": "File deleted",
+    "components_one": "{{count}} component",
+    "components_other": "{{count}} components",
+    "uploaded_one": "Uploaded {{count}} file",
+    "uploaded_other": "Uploaded {{count}} files"
   },
   "newRun": {
     "title": "New run",
@@ -216,7 +218,8 @@
     },
     "defib": "Defibrillation-proof",
     "submit": "Start run",
-    "started": "Started run"
+    "started": "Started run",
+    "partlyStarted": "Variant {{variants}} has already started; trying again starts only the rest."
   },
   "run": {
     "title": "Run",
@@ -239,7 +242,6 @@
     "export": "Export CSV",
     "exported": "Exported CSV",
     "version": "Version {{version}}",
-    "findings": "{{count}} validation findings",
     "lastStep": "Last finished step: {{step}}",
     "starting": "Starting the agents…",
     "timeline": "Run steps",
@@ -253,7 +255,10 @@
     "cancelled": "Run cancelled",
     "cancelledHelp": "This run was cancelled. You can run it again with the same settings.",
     "rerun": "Run again",
-    "rerunStarted": "New run started with the same settings"
+    "rerunStarted": "New run started with the same settings",
+    "findings_one": "{{count}} validation finding",
+    "findings_other": "{{count}} validation findings",
+    "statusColumn": "Status"
   },
   "bom": {
     "title": "Bill of materials",
@@ -282,8 +287,9 @@
     "columnsMenu": "Columns",
     "copyCsv": "Copy CSV",
     "count": "{{shown}} of {{total}} lines",
-    "csvCopied": "Copied CSV ({{count}} lines)",
-    "csvFailed": "Could not copy to the clipboard"
+    "csvFailed": "Could not copy to the clipboard",
+    "csvCopied_one": "Copied CSV ({{count}} line)",
+    "csvCopied_other": "Copied CSV ({{count}} lines)"
   },
   "panel": {
     "title": "Line {{line}}",
@@ -317,10 +323,11 @@
     "when": "When",
     "action": "Event",
     "verify": "Check integrity",
-    "verifyOk": "The audit chain is intact ({{count}} events).",
     "verifyBroken": "The audit chain is broken from event #{{seq}}. Report this to your security administrator.",
     "more": "Show older",
-    "empty": "No events for these filters."
+    "empty": "No events for these filters.",
+    "verifyOk_one": "The audit chain is intact ({{count}} event).",
+    "verifyOk_other": "The audit chain is intact ({{count}} events)."
   },
   "settings": {
     "title": "Organisation settings",
@@ -369,7 +376,15 @@
     "of": "of {{limit}}",
     "sso": "Single sign-on (SSO)",
     "ssoLead": "Single sign-on through your organisation's identity provider (SAML 2.0 or OpenID Connect), federated in Amazon Cognito in the EU.",
-    "ssoUnavailable": "Single sign-on is available only in the AWS deployment. This deployment signs in with e-mail and password."
+    "ssoUnavailable": "Single sign-on is available only in the AWS deployment. This deployment signs in with e-mail and password.",
+    "confirmRemoveMember": "Remove {{name}} from the organisation? They lose access to all its projects at once.",
+    "confirmRoleChange": "Change the role of {{name}} to “{{role}}”?",
+    "confirmOwnRole": "Change your own role to “{{role}}”? You may lose access to these settings.",
+    "confirmRevokeInvite": "Revoke the invitation for {{email}}? The invitation token stops working.",
+    "invitationRevoked": "Revoked the invitation",
+    "confirmRotate": "Rotate the key “{{name}}”? The current key stops working at once; update your integrations with the new one.",
+    "confirmRevokeKey": "Revoke the key “{{name}}”? Integrations using it stop working.",
+    "keyRevoked": "Revoked the key"
   },
   "errors": {
     "already-member": "This person is already a member of the organisation.",
@@ -506,7 +521,11 @@
     "entityId": "Entity ID (audience)",
     "saved": "Identity provider saved",
     "failed": "The identity provider could not be configured – see the status below",
-    "removeProvider": "Remove identity provider"
+    "removeProvider": "Remove identity provider",
+    "confirmRemoveDomain": "Remove the domain {{domain}}? People from it can no longer sign in with single sign-on.",
+    "domainRemoved": "Removed the domain",
+    "confirmRemoveProvider": "Remove the identity provider? Members can no longer sign in through single sign-on.",
+    "providerRemoved": "Removed the identity provider"
   },
   "samples": {
     "badge": "Sample",
@@ -561,13 +580,20 @@
   "history": {
     "title": "Version history",
     "generated": "Generated by the agents",
-    "lines": "{{count}} lines",
     "line": "Line {{line}}",
     "from": "Compare",
     "to": "with",
     "pickTwo": "Choose two different versions to see what changed.",
     "noChanges": "No differences between these versions.",
     "added": "Line {{line}} added",
-    "removed": "Line {{line}} removed"
+    "removed": "Line {{line}} removed",
+    "lines_one": "{{count}} line",
+    "lines_other": "{{count}} lines"
+  },
+  "httpErrors": {
+    "413": "The file is too large for the server to accept. Upload a smaller file or split the project into parts.",
+    "429": "Too many requests in a short time. Wait a moment and try again.",
+    "5xx": "The server is temporarily unavailable. Try again in a moment.",
+    "generic": "The request failed (HTTP {{status}}). Try again; if it keeps failing, contact your administrator."
   }
 }

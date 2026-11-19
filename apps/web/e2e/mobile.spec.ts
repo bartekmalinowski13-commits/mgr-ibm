@@ -16,3 +16,22 @@ test("phone viewport: sign in -> create organisation -> start page", async ({ pa
   await expect(page.getByRole("heading", { name: "Cześć, Marta" })).toBeVisible();
   await expectAccessible(page);
 });
+
+test("phone viewport: the navigation drawer works from the keyboard", async ({ page }) => {
+  const id = unique();
+  await page.goto("/login");
+  await signIn(page, `drawer-${id}@medtech.example`, "Marta");
+  await createOrganisation(page, `Drawer ${id}`);
+  // located by attribute: while the modal drawer is open the page behind is aria-hidden
+  const trigger = page.locator('header button[aria-haspopup="dialog"]');
+  await expect(trigger).toHaveAttribute("aria-label", "Nawigacja główna");
+  await trigger.focus();
+  await page.keyboard.press("Enter");
+  const drawer = page.getByRole("dialog", { name: "Nawigacja główna" });
+  await expect(drawer).toBeVisible();
+  await expect(trigger).toHaveAttribute("aria-expanded", "true");
+  await expectAccessible(page);
+  await page.keyboard.press("Escape");
+  await expect(drawer).toBeHidden();
+  await expect(trigger).toBeFocused();
+});
