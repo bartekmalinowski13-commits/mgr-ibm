@@ -219,6 +219,7 @@ jobs:
         run: |
           docker network create --ipv6 --subnet fd00:b0a6:4000::/64 gw-net
           docker run -d --name gw --network gw-net -e MISTRAL_API_KEY=ci-dummy-not-a-key \
+            -e LITELLM_MASTER_KEY=sk-ci-dummy-not-a-key-0123456789abcdef \
             bomagent-llm-gateway
           probe() { docker run --rm --network gw-net curlimages/curl:8.11.1 -fsS -g --max-time 5 "$1"; }
           for _ in $(seq 1 60); do
