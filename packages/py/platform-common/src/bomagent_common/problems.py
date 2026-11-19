@@ -2,16 +2,21 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from opentelemetry import trace
 from pydantic import BaseModel
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from bomagent_common.logging import get_logger
+
 PROBLEM_MEDIA_TYPE = "application/problem+json"
 PROBLEM_BASE = "https://bomagent.eu/problems/"
+log = get_logger(__name__)
 
 
 class Problem(BaseModel):
@@ -62,7 +67,13 @@ def problem_response(problem: Problem, request: Request) -> JSONResponse:
     return _response(problem, request)
 
 
-def install_problem_handlers(app: FastAPI) -> None:
+def install_problem_handlers(
+    app: FastAPI, *, error_headers: Mapping[str, str] | None = None
+) -> None:
+    """Problem+json for every error. ``error_headers`` are added to the response of an
+    unexpected exception: Starlette answers those in ``ServerErrorMiddleware``, outside any
+    user middleware, so headers set by middleware (e.g. security headers) never reach it."""
+
     async def _problem(request: Request, exc: Exception) -> JSONResponse:
         assert isinstance(exc, ProblemError)
         return _response(exc.problem.model_copy(), request, exc.headers or None)
@@ -90,9 +101,37 @@ def install_problem_handlers(app: FastAPI) -> None:
             request,
         )
 
+    async def _internal(request: Request, exc: Exception) -> JSONResponse:
+        # the details stay in the log; the client sees a generic problem (no stack trace)
+        log.error(
+            "unhandled_exception",
+            path=request.url.path,
+            method=request.method,
+            request_id=request.headers.get("x-request-id") or _trace_id(),
+            error=type(exc).__name__,
+            exc_info=exc,
+        )
+        return _response(
+            Problem(
+                type=f"{PROBLEM_BASE}internal",
+                title="Internal Server Error",
+                status=500,
+                detail="an unexpected error occurred; it has been logged",
+            ),
+            request,
+            dict(error_headers or {}),
+        )
+
+    app.add_exception_handler(Exception, _internal)
     app.add_exception_handler(ProblemError, _problem)
     app.add_exception_handler(StarletteHTTPException, _http)
     app.add_exception_handler(RequestValidationError, _validation)
+
+
+def _trace_id() -> str | None:
+    """The current trace id (hex), so a 500 without ``X-Request-Id`` can still be found."""
+    ctx = trace.get_current_span().get_span_context()
+    return format(ctx.trace_id, "032x") if ctx.is_valid else None
 
 
 def _title(status: int) -> str:

@@ -17,6 +17,7 @@ from collections.abc import AsyncIterator, Mapping
 from datetime import UTC, date, datetime
 
 from fastapi import FastAPI
+from opentelemetry.trace import Status, StatusCode
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
@@ -32,9 +33,11 @@ from bomagent_common.messaging import (
     Queue,
 )
 from bomagent_common.outbox import cleanup_sent, deliver
+from bomagent_common.telemetry import get_tracer
 from bomagent_common.tenancy import TenantContext
 
 log = get_logger(__name__)
+tracer = get_tracer(__name__)
 OUTBOX_GRACE_S = 30.0  # requests deliver their own messages first
 ANCHOR_TIMEOUT_S = 15.0
 RATE_WINDOW_TTL_S = 3600.0  # windows are one minute long; an hour is far past any retry
@@ -260,27 +263,49 @@ async def sweep(
     today = now.date()
     anchoring = anchor_sink is not None
     for tenant_id in tenants:
-        if anchoring and anchor_sink is not None and _anchored.get(tenant_id) != today:
-            try:  # the chain head goes to write-once storage once a day (ADR-0011)
-                await asyncio.wait_for(
-                    export_anchor(engine, anchor_sink, tenant_id, now), ANCHOR_TIMEOUT_S
+        with tracer.start_as_current_span(
+            "maintenance.sweep_tenant", attributes={"tenant.id": str(tenant_id)}
+        ) as span:
+            if anchoring and anchor_sink is not None and _anchored.get(tenant_id) != today:
+                try:  # the chain head goes to write-once storage once a day (ADR-0011)
+                    await asyncio.wait_for(
+                        export_anchor(engine, anchor_sink, tenant_id, now), ANCHOR_TIMEOUT_S
+                    )
+                    _anchored[tenant_id] = today
+                except Exception:
+                    # a failing sink must not hold up delivery and reaping for every tenant:
+                    # skip the rest of this sweep's anchors, the next sweep retries
+                    log.exception("audit_anchor_export_failed", tenant_id=str(tenant_id))
+                    anchoring = False
+            try:
+                await _sweep_tenant(
+                    engine, tenant_id, queues, totals, run_timeout_s, outbox_grace_s
                 )
-                _anchored[tenant_id] = today
-            except Exception:
-                # a failing sink must not hold up delivery and reaping for every tenant: skip
-                # the rest of this sweep's anchors, the next sweep retries
-                log.exception("audit_anchor_export_failed", tenant_id=str(tenant_id))
-                anchoring = False
-        totals["sent"] += await deliver(engine, tenant_id, queues, older_than_s=outbox_grace_s)
-        totals["purged"] += await cleanup_sent(engine, tenant_id)
-        totals["reaped"] += await reap_stuck_runs(engine, tenant_id, run_timeout_s)
-        totals["expired_keys"] += await expire_idempotency_keys(engine, tenant_id)
-        totals["expired_windows"] += await expire_rate_windows(engine, tenant_id)
-        totals["stale_files"] += await fail_stale_ingest(engine, tenant_id)
-        totals["stale_documents"] += await fail_stale_documents(engine, tenant_id)
+            except Exception as exc:
+                # one tenant's fault must not starve the relay and the reaper of the others
+                span.record_exception(exc)
+                span.set_status(Status(StatusCode.ERROR, type(exc).__name__))
+                log.exception("maintenance_tenant_failed", tenant_id=str(tenant_id))
     if any(totals.values()):
         log.info("maintenance_sweep", **totals)
     return totals
+
+
+async def _sweep_tenant(
+    engine: AsyncEngine,
+    tenant_id: uuid.UUID,
+    queues: Mapping[str, Queue],
+    totals: dict[str, int],
+    run_timeout_s: float,
+    outbox_grace_s: float,
+) -> None:
+    totals["sent"] += await deliver(engine, tenant_id, queues, older_than_s=outbox_grace_s)
+    totals["purged"] += await cleanup_sent(engine, tenant_id)
+    totals["reaped"] += await reap_stuck_runs(engine, tenant_id, run_timeout_s)
+    totals["expired_keys"] += await expire_idempotency_keys(engine, tenant_id)
+    totals["expired_windows"] += await expire_rate_windows(engine, tenant_id)
+    totals["stale_files"] += await fail_stale_ingest(engine, tenant_id)
+    totals["stale_documents"] += await fail_stale_documents(engine, tenant_id)
 
 
 def lifespan(  # type: ignore[no-untyped-def]

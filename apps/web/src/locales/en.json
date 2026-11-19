@@ -400,6 +400,7 @@
     "forbidden-action": "Your role does not allow this action. Ask an organisation owner for access.",
     "idempotency-key": "The request could not be sent safely. Reload the page and try again.",
     "idempotency-mismatch": "This request was already sent with different content. Reload the page and try again.",
+    "internal": "Something went wrong on our side. Try again in a moment; if it keeps happening, contact support.",
     "invalid-cursor": "The list position has expired. Reload the list.",
     "invalid-reference": "The reference BOM must be a CSV file with a designator column (for example Reference) and at least one line.",
     "invalid-token": "Your session has expired. Sign in again.",

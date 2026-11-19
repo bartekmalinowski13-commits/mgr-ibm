@@ -4558,7 +4558,7 @@
         ]
       },
       "post": {
-        "description": "Duplicates (same content) return the existing document.",
+        "description": "201 with the new document; a duplicate (same content) returns the existing document\nwith 200 and is not indexed again.",
         "operationId": "upload_document_v1_kb_documents_post",
         "parameters": [
           {
@@ -4605,6 +4605,16 @@
           "required": true
         },
         "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KbDocument"
+                }
+              }
+            },
+            "description": "A document with this content already exists"
+          },
           "201": {
             "content": {
               "application/json": {
@@ -4828,9 +4838,37 @@
     },
     "/v1/members": {
       "get": {
-        "description": "All members (organisations are small; the page has no next cursor).",
+        "description": "Active members, oldest first (cursor-paginated; at most 100 per page).",
         "operationId": "list_members_v1_members_get",
         "parameters": [
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
           {
             "in": "header",
             "name": "authorization",

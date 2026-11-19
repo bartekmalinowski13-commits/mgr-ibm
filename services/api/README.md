@@ -14,7 +14,7 @@ regenerate with `just openapi`; a test fails when it drifts).
 | runs | `POST /v1/runs` (variant A/B, model from the catalogue) -> `run.requested` for agent-worker; `GET /v1/runs`, `GET /v1/runs/{id}`, `GET /v1/runs/{id}/events` (SSE; ends with `{"status": "shutdown"}` on SIGTERM so the process can stop, the client reconnects); `POST /v1/runs/{id}/cancel` (queued/running -> `failed`, error `cancelled by user`, audit `run.cancelled`); `POST /v1/runs/{id}/rerun` (same variant/runtime/model/requirements on the project's current parsed files) |
 | BOM | `GET /v1/runs/{id}/bom`, `GET /v1/runs/{id}/bom.csv`, `GET /v1/runs/{id}/bom.xlsx`, `GET /v1/runs/{id}/bom/versions` (history), `GET /v1/runs/{id}/bom/versions/{n}`, `GET /v1/runs/{id}/bom/diff?from_version=&to_version=`, `PATCH /v1/runs/{id}/bom/items/{line}` (new immutable version, user provenance, MPN correction stored as tenant knowledge) |
 | SSO | `GET/PUT/DELETE /v1/sso` (owners/admins: SAML 2.0 or OIDC identity provider federated in Cognito; OIDC client secret goes to Cognito only), `POST /v1/sso/domains`, `POST /v1/sso/domains/{domain}/verify` (DNS TXT `_bomagent-verify.<domain>`), `DELETE /v1/sso/domains/{domain}`, `POST /v1/sso/discover` with `{"domain"}` only (public, sign-in screen; fixed minimum response time, per-IP limit; free-mail domains never match). First sign-in through the provider with a verified-domain e-mail creates the membership (default role); `enforce` requires SSO for those domains (owners exempt) and a sign-in at the provider within `BOMAGENT_SSO_MAX_AUTH_AGE_S` (default 8 h, `auth_time` claim, 0 = off; else 401 `reauth-required`). Provider names are random (`org-<24 hex>`, stored with the connection); public mailbox domains cannot be claimed (422 `domain-not-allowed`). See `bomagent_api.sso` |
-| audit | `GET /v1/audit-events` (filters, cursor), `GET /v1/audit-events/verify` |
+| audit | `GET /v1/audit-events` (filters, opaque cursor), `GET /v1/audit-events/verify` |
 
 ## Conventions
 - **Auth:** OIDC bearer JWT (issuer, audience, expiry, JWKS; required settings outside
@@ -47,8 +47,15 @@ regenerate with `just openapi`; a test fails when it drifts).
   Uploads of an organisation are serialised by the tenant row lock, so two uploads of one
   name are deterministic (the later replaces the earlier, no orphaned object). Replacing
   a file while a run of the project is queued/running -> 409 `file-in-use`. The plan limits
-  the total size of design files (`Plan.storage_bytes`, replaced files count once; over
-  the limit -> 429 `quota-exceeded`, like the other plan limits).
+  the total size of design files plus the organisation's current knowledge-base documents
+  (`Plan.storage_bytes`, replaced files count once; over the limit -> 429 `quota-exceeded`,
+  like the other plan limits). `POST /v1/kb/documents` stores the object before taking the
+  tenant lock, then checks for a duplicate and the quota under it: a duplicate (same content)
+  returns the existing document with 200, queues nothing and removes the new object.
+- **Errors:** every error is `application/problem+json`; an unexpected exception is a 500
+  `internal` problem (no stack trace, logged with the request id) that still carries the
+  security headers. All list cursors are opaque (the audit log encodes `seq`); a malformed
+  cursor -> 400 `invalid-cursor`. `GET /v1/members` is cursor-paginated like the others.
 - **Concurrency:** idempotency keys are per user and serialised; BOM edits lock the run.
   The stored request hash covers method, path and body: the same key and body on another
   endpoint -> 422 `idempotency-mismatch`.

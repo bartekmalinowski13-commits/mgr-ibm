@@ -28,7 +28,7 @@ class Plan:
     max_concurrent_runs: int  # queued + running
     max_runs_per_month: int
     llm_budget_eur_per_month: float
-    storage_bytes: int  # total size of uploaded design files per organisation
+    storage_bytes: int  # design files + knowledge-base documents per organisation
 
 
 PLANS: dict[str, Plan] = {
@@ -103,14 +103,21 @@ async def check_new_project(conn: AsyncConnection) -> None:
 
 
 async def check_storage(conn: AsyncConnection, new_bytes: int, replaced_bytes: int = 0) -> None:
-    """Total size of the organisation's design files after an upload (a replaced file
-    counts once). The caller holds the tenant lock (``plan_of(lock=True)``)."""
+    """Total size of the organisation's stored files after an upload: design files plus
+    its own current knowledge-base documents (a replaced file counts once). Takes the
+    tenant lock (``plan_of(lock=True)``), which serialises uploads of an organisation."""
     plan = await plan_of(conn, lock=True)
     used = (
-        await conn.execute(text("SELECT COALESCE(sum(size_bytes), 0) FROM projects.files"))
+        await conn.execute(
+            text(
+                "SELECT (SELECT COALESCE(sum(size_bytes), 0) FROM projects.files)"
+                " + (SELECT COALESCE(sum(size_bytes), 0) FROM kb.documents"
+                " WHERE tenant_id = app.current_tenant_id() AND superseded_at IS NULL)"
+            )
+        )
     ).scalar() or 0
     if int(used) - replaced_bytes + new_bytes > plan.storage_bytes:
-        raise quota_exceeded(f"plan allows {plan.storage_bytes} bytes of design files in storage")
+        raise quota_exceeded(f"plan allows {plan.storage_bytes} bytes of files in storage")
 
 
 async def check_new_run(conn: AsyncConnection) -> None:

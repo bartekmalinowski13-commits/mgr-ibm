@@ -10,8 +10,9 @@ keeps only its SHA-256. Accepting requires a verified e-mail equal to the invite
 from __future__ import annotations
 
 import uuid
+from typing import Annotated
 
-from fastapi import APIRouter, Request, Response
+from fastapi import APIRouter, Query, Request, Response
 
 from bomagent_api.auth import CurrentPrincipal, OrgContext, require_verified_email
 from bomagent_api.authz import require
@@ -35,10 +36,15 @@ router = APIRouter(
 
 # --------------------------------------------------------------------------- members
 @router.get("/members", summary="List members of the organisation")
-async def list_members(request: Request, ctx: OrgContext) -> Page[Member]:
-    """All members (organisations are small; the page has no next cursor)."""
+async def list_members(
+    request: Request,
+    ctx: OrgContext,
+    cursor: str | None = None,
+    limit: Annotated[int, Query(ge=1, le=100)] = 100,
+) -> Page[Member]:
+    """Active members, oldest first (cursor-paginated; at most 100 per page)."""
     require(ctx, "member.read")
-    return await service.list_members(request.app.state.engine)
+    return await service.list_members(request.app.state.engine, cursor=cursor, limit=limit)
 
 
 @router.patch("/members/{user_sub}", summary="Change the roles of a member")

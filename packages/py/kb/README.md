@@ -11,6 +11,8 @@ snapshots, global/tenant scopes.
 - `KnowledgeBase(embedder, reranker)`; every method takes an `AsyncConnection` opened in
   the right RLS context (`tenant_transaction` / `platform_transaction`):
   - `add_document(conn, DocumentMeta, scope=Scope.TENANT|GLOBAL, created_by)` (dedup by SHA-256)
+  - `register_document(...)` -> `(id, created)`; concurrent registrations of the same content
+    resolve through `ON CONFLICT DO NOTHING` on `documents_dedupe` (no error, one row)
   - `index_document(conn, doc_id, extracted, extra_mpns=...)` - chunks + embeddings + part catalogue
   - `search(conn, query, k, snapshot_id, kinds)`, `search_many(...)` (one embeddings call)
   - `snapshot(conn) -> "kbs_..."` - frozen set of active documents (stored per run)

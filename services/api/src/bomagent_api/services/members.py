@@ -17,7 +17,14 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
-from bomagent_api.pagination import clamp, encode_cursor, page_filter
+from bomagent_api.pagination import (
+    MAX_LIMIT,
+    clamp,
+    decode_key_cursor,
+    encode_cursor,
+    encode_key_cursor,
+    page_filter,
+)
 from bomagent_api.repositories import members as repo
 from bomagent_api.repositories.tables import invitations
 from bomagent_api.schemas import (
@@ -39,7 +46,6 @@ from bomagent_common.tenancy import TenantContext, require_tenant
 log = get_logger(__name__)
 ROLE_ORDER = ("owner", "admin", "engineer", "reviewer", "viewer")
 INVITATION_TTL = timedelta(days=7)
-MEMBER_LIST_LIMIT = 1000
 
 
 def canonical(roles: list[str]) -> list[str]:
@@ -78,11 +84,17 @@ async def _keeps_an_owner(conn: AsyncConnection, leaving: str) -> None:
 
 
 # --------------------------------------------------------------------------- members
-async def list_members(engine: AsyncEngine) -> Page[Member]:
-    """All members (organisations are small; the page has no next cursor)."""
+async def list_members(
+    engine: AsyncEngine, *, cursor: str | None = None, limit: int = MAX_LIMIT
+) -> Page[Member]:
+    """Active members, oldest first, cursor-paginated on ``(created_at, user_sub)``."""
+    after = decode_key_cursor(cursor)
     async with tenant_transaction(engine) as conn:
-        items = [Member(**r) for r in await repo.list_active(conn, MEMBER_LIST_LIMIT)]
-    return Page[Member](items=items, next_cursor=None)
+        rows = await repo.list_active(conn, clamp(limit) + 1, after)
+    more = len(rows) > clamp(limit)
+    rows = rows[: clamp(limit)]
+    nxt = encode_key_cursor(rows[-1]["created_at"], rows[-1]["user_sub"]) if more else None
+    return Page[Member](items=[Member(**r) for r in rows], next_cursor=nxt)
 
 
 async def update_member(
