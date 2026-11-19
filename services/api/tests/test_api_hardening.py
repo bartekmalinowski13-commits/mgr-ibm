@@ -265,3 +265,10 @@ async def test_concurrent_exports_respect_the_daily_cap(env, monkeypatch):
     responses = await asyncio.gather(*(env.c.post(url, headers=owner) for _ in range(6)))
     codes = sorted(r.status_code for r in responses)
     assert codes == [202, 202, 429, 429, 429, 429], [r.text for r in responses]
+
+
+@pytest.mark.parametrize("limit", [0, 101])
+async def test_member_limit_is_bounded_in_the_contract(env, limit):
+    owner = await env.org("mem")
+    resp = await env.c.get(f"/v1/members?limit={limit}", headers=owner)
+    _assert_problem(resp, 422, "validation-error")

@@ -29,6 +29,8 @@ from opentelemetry.sdk.trace.export import (
     SpanExporter,
 )
 
+from bomagent_common.logging import get_logger
+
 if TYPE_CHECKING:
     from fastapi import FastAPI
     from sqlalchemy import Engine
@@ -38,6 +40,8 @@ if TYPE_CHECKING:
 
 _provider: TracerProvider | None = None
 _traced_engines: weakref.WeakSet[Engine] = weakref.WeakSet()
+_sql_warned = False
+log = get_logger(__name__)
 _metric_reader: InMemoryMetricReader | None = None
 #: seconds between metric exports to the collector
 METRIC_EXPORT_INTERVAL_MS = 30_000
@@ -113,18 +117,34 @@ def instrument_fastapi(app: FastAPI) -> None:
 
 
 def instrument_sqlalchemy(engine: AsyncEngine) -> None:
-    """Trace every statement of ``engine`` (ADR-0010); idempotent per engine.
+    """Trace every statement of ``engine`` (ADR-0010); idempotent per engine, best effort.
 
     ``SQLAlchemyInstrumentor.instrument`` is a process-wide singleton that ignores every
-    call after the first, so later engines get their own ``EngineTracer``. Statements are
-    traced as written (bound values are never recorded)."""
-    from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
-    from opentelemetry.instrumentation.sqlalchemy.engine import EngineTracer
-
+    call after the first, so later engines get their own ``EngineTracer`` (a private API of
+    the pinned ``opentelemetry-instrumentation-sqlalchemy``). If that API changes, the
+    service logs one warning and runs without database spans instead of failing to start.
+    Statements are traced as written (bound values are never recorded)."""
+    global _sql_warned  # noqa: PLW0603 - process-wide "warned once" flag
     sync = engine.sync_engine
     if sync in _traced_engines:
         return
     _traced_engines.add(sync)
+    try:
+        _trace_engine(sync)
+    except Exception as exc:
+        if not _sql_warned:
+            _sql_warned = True
+            log.warning(
+                "sqlalchemy_instrumentation_unavailable",
+                error=type(exc).__name__,
+                detail=str(exc)[:200],
+                effect="no database spans",
+            )
+
+
+def _trace_engine(sync: Engine) -> None:
+    from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor, engine
+
     instrumentor = SQLAlchemyInstrumentor()
     if not instrumentor.is_instrumented_by_opentelemetry:
         # the instrumentation declares "sqlalchemy < 2.1" and silently does nothing for 2.1;
@@ -140,7 +160,7 @@ def instrument_sqlalchemy(engine: AsyncEngine) -> None:
         " the state attribute.",
     )
     tracer = trace.get_tracer("opentelemetry.instrumentation.sqlalchemy")
-    EngineTracer(tracer, sync, usage)  # type: ignore[no-untyped-call]  # untyped upstream
+    engine.EngineTracer(tracer, sync, usage)  # type: ignore[no-untyped-call]  # untyped upstream
 
 
 def instrument_httpx() -> None:
