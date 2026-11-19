@@ -115,6 +115,8 @@ async def test_variant_a_compose_changes_are_not_overwritten_by_earlier_choices(
 
 async def test_compose_reordering_designators_keeps_mpn_select_provenance(retriever):
     def reverse_refdes(out):
+        # reverse the line order too: designator order alone is normalised by BomItem
+        out["lines"] = list(reversed(out["lines"]))
         for line in out["lines"]:
             line["refdes"] = list(reversed(line["refdes"]))
         return out
