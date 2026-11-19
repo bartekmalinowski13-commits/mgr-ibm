@@ -1,4 +1,5 @@
-# One environment of the main pipeline: cdk deploy, DB bootstrap + migrations, web app, smoke.
+# One environment of the main pipeline: DB bootstrap + migrations with the new image, cdk deploy
+# (rollout), web app, smoke (tools/deploy.sh).
 # Called by main.yml once per environment, strictly in order (dev -> staging -> prod).
 name: deploy-env
 
@@ -26,7 +27,7 @@ jobs:
       - name: AWS credentials (GitHub OIDC)
         env: { ROLE_ARN: "${{ vars.AWS_DEPLOY_ROLE_ARN }}" }
         run: bash .github/scripts/aws-oidc.sh "$ROLE_ARN" 10800
-      - name: deploy, bootstrap DB, migrate, publish web app, smoke
+      - name: bootstrap DB, migrate, deploy, publish web app, smoke
         env:
           ENV: ${{ inputs.environment }}
           AWS_REGION: eu-central-1
@@ -41,4 +42,6 @@ jobs:
           ORGANIZATION_SECURITY_SERVICES: ${{ vars.ORGANIZATION_SECURITY_SERVICES }}
           SINGLE_ACCOUNT: ${{ vars.SINGLE_ACCOUNT }}
           MONTHLY_BUDGET_USD: ${{ vars.MONTHLY_BUDGET_USD }}
+          # dedicated smoke tenant (never a customer); optional: readiness check after rollout
+          SMOKE_TENANT_API_KEY: ${{ secrets.SMOKE_TENANT_API_KEY }}
         run: bash tools/deploy.sh
