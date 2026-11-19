@@ -3,7 +3,13 @@
 # Expects AWS credentials of the environment's GitHub deploy role in the environment and:
 #   ENV=dev|staging|prod  AWS_ACCOUNT_ID  IMAGE_REGISTRY  IMAGE_TAG  GITHUB_REPOSITORY (set by
 #   GitHub Actions)  [DOMAIN_NAME CLOUDFRONT_CERTIFICATE_ARN ALB_CERTIFICATE_ARN ALARM_EMAIL
-#   GITHUB_OIDC_PROVIDER_ARN ORGANIZATION_SECURITY_SERVICES]
+#   GITHUB_OIDC_PROVIDER_ARN ORGANIZATION_SECURITY_SERVICES SMOKE_TENANT_API_KEY]
+#
+# Order (ops review I5): database bootstrap + migrations with the NEW image run BEFORE
+# `cdk deploy --all` rolls the services onto it, so new code never serves the old schema and
+# a failed migration stops the deploy with the old code still running. Migrations are
+# expand/contract (docs/platform/runbooks/rollback.md): the old code tolerates the new schema.
+# The first deployment of an environment has no Compute stack yet, so it migrates after cdk.
 set -euo pipefail
 : "${ENV:?}" "${AWS_ACCOUNT_ID:?}" "${IMAGE_REGISTRY:?}" "${IMAGE_TAG:?}" "${GITHUB_REPOSITORY:?}"
 REGION=eu-central-1
@@ -26,12 +32,75 @@ out() { # out <stack> <region> <output key prefix>
     --query "Stacks[0].Outputs[?starts_with(OutputKey, '$3')].OutputValue | [0]" --output text
 }
 
+CLUSTER="bomagent-${ENV}"
+TMP=$(mktemp -d)
+trap 'rm -rf "$TMP"' EXIT
+
+run_task() { # run_task <task definition ARN> <container name>: one-off task, must exit 0
+  local task code
+  task=$(aws ecs run-task --region "$REGION" --cluster "$CLUSTER" --launch-type FARGATE \
+    --task-definition "$1" \
+    --network-configuration "awsvpcConfiguration={subnets=[${SUBNETS}],securityGroups=[${SG}],assignPublicIp=DISABLED}" \
+    --query 'tasks[0].taskArn' --output text)
+  aws ecs wait tasks-stopped --region "$REGION" --cluster "$CLUSTER" --tasks "$task"
+  code=$(aws ecs describe-tasks --region "$REGION" --cluster "$CLUSTER" --tasks "$task" \
+    --query "tasks[0].containers[?name=='$2'].exitCode | [0]" --output text)
+  [ "$code" = "0" ] || { echo "$2 task failed (exit ${code})"; exit 1; }
+}
+
+with_new_image() { # with_new_image <task definition ARN> <container>: ARN of a new revision
+  # of the same family whose <container> runs IMAGE_TAG (everything else unchanged)
+  local json="$TMP/taskdef-$2.json"
+  aws ecs describe-task-definition --region "$REGION" --task-definition "$1" \
+    --query taskDefinition --output json \
+  | jq --arg c "$2" --arg tag "$IMAGE_TAG" '
+      .containerDefinitions |= map(
+        if .name == $c then .image |= sub(":[^:/@]+$"; ":" + $tag) else . end)
+      | {family, taskRoleArn, executionRoleArn, networkMode, containerDefinitions, volumes,
+         placementConstraints, requiresCompatibilities, cpu, memory, runtimePlatform,
+         ephemeralStorage}
+      | with_entries(select(.value != null))' > "$json"
+  jq -e --arg c "$2" --arg tag "$IMAGE_TAG" \
+    '.containerDefinitions[] | select(.name == $c) | .image | endswith(":" + $tag)' \
+    "$json" > /dev/null || { echo "could not point $2 at ${IMAGE_TAG}"; exit 1; }
+  aws ecs register-task-definition --region "$REGION" --cli-input-json "file://${json}" \
+    --query taskDefinition.taskDefinitionArn --output text
+}
+
+network() { # subnets + security group of the one-off tasks (from the Compute stack)
+  SG=$(out "${PREFIX}-Compute" "$REGION" MigrationSecurityGroup)
+  SUBNETS=$(aws ec2 describe-subnets --region "$REGION" \
+    --filters "Name=tag:aws-cdk:subnet-name,Values=isolated" "Name=tag:environment,Values=${ENV}" \
+    --query 'Subnets[].SubnetId' --output text | tr '\t' ',')
+}
+
+migrate() { # migrate <bootstrap task def ARN> <migrate task def ARN>
+  run_task "$1" dbbootstrap # roles, passwords, pgvector, ownership (idempotent)
+  run_task "$2" migrate
+}
+
 echo "::group::WAF for CloudFront (us-east-1, no CDK bootstrap there)"
 # deployed alone first; its ARN reaches the edge stack as context, not as a cross-region
 # reference (no SSM/Lambda machinery in us-east-1; see policies/scp-eu-only.json)
 pnpm --filter @bomagent/infra exec cdk deploy "${PREFIX}-Waf" --exclusively \
   --require-approval never "${CTX[@]}"
 CTX+=(-c "bomagent:webAclArn=$(out "${PREFIX}-Waf" us-east-1 WebAclArn)")
+echo "::endgroup::"
+
+echo "::group::database bootstrap and migrations with the new image (before the rollout)"
+FIRST_DEPLOY=false
+BOOTSTRAP_DEF=$(out "${PREFIX}-Compute" "$REGION" DbBootstrapTaskDefinition 2>/dev/null || true)
+MIGRATE_DEF=$(out "${PREFIX}-Compute" "$REGION" MigrationTaskDefinition 2>/dev/null || true)
+if [ -z "$MIGRATE_DEF" ] || [ "$MIGRATE_DEF" = "None" ] \
+   || [ -z "$BOOTSTRAP_DEF" ] || [ "$BOOTSTRAP_DEF" = "None" ]; then
+  FIRST_DEPLOY=true
+  echo "no Compute stack yet: first deployment, migrations run after cdk deploy"
+else
+  network
+  NEW_BOOTSTRAP=$(with_new_image "$BOOTSTRAP_DEF" dbbootstrap)
+  NEW_MIGRATE=$(with_new_image "$MIGRATE_DEF" migrate)
+  migrate "$NEW_BOOTSTRAP" "$NEW_MIGRATE"
+fi
 echo "::endgroup::"
 
 echo "::group::cdk deploy (${ENV})"
@@ -46,25 +115,14 @@ if [ -z "$APP_URL" ]; then # first deployment: point the Cognito callback at Clo
 fi
 echo "::endgroup::"
 
-echo "::group::database bootstrap and migrations"
-SG=$(out "${PREFIX}-Compute" "$REGION" MigrationSecurityGroup)
-SUBNETS=$(aws ec2 describe-subnets --region "$REGION" \
-  --filters "Name=tag:aws-cdk:subnet-name,Values=isolated" "Name=tag:environment,Values=${ENV}" \
-  --query 'Subnets[].SubnetId' --output text | tr '\t' ',')
-run_task() { # run_task <task definition output> <container name>: one-off task, must exit 0
-  local def task code
-  def=$(out "${PREFIX}-Compute" "$REGION" "$1")
-  task=$(aws ecs run-task --region "$REGION" --cluster "bomagent-${ENV}" --launch-type FARGATE \
-    --task-definition "$def" \
-    --network-configuration "awsvpcConfiguration={subnets=[${SUBNETS}],securityGroups=[${SG}],assignPublicIp=DISABLED}" \
-    --query 'tasks[0].taskArn' --output text)
-  aws ecs wait tasks-stopped --region "$REGION" --cluster "bomagent-${ENV}" --tasks "$task"
-  code=$(aws ecs describe-tasks --region "$REGION" --cluster "bomagent-${ENV}" --tasks "$task" \
-    --query "tasks[0].containers[?name=='$2'].exitCode | [0]" --output text)
-  [ "$code" = "0" ] || { echo "$2 task failed (exit ${code})"; exit 1; }
-}
-run_task DbBootstrapTaskDefinition dbbootstrap # roles, passwords, pgvector, ownership
-run_task MigrationTaskDefinition migrate
+echo "::group::database bootstrap and migrations (stack-managed task definitions)"
+# first deployment: the only migration; later: a no-op at head that also proves the task
+# definitions cdk just deployed (environment, secrets) can reach the database
+network
+BOOTSTRAP_DEF=$(out "${PREFIX}-Compute" "$REGION" DbBootstrapTaskDefinition)
+MIGRATE_DEF=$(out "${PREFIX}-Compute" "$REGION" MigrationTaskDefinition)
+migrate "$BOOTSTRAP_DEF" "$MIGRATE_DEF"
+if [ "$FIRST_DEPLOY" = true ]; then echo "first deployment migrated"; fi
 echo "::endgroup::"
 
 echo "::group::web app"
@@ -85,8 +143,23 @@ aws cloudfront create-invalidation --distribution-id "$DIST" --paths /index.html
 echo "::endgroup::"
 
 echo "::group::smoke"
+# readiness, not only liveness: every service settled on the new tasks (ALB health), then a
+# tenant read through auth + tenant context + RLS with the dedicated smoke tenant's key
+SERVICES=$(aws ecs list-services --region "$REGION" --cluster "$CLUSTER" \
+  --query 'serviceArns' --output text)
+for chunk in $(echo "$SERVICES" | tr '\t' '\n' | xargs -n 10 | tr ' ' ','); do
+  aws ecs wait services-stable --region "$REGION" --cluster "$CLUSTER" \
+    --services $(echo "$chunk" | tr ',' ' ')
+done
 curl -fsS "${URL}/" -o /dev/null
 STATUS=$(curl -s -o /dev/null -w '%{http_code}' "${URL}/v1/me")
 [ "$STATUS" = "401" ] || { echo "API through CloudFront answered ${STATUS}, expected 401"; exit 1; }
+if [ -n "${SMOKE_TENANT_API_KEY:-}" ]; then
+  STATUS=$(curl -s -o /dev/null -w '%{http_code}' -H @- "${URL}/v1/projects?limit=1" \
+    <<<"Authorization: Bearer ${SMOKE_TENANT_API_KEY}")
+  [ "$STATUS" = "200" ] || { echo "tenant read with the smoke key answered ${STATUS}"; exit 1; }
+else
+  echo "::warning::SMOKE_TENANT_API_KEY not set: database readiness through the API not checked"
+fi
 echo "deployed ${ENV}: ${URL}"
 echo "::endgroup::"

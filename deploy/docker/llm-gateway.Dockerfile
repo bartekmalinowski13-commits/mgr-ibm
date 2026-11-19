@@ -31,4 +31,10 @@ COPY --from=render --chmod=0444 /config.yaml /app/config.yaml
 ENV LITELLM_LOCAL_MODEL_COST_MAP=True HOME=/tmp
 USER 10001:10001
 EXPOSE 4000
-CMD ["--config", "/app/config.yaml", "--host", "::", "--port", "4000", "--num_workers", "1"]
+# Dual-stack: an EMPTY host makes uvicorn's asyncio server bind every address family of the
+# host (one socket on 0.0.0.0 and one on ::). "::" alone is IPv6-only (asyncio sets
+# IPV6_V6ONLY), which broke the IPv4-only AWS VPC (Service Connect http://litellm:4000);
+# "0.0.0.0" alone breaks Fly's IPv6 6PN network. CI starts the image and probes both.
+HEALTHCHECK --interval=15s --timeout=5s --start-period=60s --retries=3 \
+  CMD ["python3", "-c", "import urllib.request as u; u.urlopen('http://127.0.0.1:4000/health/liveliness', timeout=4)"]
+CMD ["--config", "/app/config.yaml", "--host", "", "--port", "4000", "--num_workers", "1"]

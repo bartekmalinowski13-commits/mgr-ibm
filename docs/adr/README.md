@@ -22,3 +22,4 @@ Format: Context → Decision → Consequences → Alternatives considered. Statu
 | [0016](0016-db-migrations-package.md) | One migration package with hand-written DDL and database roles |
 | [0017](0017-supabase-pilot-variant.md) | Second, lightweight deployment variant on Supabase (EU) for pilots (proposed) |
 | [0018](0018-deployment-tiers.md) | Deployment tiers: Standard (Fly + Supabase) and Enterprise (AWS) (proposed) |
+| [0019](0019-egress-allowlist.md) | Egress allowlist at the network layer: DNS Firewall + tight security groups (AWS) (proposed) |
