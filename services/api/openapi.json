@@ -9920,6 +9920,17 @@
               "application/problem+json": {}
             },
             "description": "Problem details (RFC 9457)"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {}
+            },
+            "description": "Problem details (RFC 9457)"
           }
         },
         "summary": "Remove the identity provider",
@@ -10041,6 +10052,17 @@
             "description": "Problem details (RFC 9457)"
           },
           "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {}
+            },
+            "description": "Problem details (RFC 9457)"
+          },
+          "502": {
             "content": {
               "application/json": {
                 "schema": {
@@ -10182,6 +10204,17 @@
             "description": "Problem details (RFC 9457)"
           },
           "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {}
+            },
+            "description": "Problem details (RFC 9457)"
+          },
+          "502": {
             "content": {
               "application/json": {
                 "schema": {
@@ -10399,6 +10432,17 @@
               "application/problem+json": {}
             },
             "description": "Problem details (RFC 9457)"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {}
+            },
+            "description": "Problem details (RFC 9457)"
           }
         },
         "summary": "Add an e-mail domain to verify",
@@ -10524,6 +10568,17 @@
             "description": "Problem details (RFC 9457)"
           },
           "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {}
+            },
+            "description": "Problem details (RFC 9457)"
+          },
+          "502": {
             "content": {
               "application/json": {
                 "schema": {
@@ -10665,6 +10720,17 @@
             "description": "Problem details (RFC 9457)"
           },
           "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {}
+            },
+            "description": "Problem details (RFC 9457)"
+          },
+          "502": {
             "content": {
               "application/json": {
                 "schema": {

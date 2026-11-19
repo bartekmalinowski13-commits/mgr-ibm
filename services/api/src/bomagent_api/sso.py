@@ -295,6 +295,23 @@ async def join_on_first_sign_in(
         ).first()
         if verified is None:
             return  # the provider may only vouch for its organisation's verified domains
+        member = await conn.execute(
+            text("SELECT 1 FROM tenancy.memberships WHERE user_sub = :s"), {"s": sub}
+        )
+        if member.first() is not None:
+            return  # already a member: nothing to provision (the common case)
+        removed = await conn.execute(
+            text(
+                "SELECT 1 FROM audit.events WHERE object_type = 'member' AND object_id = :s"
+                " AND action = 'member.removed' LIMIT 1"
+            ),
+            {"s": sub},
+        )
+        if removed.first() is not None:
+            # review I-1: an admin removed this user, and only a removal deletes a
+            # membership; just-in-time provisioning must not undo it. An invitation brings
+            # the user back (accepting it creates the membership, so this check is skipped).
+            return
         inserted = (
             await conn.execute(
                 text(
