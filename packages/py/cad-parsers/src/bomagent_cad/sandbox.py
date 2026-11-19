@@ -38,8 +38,9 @@ from bomagent_cad.base import FileRef, ParseError
 from bomagent_cad.registry import parse_files
 
 MiB = 1024 * 1024
-#: cap on the child's reply (a ParsedDesign is small; anything bigger is a misbehaving child)
-MAX_REPLY_BYTES = 128 * MiB
+#: cap on the child's reply: about 600 bytes per component at MAX_COMPONENTS; anything bigger
+#: is a misbehaving child (the parent has no memory limit of its own)
+MAX_REPLY_BYTES = 64 * MiB
 _ENV_KEEP = ("LANG", "LC_ALL", "TZ")
 log = logging.getLogger(__name__)
 _reported: set[tuple[bool, bool]] = set()
