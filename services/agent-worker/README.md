@@ -38,6 +38,11 @@ stack, bounds hand-backs). The API's reaper fails a `running` run only after `ru
 threshold (+5 min) of its start, so a redelivery after a hard kill is resumed first. Limit without a migration: no
 heartbeat column (liveness is the newest `runs.graph_checkpoints.created_at`).
 
+**Metering of failed runs:** the spend so far is taken from every finished step (the
+`on_step` progress callback, also called by a step that raises), so a run that fails with a
+non-LLM exception inside the runtime still meters the calls it made, not 0. Timed-out calls
+are metered at the client's estimate (`LlmError.billing`, see `packages/py/llm`).
+
 **Trace size cap (DATA-01/02):** the complete trace is always written to `trace.json` in
 object storage; the `runs.trace` JSONB column is capped at `BOMAGENT_RUN_TRACE_MAX_BYTES`
 (default 262144 = 256 KiB, `0` = off; also read by the all-in-one process). A larger trace is

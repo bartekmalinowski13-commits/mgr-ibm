@@ -45,6 +45,9 @@ log = logging.getLogger(__name__)
 _step_calls: ContextVar[list[int] | None] = ContextVar("bomagent_step_calls", default=None)
 T = TypeVar("T", bound=BaseModel)
 R = TypeVar("R")
+#: findings flagging a failed call whose usage the provider did not report (I3):
+#: ``estimated`` - billed, cost estimated from the prompt; ``unbilled`` - an explicit 0
+BILLING_FLAGS = {"estimated": "llm.usage_estimated", "unbilled": "llm.call_unbilled"}
 
 
 @dataclass
@@ -184,6 +187,20 @@ class AgentContext:
             counter = _step_calls.get()
             if counter is not None:
                 counter[0] += exc.usage.llm_calls
+            if exc.billing in BILLING_FLAGS:
+                # not ``run.*``: the run's failure reason stays the model failure itself
+                self.issues.append(
+                    Finding(
+                        rule_id=BILLING_FLAGS[exc.billing],
+                        severity=Severity.INFO,
+                        message=f"{prompt_id}: {exc} - "
+                        + (
+                            "usage estimated from the prompt size (lower bound)"
+                            if exc.billing == "estimated"
+                            else "recorded as 0 (the provider does not bill it)"
+                        ),
+                    )
+                )
             raise
         self.budget.charge(usage)
         counter = _step_calls.get()

@@ -8,6 +8,8 @@ import math
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
+import pytest
+import typer
 import yaml
 from typer.testing import CliRunner
 
@@ -199,3 +201,362 @@ def test_primary_family_has_holm_effect_size_and_cluster_sensitivity(tmp_path):
     report = (out / "report.md").read_text()
     assert "Holm" in report
     assert "d_z" in report
+
+
+# --------------------------------------------------------------------------- review fixes
+
+
+class _Chat:
+    """Fake provider wrapper for the matrix: counts calls, can fail chosen calls."""
+
+    def __init__(self, fail=None):
+        from bomagent_agents.fake_responder import heuristic_responder
+        from bomagent_llm.chat import FakeChat
+
+        self.inner = FakeChat(heuristic_responder)
+        self.fail = fail or (lambda request, n: None)
+        self.n = 0
+
+    async def complete(self, request):
+        self.n += 1
+        error = self.fail(request, self.n)
+        if error is not None:
+            raise error
+        return await self.inner.complete(request)
+
+
+def _patch_chat(monkeypatch, chat):
+    import bomagent_cli.main as main_mod
+
+    monkeypatch.setattr(main_mod, "build_chat", lambda model, cassettes: chat)
+    return chat
+
+
+def _lines(path):
+    return [json.loads(line) for line in path.read_text().splitlines()]
+
+
+def test_failed_validator_calls_are_failures_not_misses(tmp_path, monkeypatch):
+    """I1: a validator call that fails (model error) is recorded with its status and kept
+    out of the rates; the same rule for both variants; every validate call has its own
+    budget (no shared wall clock across baseline and trials)."""
+    from bomagent_llm.chat import LlmError
+
+    validates = {"n": 0}
+
+    def fail(request, n):
+        if request.prompt_id == "validate":
+            validates["n"] += 1
+            if validates["n"] == 2:  # A: baseline ok, first trial fails
+                return LlmError("gateway timed out", billing="estimated")
+        return None
+
+    _patch_chat(monkeypatch, _Chat(fail))
+    cfg = _config(tmp_path, repeats=1, injection={"errors": 4, "trials": 2})
+    result = run_experiment(ExperimentConfig.from_file(cfg), tmp_path)
+    trials = _lines(tmp_path / "pilot" / "injection.jsonl")
+    a = sorted((t for t in trials if t["variant"] == "A"), key=lambda t: t["trial"])
+    b = [t for t in trials if t["variant"] == "B"]
+    assert [t["status"] for t in a] == ["failed", "completed"]
+    assert a[0]["detection_rate"] is None
+    assert a[0]["false_alarm_rate"] is None
+    assert a[0]["detected"] is None
+    assert a[0]["by_kind"] == {}
+    assert all(t["status"] == "completed" for t in b)
+    # the failed trial does not count as a miss: A's mean is over completed trials only
+    comparison = result.injection_comparisons["fake-closed"]["detection_rate"]
+    assert comparison.mean_a == a[1]["detection_rate"]
+    report = (tmp_path / "pilot" / "report.md").read_text()
+    assert "failed trials" in report
+
+
+def test_a_failed_baseline_excludes_the_design_from_the_rates(tmp_path, monkeypatch):
+    from bomagent_llm.chat import LlmError
+
+    def fail(request, n):  # only the injection's validator calls, not the full runs
+        if request.metadata["run_id"].startswith("validation-"):
+            return LlmError("gateway returned 500", billing="unbilled")
+        return None
+
+    chat = _patch_chat(monkeypatch, _Chat(fail))
+    cfg = _config(tmp_path, repeats=1, injection={"errors": 4, "trials": 3})
+    result = run_experiment(ExperimentConfig.from_file(cfg), tmp_path)
+    trials = _lines(tmp_path / "pilot" / "injection.jsonl")
+    a = [t for t in trials if t["variant"] == "A"]
+    assert len(a) == 3
+    assert {t["status"] for t in a} == {"baseline_failed"}
+    assert all(t["detection_rate"] is None for t in a)
+    comparison = result.injection_comparisons["fake-closed"]["detection_rate"]
+    assert math.isnan(comparison.mean_a)
+    # nothing is validated against a failed baseline: only the baseline call was made
+    validate_calls = [r for r in chat.inner.calls if r.prompt_id == "validate"]
+    assert all(not r.metadata["run_id"].startswith("validation-") for r in validate_calls)
+    assert chat.n - len(chat.inner.calls) == 1  # one failed call: the baseline
+
+
+def test_run_budget_is_configured_consistent_and_in_the_manifest(tmp_path, monkeypatch):
+    """I2: the budget that decides outcomes is part of the configuration, reaches every run
+    and is recorded; a run timeout shorter than the per-call budgets is refused."""
+    import pytest
+    from pydantic import ValidationError
+
+    from bomagent_agents import contracts
+    from bomagent_cli.experiment import minimum_run_timeout_s
+    from bomagent_llm.catalog import load_catalog
+
+    seen = []
+    real_init = contracts.Budget.__init__
+
+    def spy(self, config, *args, **kwargs):
+        seen.append(config)
+        real_init(self, config, *args, **kwargs)
+
+    monkeypatch.setattr(contracts.Budget, "__init__", spy)
+    budget = {"timeout_s": 4000, "max_llm_calls": 150, "concurrency": 4}
+    cfg = _config(tmp_path, repeats=1, budget=budget, injection={"errors": 2, "trials": 1})
+    run_experiment(ExperimentConfig.from_file(cfg), tmp_path)
+    assert seen
+    assert all((c.timeout_s, c.max_llm_calls, c.concurrency) == (4000, 150, 4) for c in seen)
+    manifest = json.loads((tmp_path / "pilot" / "manifest.json").read_text())
+    recorded = manifest["budget"]
+    assert recorded["timeout_s"] == 4000
+    assert {"max_llm_calls", "max_total_tokens", "kb_k", "max_repair_iterations"} <= set(recorded)
+    assert manifest["minimum_run_timeout_s"]["fake-closed"] <= 4000
+
+    # the pre-registered default fits the slowest enabled model's per-call budgets
+    default = ExperimentConfig.from_file(_config(tmp_path)).budget.timeout_s
+    assert default >= minimum_run_timeout_s(load_catalog().get("mistral-large-eu"))
+    with pytest.raises(ValidationError):
+        ExperimentConfig.from_file(_config(tmp_path, budget={"timeout_s": -1}))
+    with pytest.raises(ValueError, match="timeout"):
+        run_experiment(
+            ExperimentConfig.from_file(
+                _config(tmp_path, models=["mistral-large-eu"], budget={"timeout_s": 1200})
+            ),
+            tmp_path / "small",
+        )
+
+
+def test_an_exception_in_one_run_is_recorded_and_the_matrix_goes_on(tmp_path, monkeypatch):
+    """I5: an unexpected exception is a reported run (status error, type, spend so far),
+    not the end of the matrix."""
+
+    failed_run = []
+
+    def fail(request, n):
+        if n == 3:
+            failed_run.append(request.metadata["run_id"])
+            return TypeError("content is a list")
+        return None
+
+    chat = _patch_chat(monkeypatch, _Chat(fail))
+    cfg = _config(tmp_path, repeats=2, variants=["A"], injection={"errors": 2, "trials": 0})
+    result = run_experiment(ExperimentConfig.from_file(cfg), tmp_path)
+    runs = _lines(tmp_path / "pilot" / "runs.jsonl")
+    assert len(runs) == 2
+    errored = [r for r in runs if r["status"] == "error"]
+    assert len(errored) == 1
+    assert errored[0]["error"] == "TypeError"
+    # the spend of every call the failed run got answered (concurrent branches included)
+    answered = [r for r in chat.inner.calls if r.metadata["run_id"] == failed_run[0]]
+    assert errored[0]["spent"]["llm_calls"] == len(answered) >= 2
+    # scored like a failed run: an empty BOM, so quality is 0 and the spend is in the metrics
+    metrics = errored[0]["metrics"]
+    assert metrics["line_f1"] == 0.0
+    assert metrics["llm_calls"] == len(answered)
+    assert metrics["cost_eur"] == errored[0]["spent"]["cost_eur"]
+    assert result.cells[("A", "fake-closed")].statuses["error"] == 1
+    assert "error" in (tmp_path / "pilot" / "report.md").read_text()
+
+
+def test_a_run_that_raises_stays_in_the_paired_comparison(tmp_path, monkeypatch):
+    """Review of #90: dropping errored runs from the metrics removed the design from the
+    paired test (survivor bias). An errored A run is scored, so the pair is kept; the report
+    gives the number of pairs and of dropped pairs per metric."""
+
+    def fail(request, n):  # every full A run breaks on its first model call
+        if request.prompt_id == "extract_group":
+            return TypeError("content is a list")
+        return None
+
+    _patch_chat(monkeypatch, _Chat(fail))
+    cfg = _config(tmp_path, repeats=1, injection={"errors": 2, "trials": 0})
+    result = run_experiment(ExperimentConfig.from_file(cfg), tmp_path)
+    comps = result.comparisons["fake-closed"]
+    assert comps["line_f1"].n == 1
+    assert comps["line_f1"].mean_a == 0.0
+    assert comps["cost_eur"].n == 1
+    assert comps["attempted_mpn_hallucination_rate"].n == 0  # undefined for the empty BOM
+    report = (tmp_path / "pilot" / "report.md").read_text()
+    assert "pairs (dropped)" in report
+    assert "| line_f1 | higher | 1 (0) |" in report
+    assert "| attempted_mpn_hallucination_rate | lower | 0 (1) |" in report
+
+
+def _resume_after(tmp_path, monkeypatch, mutate, **kwargs):
+    tmp_path.mkdir(parents=True, exist_ok=True)
+    _patch_chat(monkeypatch, _Chat())
+    config = ExperimentConfig.from_file(
+        _config(tmp_path, repeats=1, variants=["B"], injection={"errors": 2, "trials": 0})
+    )
+    run_experiment(config, tmp_path / "out")
+    path = tmp_path / "out" / "pilot" / "manifest.json"
+    manifest = json.loads(path.read_text())
+    mutate(manifest)
+    path.write_text(json.dumps(manifest))
+    return run_experiment(config, tmp_path / "out", **kwargs)
+
+
+def _set(*keys):
+    def mutate(manifest):
+        target = manifest
+        for k in keys[:-1]:
+            target = target[k]
+        target[keys[-1]] = "changed"
+
+    return mutate
+
+
+@pytest.mark.parametrize(
+    ("mutate", "what"),
+    [
+        (_set("prompts", "validate"), "prompts"),
+        (_set("rule_pack", "version"), "rule_pack"),
+        (_set("retrieval", "kb_snapshot_id"), "kb_snapshot_id"),
+        (_set("model_ids", "fake-closed"), "model_ids"),
+        (_set("models", "fake-closed", "gateway_model"), "models"),
+        (_set("budget", "timeout_s"), "budget"),
+    ],
+)
+def test_resume_refuses_a_changed_matrix(tmp_path, monkeypatch, mutate, what):
+    """Review of #90: a restart must continue the same experiment - same prompts, rule
+    pack, knowledge base and model entries, not only the same YAML."""
+    with pytest.raises(ValueError, match=what):
+        _resume_after(tmp_path, monkeypatch, mutate)
+
+
+def test_resume_refuses_code_drift_unless_allowed_and_reports_commits(tmp_path, monkeypatch):
+    old = "0" * 40
+    with pytest.raises(ValueError, match="allow-code-drift"):
+        _resume_after(tmp_path, monkeypatch, _set("commit"))
+
+    def other_commit(manifest):
+        manifest["commit"] = old
+
+    _resume_after(tmp_path / "again", monkeypatch, other_commit, allow_code_drift=True)
+    out = tmp_path / "again" / "out" / "pilot"
+    manifest = json.loads((out / "manifest.json").read_text())
+    (resumed,) = manifest["resumed"]
+    assert resumed["code_drift"] is True
+    assert resumed["commit"] != old
+    runs = _lines(out / "runs.jsonl")
+    assert all("commit" in r and "dirty" in r for r in runs)
+    report = (out / "report.md").read_text()
+    assert "## Code provenance" in report
+    assert old in report
+    assert resumed["commit"] in report
+    # the CLI flag reaches the resume check
+    # inspect the command's options, not --help text (Rich adds ANSI styling in CI)
+    run_cmd = typer.main.get_command(app).commands["experiment"].commands["run"]  # type: ignore[attr-defined]
+    assert any("--allow-code-drift" in p.opts for p in run_cmd.params)
+
+
+@pytest.mark.parametrize("where", ["injection", "run"])
+def test_a_cassette_miss_aborts_the_matrix(tmp_path, monkeypatch, where):
+    """A replay without a recording is a setup error, never a scored outcome: it stops the
+    matrix from inside a validation call or a graph run (resumable after recording)."""
+    from bomagent_llm.chat import CassetteMissError
+
+    def fail(request, n):
+        from_validation = request.metadata["run_id"].startswith("validation-")
+        if from_validation == (where == "injection"):
+            return CassetteMissError("no cassette")
+        return None
+
+    _patch_chat(monkeypatch, _Chat(fail))
+    trials = 1 if where == "injection" else 0
+    cfg = _config(tmp_path, repeats=1, variants=["A"], injection={"errors": 2, "trials": trials})
+    with pytest.raises(CassetteMissError):
+        run_experiment(ExperimentConfig.from_file(cfg), tmp_path)
+    out = tmp_path / "pilot"
+    assert not (out / "runs.jsonl").exists() or not _lines(out / "runs.jsonl")
+    assert not (out / "injection.jsonl").exists()
+
+
+def test_a_crashed_matrix_resumes_without_rerunning_paid_cells(tmp_path, monkeypatch):
+    """I5/M4: results are persisted as they finish and the manifest before the first run;
+    a restart skips finished runs and trials and never repeats a paid call."""
+    import pytest
+
+    class Crash(BaseException):  # like a killed process: nothing catches it
+        pass
+
+    config = ExperimentConfig.from_file(
+        _config(tmp_path, repeats=2, injection={"errors": 3, "trials": 2})
+    )
+    out = tmp_path / "out" / "pilot"
+    first = _patch_chat(monkeypatch, _Chat(lambda r, n: Crash() if n == 40 else None))
+    with pytest.raises(Crash):
+        run_experiment(config, tmp_path / "out")
+    manifest = json.loads((out / "manifest.json").read_text())
+    assert manifest["config"]["name"] == "pilot"
+    assert isinstance(manifest["dirty"], bool)
+    assert _lines(out / "runs.jsonl")
+    paid_before = first.n - 1  # the crashing call was never answered
+
+    second = _patch_chat(monkeypatch, _Chat())
+    result = run_experiment(config, tmp_path / "out")
+    runs = _lines(out / "runs.jsonl")
+    keys = [(r["design_dir"], r["variant"], r["model"], r["repeat"]) for r in runs]
+    assert len(keys) == len(set(keys)) == 4
+    trials = _lines(out / "injection.jsonl")
+    tkeys = [(t["design_dir"], t["variant"], t["model"], t["trial"]) for t in trials]
+    assert len(tkeys) == len(set(tkeys)) == 4
+    assert len(result.records) == 4
+    assert json.loads((out / "manifest.json").read_text())["resumed"]
+    # a fresh, uninterrupted matrix needs exactly the calls of both attempts together,
+    # minus the cell cut off by the crash (its answered calls are paid again)
+    fresh = _patch_chat(monkeypatch, _Chat())
+    run_experiment(config, tmp_path / "fresh")
+    assert paid_before + second.n >= fresh.n
+    assert second.n < fresh.n
+    # a third start has nothing left to do
+    third = _patch_chat(monkeypatch, _Chat())
+    run_experiment(config, tmp_path / "out")
+    assert third.n == 0
+    # a different matrix in the same directory is refused
+    with pytest.raises(ValueError, match="different configuration"):
+        run_experiment(ExperimentConfig.from_file(_config(tmp_path, repeats=3)), tmp_path / "out")
+
+
+def test_billing_flags_are_counted_per_run_and_reported(tmp_path, monkeypatch):
+    """I3: timed-out (estimated) and unbilled calls are visible per run and per variant."""
+    from bomagent_bom.model import Usage
+    from bomagent_llm.chat import LlmError
+
+    def fail(request, n):
+        if request.prompt_id == "mpn_select" and n % 3 == 0:
+            return LlmError("gateway timed out", Usage(llm_calls=1), billing="estimated")
+        return None
+
+    _patch_chat(monkeypatch, _Chat(fail))
+    cfg = _config(tmp_path, repeats=1, injection={"errors": 2, "trials": 0})
+    run_experiment(ExperimentConfig.from_file(cfg), tmp_path)
+    runs = _lines(tmp_path / "pilot" / "runs.jsonl")
+    assert sum(r["billing"]["estimated_calls"] for r in runs) >= 1
+    assert all(r["billing"]["unbilled_calls"] == 0 for r in runs)
+    report = (tmp_path / "pilot" / "report.md").read_text()
+    assert "estimated usage" in report
+
+
+def test_designs_with_the_same_name_are_rejected(tmp_path):
+    """M10: two directories parsing to one design name would merge two statistical units."""
+    import shutil
+
+    import pytest
+
+    copy = tmp_path / "copy" / "ecg-frontend"
+    shutil.copytree(KICAD_FIXTURES / "ecg-frontend", copy)
+    cfg = _config(tmp_path, designs=[str(KICAD_FIXTURES / "ecg-frontend"), str(copy)])
+    with pytest.raises(ValueError, match="same design name"):
+        run_experiment(ExperimentConfig.from_file(cfg), tmp_path / "out")

@@ -290,6 +290,39 @@ async def test_result_of_a_reaped_run_is_discarded_and_failed_spend_is_metered(
     assert calls == 2 * result.usage.llm_calls
 
 
+async def test_spend_before_an_exception_inside_the_runtime_is_metered(app_engine, make_tenant):
+    """I7: a non-LLM exception in the graph (e.g. a KB error) after paid calls still meters
+    the calls made so far, not 0."""
+    tenant = await make_tenant()
+    store = InMemoryObjectStore(enforce_tenant=False)
+    rid = await _registered_run(app_engine, store, tenant)
+    worker = await _worker(app_engine, store)
+    worker.allow_unregistered = False
+
+    class BreaksOnSecondCall(FakeChat):
+        async def complete(self, request):
+            if len(self.calls) >= 1:
+                raise RuntimeError("knowledge base unavailable")
+            return await super().complete(request)
+
+    async with tenant_transaction(app_engine, tenant.tenant_id) as conn:  # A: several calls
+        await conn.execute(
+            text("UPDATE runs.runs SET variant = 'A', runtime = 'langgraph_a' WHERE id = :i"),
+            {"i": rid},
+        )
+    worker.chat = BreaksOnSecondCall(heuristic_responder)
+    with tenant_scope(tenant), pytest.raises(RuntimeError, match="unavailable"):
+        await worker.execute(Message.create(RUN_REQUESTED, tenant, {"run_id": str(rid)}))
+    status, _, actions, _ = await _state(app_engine, tenant, rid)
+    assert (status, actions) == ("failed", ["run.failed"])
+    async with tenant_transaction(app_engine, tenant.tenant_id) as conn:
+        runs, calls = (
+            await conn.execute(text("SELECT runs, llm_calls FROM metering.usage_daily"))
+        ).one()
+    assert runs == 1
+    assert calls == 1  # the answered call before the failure
+
+
 async def test_steps_reach_the_database_while_the_run_is_running(app_engine, make_tenant):
     """Live progress: each finished step is stored before the run ends (SSE polls it)."""
     tenant = await make_tenant()
