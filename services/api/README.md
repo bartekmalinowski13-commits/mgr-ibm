@@ -58,7 +58,10 @@ regenerate with `just openapi`; a test fails when it drifts).
   The outbox relay delivers to whichever backend is configured.
 - **Maintenance loop:** outbox relay (a row is retried up to 10 times, then marked dead
   with `last_error` and logged as `outbox_message_dead`), deletion of sent outbox rows
-  older than 7 days, stuck-run reaper.
+  older than 7 days, stuck-run reaper, and the reaper of work whose queue message
+  dead-lettered: project files still `uploaded` and KB documents still `pending`/`indexing`
+  after visibility x max receives + 1 h become `failed` (`ingest.timeout` with a UI message
+  / an error text), audited as `project.files_failed` / `kb.document.failed`.
 
 ## Sample projects
 
