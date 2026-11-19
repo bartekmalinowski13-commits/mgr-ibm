@@ -20,7 +20,7 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Protocol, TypeVar
+from typing import Any, Literal, Protocol, TypeVar
 
 import httpx
 from opentelemetry import trace
@@ -33,14 +33,34 @@ tracer = trace.get_tracer(__name__)
 T = TypeVar("T", bound=BaseModel)
 
 
+#: how the usage of a failed call was obtained
+#: ``metered`` - reported by the provider; ``estimated`` - the provider bills the call but
+#: reported nothing (timeout: prompt tokens estimated from its length, output unknown, so a
+#: lower bound); ``unbilled`` - recorded as an explicit 0 (rejected or never delivered)
+Billing = Literal["metered", "estimated", "unbilled"]
+
+
 class LlmError(RuntimeError):
     """Gateway failure or a response that does not match the requested schema.
 
-    ``usage`` carries what the failed attempts still cost (thesis cost metric)."""
+    ``usage`` carries what the failed attempts still cost (thesis cost metric) and
+    ``billing`` how that figure was obtained."""
 
-    def __init__(self, message: str, usage: Usage | None = None) -> None:
+    def __init__(
+        self, message: str, usage: Usage | None = None, *, billing: Billing = "metered"
+    ) -> None:
         super().__init__(message)
         self.usage = usage or Usage()
+        self.billing: Billing = billing
+
+
+class _UnreachableError(LlmError):
+    """No request reached the provider (transport failure after the retries)."""
+
+
+class CassetteMissError(LookupError):
+    """Replay-only mode found no recorded response for a request. Not an ``LlmError``: a
+    broken replay is a setup error, never a model failure to be scored."""
 
 
 @dataclass(frozen=True)
@@ -100,7 +120,7 @@ async def structured[T: BaseModel](
         try:
             result = await client.complete(request)
         except LlmError as exc:
-            raise LlmError(str(exc), total + exc.usage) from exc
+            raise LlmError(str(exc), total + exc.usage, billing=exc.billing) from exc
         total = total + result.usage
         try:
             return schema.model_validate(result.data), total
@@ -193,11 +213,15 @@ class GatewayChat:
                 )
             except (httpx.ReadTimeout, httpx.WriteTimeout) as exc:
                 span.set_status(trace.StatusCode.ERROR, type(exc).__name__)
-                raise LlmError(f"gateway timed out after {limits.read:.0f}s") from exc
+                raise LlmError(
+                    f"gateway timed out after {limits.read:.0f}s", billing="estimated"
+                ) from exc
             except httpx.HTTPError as exc:
                 if attempt >= self._max_retries:
                     span.set_status(trace.StatusCode.ERROR, type(exc).__name__)
-                    raise LlmError(f"gateway unreachable: {type(exc).__name__}") from exc
+                    raise _UnreachableError(
+                        f"gateway unreachable: {type(exc).__name__}", billing="unbilled"
+                    ) from exc
             else:
                 if resp.status_code not in RETRY_STATUS or attempt >= self._max_retries:
                     return resp
@@ -234,17 +258,36 @@ class GatewayChat:
         with tracer.start_as_current_span(
             f"chat {request.prompt_id}", attributes=_span_attrs(request)
         ) as span:
-            resp = await self._post_with_retry(body, span, limits)
+            try:
+                resp = await self._post_with_retry(body, span, limits)
+            except LlmError as exc:
+                raise self._failed_call(request, exc, time.perf_counter() - start) from exc
+            if resp.status_code == 408:  # the gateway cut the generation off: billed
+                span.set_status(trace.StatusCode.ERROR, "408")
+                raise self._failed_call(
+                    request,
+                    LlmError("gateway returned 408 (timed out)", billing="estimated"),
+                    time.perf_counter() - start,
+                )
             if resp.status_code >= 400:
                 span.set_status(trace.StatusCode.ERROR, str(resp.status_code))
-                raise LlmError(f"gateway returned {resp.status_code}")
+                raise self._failed_call(
+                    request,
+                    LlmError(f"gateway returned {resp.status_code}", billing="unbilled"),
+                    time.perf_counter() - start,
+                )
             try:
                 payload = resp.json()
-                content = payload["choices"][0]["message"]["content"] or "{}"
-            except (ValueError, KeyError, IndexError, TypeError) as exc:
+                choice = payload["choices"][0]
+                content = choice["message"]["content"]
+                usage = payload.get("usage") or {}
+            except (ValueError, KeyError, IndexError, TypeError, AttributeError) as exc:
                 span.set_status(trace.StatusCode.ERROR, "malformed response")
-                raise LlmError("malformed gateway response") from exc
-            usage = payload.get("usage") or {}
+                raise self._failed_call(
+                    request,
+                    LlmError("malformed gateway response", billing="unbilled"),
+                    time.perf_counter() - start,
+                ) from exc
             span.set_attribute("gen_ai.usage.input_tokens", usage.get("prompt_tokens", 0))
             span.set_attribute("gen_ai.usage.output_tokens", usage.get("completion_tokens", 0))
             span.set_attribute("gen_ai.response.model", payload.get("model", ""))
@@ -255,11 +298,30 @@ class GatewayChat:
             time.perf_counter() - start,
             (usage.get("prompt_tokens_details") or {}).get("cached_tokens", 0),
         )
+        # an empty or length-cut reply is a (paid) failure, not an all-default answer
+        if not isinstance(content, str) or not content.strip():
+            raise LlmError(f"{request.prompt_id}: empty response", call_usage)
+        if choice.get("finish_reason") == "length":
+            raise LlmError(f"{request.prompt_id}: truncated response (max_tokens)", call_usage)
         try:
             data = json.loads(content)
         except json.JSONDecodeError as exc:
             raise LlmError(f"{request.prompt_id}: non-JSON response", call_usage) from exc
         return ChatResult(data=data, usage=call_usage, model_id=request.model.id, raw=content)
+
+    @staticmethod
+    def _failed_call(request: ChatRequest, exc: LlmError, seconds: float) -> LlmError:
+        """Usage of a call that produced no answer, by how the provider bills it."""
+        if exc.billing == "estimated":
+            # the provider bills the prompt (and whatever it generated before the cut-off,
+            # unknown here): estimate the prompt, price it, flag it - a lower bound
+            prompt_tokens = _estimate_tokens("".join(m.content for m in request.messages))
+            usage = _usage(request.model, prompt_tokens, 0, seconds)
+        elif isinstance(exc, _UnreachableError):
+            usage = Usage(wall_time_s=seconds)  # nothing reached the provider
+        else:
+            usage = Usage(llm_calls=1, wall_time_s=seconds)  # rejected: explicit 0, flagged
+        return LlmError(str(exc), usage, billing=exc.billing)
 
 
 Responder = Callable[[ChatRequest], dict[str, Any]]
@@ -270,9 +332,12 @@ def _estimate_tokens(text: str) -> int:
 
 
 class FakeChat:
-    """Deterministic fake: cassette replay first, then the scripted ``responder``."""
+    """Deterministic fake: cassette replay first, then the scripted ``responder``.
 
-    def __init__(self, responder: Responder, cassette_dir: str | Path | None = None) -> None:
+    ``responder=None`` is replay-only (recorded real-model runs): a request without a
+    cassette raises ``CassetteMissError`` instead of being answered by a heuristic."""
+
+    def __init__(self, responder: Responder | None, cassette_dir: str | Path | None = None) -> None:
         self._responder = responder
         self._cassettes: dict[str, dict[str, Any]] = {}
         self._usage: dict[str, Usage] = {}
@@ -290,7 +355,15 @@ class FakeChat:
             f"chat {request.prompt_id}", attributes=_span_attrs(request)
         ):
             cached = self._cassettes.get(request.cache_key())
-            data = cached if cached is not None else self._responder(request)
+            if cached is not None:
+                data = cached
+            elif self._responder is not None:
+                data = self._responder(request)
+            else:
+                raise CassetteMissError(
+                    f"no cassette for {request.prompt_id} on {request.model.id} "
+                    f"(key {request.cache_key()[:16]}); record it first"
+                )
         prompt_text = "".join(m.content for m in request.messages)
         out = json.dumps(data)
         recorded = self._usage.get(request.cache_key()) if cached is not None else None

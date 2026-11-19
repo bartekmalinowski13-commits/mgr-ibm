@@ -10,11 +10,19 @@ from bomagent_agents.retrieval import Retriever
 from bomagent_agents.runtime_base import AgentContext
 from bomagent_agents.variant_a import LangGraphVariantA
 from bomagent_agents.variant_b import LangGraphVariantB
-from bomagent_bom.model import Usage
+from bomagent_bom.model import ParsedDesign, Usage
 from bomagent_llm.catalog import Catalog, load_catalog
 from bomagent_llm.chat import ChatClient
 
 RUNTIMES = ("langgraph_a", "langgraph_b", "claude_agent_sdk_a")
+
+
+def design_mpns(design: ParsedDesign) -> set[str]:
+    """MPNs read from the design files (trusted by the evidence-only guard). One helper for
+    the guard and the experiment's residual metric, so both read the same fields."""
+    return {
+        c.field("MPN", "Manufacturer Part Number").strip().upper() for c in design.components
+    } - {""}
 
 
 def context_factory(
@@ -31,12 +39,8 @@ def context_factory(
     cat = catalog or load_catalog()
 
     def make(run: RunInput) -> AgentContext:
-        design_mpns = {
-            c.field("MPN", "Manufacturer Part Number").strip().upper()
-            for c in run.design.components
-        } - {""}
         return AgentContext(
-            design_mpns=design_mpns,
+            design_mpns=design_mpns(run.design),
             chat=chat,
             catalog=cat,
             retriever=retriever,

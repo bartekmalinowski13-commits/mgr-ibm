@@ -153,24 +153,32 @@ def eval_cmd(
 
 
 def build_chat(model_id: str, cassettes: Path | None) -> Any:
-    """Fake provider for ``fake-*`` models; otherwise the LLM gateway from the environment
-    (``BOMAGENT_LLM_GATEWAY_URL`` / ``BOMAGENT_LLM_GATEWAY_KEY``)."""
+    """Fake provider for ``fake-*`` models; recorded responses only (replay, no gateway) for
+    any other model when ``cassettes`` is given - a missing recording raises
+    ``CassetteMissError`` instead of falling back to a heuristic answer; otherwise the LLM
+    gateway from the environment (``BOMAGENT_LLM_GATEWAY_URL`` / ``BOMAGENT_LLM_GATEWAY_KEY``).
+    """
     import os
 
     from bomagent_agents.fake_responder import heuristic_responder
+    from bomagent_llm import chat as chat_mod
     from bomagent_llm.catalog import load_catalog
-    from bomagent_llm.chat import FakeChat, GatewayChat
 
     spec = load_catalog().get(model_id)
     if spec.provider == "fake":
-        return FakeChat(heuristic_responder, cassettes)
+        return chat_mod.FakeChat(heuristic_responder, cassettes)
+    if cassettes is not None:
+        if not (cassettes / spec.id).is_dir():
+            raise _fail(f"no cassettes for {spec.id} under {cassettes}; record them first")
+        # the real ModelSpec stays in the request, so the cache keys match the recording
+        return chat_mod.FakeChat(None, cassettes / spec.id)
     url, key = (
         os.environ.get("BOMAGENT_LLM_GATEWAY_URL"),
         os.environ.get("BOMAGENT_LLM_GATEWAY_KEY"),
     )
     if not url or not key:
         raise _fail("set BOMAGENT_LLM_GATEWAY_URL and BOMAGENT_LLM_GATEWAY_KEY for real models")
-    return GatewayChat(url, key)
+    return chat_mod.GatewayChat(url, key)
 
 
 def _execute(
@@ -214,7 +222,12 @@ def _execute(
         )
         return result, await retriever.known_mpns()
 
-    result, known = asyncio.run(go())
+    from bomagent_llm.chat import CassetteMissError
+
+    try:
+        result, known = asyncio.run(go())
+    except CassetteMissError as exc:
+        raise _fail(str(exc)) from exc
     typer.echo(
         f"{result.runtime}: {result.status}, {len(result.bom.items)} lines, "
         f"{result.usage.llm_calls} LLM calls, {result.usage.input_tokens}+"

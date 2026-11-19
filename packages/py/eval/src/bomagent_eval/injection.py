@@ -10,6 +10,7 @@ on the mutated BOM that match no injected error are false alarms.
 
 from __future__ import annotations
 
+import math
 import random
 import re
 from dataclasses import dataclass, field
@@ -80,7 +81,10 @@ class DetectionReport:
 
     @property
     def false_alarm_rate(self) -> float:
-        return self.false_alarms / self.new_findings if self.new_findings else 0.0
+        """Share of new findings that match no injected error (a false-discovery
+        proportion). Undefined (NaN) when the validator raised no new finding: silence is
+        not a perfect score."""
+        return self.false_alarms / self.new_findings if self.new_findings else math.nan
 
 
 def rule_coverage() -> dict[str, bool]:

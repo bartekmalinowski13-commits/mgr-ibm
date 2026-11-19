@@ -61,12 +61,14 @@ class PairedComparison(BaseModel):
     cluster_ci_high: float = math.nan
 
 
-def holm_adjust(p_values: dict[str, float]) -> dict[str, float]:
+def holm_adjust(p_values: dict[str, float], family_size: int | None = None) -> dict[str, float]:
     """Holm-Bonferroni adjusted p-values (step-down, monotone, capped at 1).
 
-    NaN p-values are left as NaN and do not count towards the size of the family."""
+    NaN p-values are left as NaN. Without ``family_size`` they do not count towards the
+    size of the family; a pre-registered family passes its fixed size, so an undefined
+    hypothesis does not make the correction less conservative."""
     valid = sorted(((p, k) for k, p in p_values.items() if not math.isnan(p)))
-    m = len(valid)
+    m = len(valid) if family_size is None else max(family_size, len(valid))
     out: dict[str, float] = dict.fromkeys(p_values, math.nan)
     running = 0.0
     for i, (p, k) in enumerate(valid):

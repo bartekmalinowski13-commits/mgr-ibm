@@ -52,6 +52,11 @@ def test_holm_adjustment_is_monotone_and_capped():
     nan_case = holm_adjust({"a": 0.01, "b": math.nan})
     assert nan_case["a"] == pytest.approx(0.01)  # NaN is not counted in the family
     assert math.isnan(nan_case["b"])
+    # M1: a pre-registered family keeps its size when one hypothesis is undefined
+    fixed = holm_adjust({"a": 0.01, "b": math.nan, "c": 0.02}, family_size=3)
+    assert fixed["a"] == pytest.approx(0.03)
+    assert fixed["c"] == pytest.approx(0.04)
+    assert math.isnan(fixed["b"])
 
 
 def test_effect_size_is_standardised_paired_difference():

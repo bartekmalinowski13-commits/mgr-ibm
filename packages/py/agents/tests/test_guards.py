@@ -155,3 +155,37 @@ async def test_a_lying_model_shows_in_the_attempted_rate_not_in_the_final_bom(va
     assert all(i.mpn not in {"INVENTED-A", "NOT-IN-EVIDENCE-1"} for i in out.bom.items)
     honest = evaluate((await run_with(heuristic_responder, variant, retriever)).bom, [])
     assert honest.hallucinations.rejected_mpn_decisions == 0
+
+
+@pytest.mark.parametrize("variant", ["A", "B"])
+@pytest.mark.parametrize(
+    ("billing", "rule"), [("estimated", "llm.usage_estimated"), ("unbilled", "llm.call_unbilled")]
+)
+async def test_failed_calls_are_charged_and_their_billing_is_flagged(
+    retriever, variant, billing, rule
+):
+    """I3: a timed-out (estimated) or rejected (explicit 0) call is charged as the client
+    says and leaves a flag in the run's findings, so cost tables can tell them apart."""
+    from bomagent_bom.model import Usage
+    from bomagent_llm.chat import LlmError
+
+    class Failing(FakeChat):
+        async def complete(self, request):
+            if request.prompt_id == "mpn_select":
+                cost = Usage(llm_calls=1, input_tokens=100, cost_eur=0.5)
+                raise LlmError(
+                    "gateway timed out",
+                    cost if billing == "estimated" else Usage(llm_calls=1),
+                    billing=billing,
+                )
+            return await super().complete(request)
+
+    rt = runtime_for(variant, context_factory(Failing(heuristic_responder), retriever))
+    out = await rt.run(run_input(variant))
+    flags = [f for f in out.bom.findings if f.rule_id == rule]
+    assert flags
+    assert all(f.severity == "info" for f in flags)
+    if billing == "estimated":
+        assert out.usage.cost_eur >= 0.5 * len(flags)
+    # the run's failure reason stays the model failure, not the billing note
+    assert not any(f.rule_id.startswith("run.") and "billing" in f.message for f in flags)
