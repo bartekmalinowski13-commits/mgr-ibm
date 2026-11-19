@@ -119,6 +119,87 @@ async def test_stuck_runs_are_reaped(app_engine, platform_engine, make_tenant):
     assert actions == ["run.failed"]
 
 
+async def test_a_running_run_with_a_recent_checkpoint_is_not_reaped(
+    app_engine, platform_engine, make_tenant
+):
+    """The reaper must not race the resume of an interrupted run: a run counts as stuck when
+    it has been idle (no start, takeover or checkpoint) for ``run_timeout_s``, so takeover
+    (after ``resume_stale_after_s`` idle) always comes first."""
+    tenant = await make_tenant()
+    pid, busy, idle = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
+    async with tenant_transaction(app_engine, tenant.tenant_id) as conn:
+        await conn.execute(
+            text(
+                "INSERT INTO projects.projects (id, tenant_id, name, created_by)"
+                " VALUES (:i, :t, 'p', 'u')"
+            ),
+            {"i": pid, "t": tenant.tenant_id},
+        )
+        for rid in (busy, idle):
+            await conn.execute(
+                text(
+                    "INSERT INTO runs.runs (id, tenant_id, project_id, variant, runtime,"
+                    " model_id, created_by, status, started_at) VALUES (:r, :t, :p, 'A',"
+                    " 'langgraph_a', 'fake-closed', 'u', 'running', now() - interval '2 hours')"
+                ),
+                {"r": rid, "t": tenant.tenant_id, "p": pid},
+            )
+        for rid, age in ((busy, "1 minute"), (idle, "90 minutes")):
+            await conn.execute(
+                text(
+                    "INSERT INTO runs.graph_checkpoints (tenant_id, run_id, checkpoint_id,"
+                    " checkpoint_type, checkpoint, metadata_type, metadata, created_at)"
+                    " VALUES (:t, :r, 'c1', 'json', '\\x00', 'json', '\\x00',"
+                    " now() - CAST(:age AS interval))"
+                ),
+                {"t": tenant.tenant_id, "r": rid, "age": age},
+            )
+    await sweep(app_engine, platform_engine, {}, run_timeout_s=3600)
+    async with tenant_transaction(app_engine, tenant.tenant_id) as conn:
+        states = {
+            r.id: r.status for r in await conn.execute(text("SELECT id, status FROM runs.runs"))
+        }
+    assert states == {busy: "running", idle: "failed"}
+
+
+async def test_a_hard_killed_run_is_left_to_its_redelivery_before_it_is_reaped(
+    app_engine, platform_engine, make_tenant
+):
+    """Worker killed without a hand-back: the message comes back after the queue's visibility
+    timeout and is taken over once the run is stale. The reaper must not fail the run inside
+    visibility timeout + resume threshold of its start (they would fall due together)."""
+    from bomagent_api.maintenance import RUNNING_REAP_GRACE_S
+    from bomagent_common.messaging import QUEUE_VISIBILITY_S, RUN_RESUME_STALE_S
+
+    assert QUEUE_VISIBILITY_S["runs"] + RUN_RESUME_STALE_S <= RUNNING_REAP_GRACE_S
+    tenant = await make_tenant()
+    pid, killed, long_dead = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
+    async with tenant_transaction(app_engine, tenant.tenant_id) as conn:
+        await conn.execute(
+            text(
+                "INSERT INTO projects.projects (id, tenant_id, name, created_by)"
+                " VALUES (:i, :t, 'p', 'u')"
+            ),
+            {"i": pid, "t": tenant.tenant_id},
+        )
+        for rid, age_s in ((killed, 3900), (long_dead, RUNNING_REAP_GRACE_S + 60)):
+            await conn.execute(
+                text(
+                    "INSERT INTO runs.runs (id, tenant_id, project_id, variant, runtime,"
+                    " model_id, created_by, status, started_at) VALUES (:r, :t, :p, 'A',"
+                    " 'langgraph_a', 'fake-closed', 'u', 'running',"
+                    " now() - make_interval(secs => :age))"
+                ),
+                {"r": rid, "t": tenant.tenant_id, "p": pid, "age": age_s},
+            )
+    await sweep(app_engine, platform_engine, {}, run_timeout_s=3600)
+    async with tenant_transaction(app_engine, tenant.tenant_id) as conn:
+        states = {
+            r.id: r.status for r in await conn.execute(text("SELECT id, status FROM runs.runs"))
+        }
+    assert states == {killed: "running", long_dead: "failed"}
+
+
 async def test_stale_queued_runs_are_reaped(app_engine, platform_engine, make_tenant):
     tenant = await make_tenant()
     pid, rid = uuid.uuid4(), uuid.uuid4()

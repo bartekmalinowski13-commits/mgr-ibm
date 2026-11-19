@@ -1,21 +1,24 @@
-"""Run with ``python -m bomagent_api`` (container entrypoint)."""
+"""Run with ``python -m bomagent_api`` (container entrypoint).
+
+SIGTERM is handled by ``bomagent_common.shutdown``: long-lived responses end and queue
+consumers stop claiming at once, then the lifespan teardown runs within the kill timeout.
+"""
 
 from __future__ import annotations
 
-import os
+from typing import Any
 
-import uvicorn
+from bomagent_common import shutdown
+
+
+def build_app() -> Any:
+    from bomagent_api.app import create_app
+
+    return create_app()
 
 
 def main() -> None:
-    uvicorn.run(
-        "bomagent_api.app:create_app",
-        factory=True,
-        host=os.environ.get("BOMAGENT_HOST", "0.0.0.0"),  # noqa: S104 - container port
-        port=int(os.environ.get("BOMAGENT_PORT", "8000")),
-        log_config=None,
-        proxy_headers=True,
-    )
+    shutdown.serve(build_app)
 
 
 if __name__ == "__main__":

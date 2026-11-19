@@ -12,9 +12,9 @@ on:
   workflow_dispatch:
     inputs:
       model:
-        description: "Model id from the catalogue (must be EU-verified)"
+        description: "Model id from the catalogue (must be enabled and EU-verified)"
         required: false
-        default: "claude-sonnet-eu"
+        default: "mistral-large-eu"
       min_f1:
         description: "Fail when line F1 is below this"
         required: false
@@ -43,7 +43,7 @@ jobs:
     env:
       BOMAGENT_LLM_GATEWAY_URL: ${{ secrets.BOMAGENT_LLM_GATEWAY_URL }}
       BOMAGENT_LLM_GATEWAY_KEY: ${{ secrets.BOMAGENT_LLM_GATEWAY_KEY }}
-      MODEL: ${{ inputs.model || 'claude-sonnet-eu' }}
+      MODEL: ${{ inputs.model || 'mistral-large-eu' }}
       MIN_F1: ${{ inputs.min_f1 || '0.80' }}
       MAX_HALLUCINATION_RATE: ${{ inputs.max_hallucination_rate || '0.05' }}
     steps:

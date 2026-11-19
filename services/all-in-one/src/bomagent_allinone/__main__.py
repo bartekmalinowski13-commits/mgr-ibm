@@ -11,10 +11,10 @@ variables: ``BOMAGENT_MIGRATOR_DATABASE_URL``; ``BOMAGENT_ADMIN_DATABASE_URL``,
 
 from __future__ import annotations
 
-import os
 import sys
+from typing import Any
 
-import uvicorn
+from bomagent_common import shutdown
 
 COMMANDS = {"serve", "migrate", "bootstrap"}
 
@@ -30,14 +30,16 @@ def main(argv: list[str] | None = None) -> None:
         sys.argv = ["bomagent-migrate", "upgrade" if command == "migrate" else "bootstrap"]
         bomagent_migrations.main()
         return
-    uvicorn.run(
-        "bomagent_allinone.app:create_app",
-        factory=True,
-        host=os.environ.get("BOMAGENT_HOST", "0.0.0.0"),  # noqa: S104 - container port
-        port=int(os.environ.get("BOMAGENT_PORT", "8000")),
-        log_config=None,
-        proxy_headers=True,  # trusted proxies: uvicorn's FORWARDED_ALLOW_IPS
-    )
+    # SIGTERM ends open live-progress streams and stops the consumers claiming at once, so
+    # the lifespan teardown (consumer grace, message release) runs within the host's kill
+    # timeout; BOMAGENT_HOST/PORT, BOMAGENT_SHUTDOWN_GRACE_S (bomagent_common.shutdown)
+    shutdown.serve(build_app)
+
+
+def build_app() -> Any:
+    from bomagent_allinone.app import create_app
+
+    return create_app()
 
 
 if __name__ == "__main__":

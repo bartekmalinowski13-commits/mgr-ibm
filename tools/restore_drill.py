@@ -12,7 +12,13 @@ Safety model (the script can never touch production data):
   * ``--dry-run`` prints the plan and needs no database or credentials.
 
 Steps: create scratch DB -> pg_restore -> row counts of key tables -> ``audit.verify_chain``
-for every tenant. Exit code 0 = restore verified, 1 = verification failed, 2 = refused/usage.
+for every tenant, each in that tenant's own context (``app.tenant_id``; the function refuses to
+run without it). Exit code 0 = restore verified, 1 = verification failed, 2 = refused/usage.
+
+The drill fails loudly whenever it cannot verify: a dump without tenants (or one whose tenants
+the admin role cannot see because of RLS) fails unless ``--allow-empty`` is given; tenants
+without any audit event fail; and every tenant's ``checked`` must equal the number of its
+events (a role that RLS hides rows from would otherwise "verify" an empty chain).
 Runbook: docs/platform/runbooks/backup-restore-dr.md
 """
 
@@ -24,6 +30,7 @@ import re
 import shutil
 import subprocess
 import sys
+import uuid
 from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit
 
@@ -49,6 +56,11 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--confirm-scratch", required=True, help="repeat --scratch-db to confirm")
     p.add_argument("--cleanup", action="store_true", help="drop the scratch database afterwards")
     p.add_argument("--dry-run", action="store_true", help="print the plan, touch nothing")
+    p.add_argument(
+        "--allow-empty",
+        action="store_true",
+        help="accept a dump without tenants (otherwise an empty restore fails verification)",
+    )
     return p
 
 
@@ -79,14 +91,59 @@ def db_url(admin_url: str, dbname: str) -> str:
     return urlunsplit((p.scheme, p.netloc, "/" + dbname, p.query, ""))
 
 
-def _psql(url: str, sql: str) -> str:
-    out = subprocess.run(
-        ["psql", url, "-X", "-A", "-t", "-v", "ON_ERROR_STOP=1", "-c", sql],
-        check=True,
-        capture_output=True,
-        text=True,
-    )
+def _conn(url: str) -> tuple[str, dict[str, str]]:
+    """The URL without its password, and the environment that carries the password: argv is
+    visible to every user of the host (``ps``), the environment of the child is not."""
+    p = urlsplit(url)
+    env = dict(os.environ)
+    if p.password is not None:
+        env["PGPASSWORD"] = p.password
+        host = p.hostname or ""
+        if ":" in host:  # IPv6 literal
+            host = f"[{host}]"
+        user = f"{p.username}@" if p.username else ""
+        port = f":{p.port}" if p.port else ""
+        url = urlunsplit((p.scheme, f"{user}{host}{port}", p.path, p.query, ""))
+    return url, env
+
+
+def _psql(url: str, *statements: str) -> str:
+    """Run ``statements`` in ONE psql session (so ``SET`` applies to the queries after it)."""
+    target, env = _conn(url)
+    cmd = ["psql", target, "-X", "-q", "-A", "-t", "-v", "ON_ERROR_STOP=1"]
+    for sql in statements:
+        cmd += ["-c", sql]
+    out = subprocess.run(cmd, check=True, capture_output=True, text=True, env=env)
     return out.stdout.strip()
+
+
+class VerificationError(Exception):
+    """The restored database could not be verified."""
+
+
+def verify_tenant(target: str, tenant: str) -> tuple[int, str]:
+    """``(checked, broken_seq or '')`` of one tenant's chain, verified in its own context.
+
+    Raises VerificationError when the visible event count differs from what the chain
+    check walked (the context did not apply) or the tenant has no audit event at all."""
+    try:
+        tid = str(uuid.UUID(tenant))  # never interpolate anything but a canonical UUID
+    except ValueError as exc:
+        raise VerificationError(f"tenant id {tenant!r} is not a UUID") from exc
+    row = _psql(
+        target,
+        f"SET app.tenant_id = '{tid}'",
+        f"SELECT (SELECT count(*) FROM audit.events WHERE tenant_id = '{tid}')"
+        " || '|' || v.checked || '|' || coalesce(v.first_broken_seq::text, '')"
+        f" FROM audit.verify_chain('{tid}') v",
+    )
+    visible, _, rest = row.partition("|")
+    checked, _, broken = rest.partition("|")
+    if int(visible) == 0:
+        raise VerificationError(f"tenant {tid} has no audit events in the restore")
+    if not broken and int(checked) != int(visible):
+        raise VerificationError(f"tenant {tid}: verify_chain checked {checked} of {visible} events")
+    return int(checked), broken
 
 
 def plan(args: argparse.Namespace) -> list[str]:
@@ -94,11 +151,43 @@ def plan(args: argparse.Namespace) -> list[str]:
         f"create database {args.scratch_db} (must not exist)",
         f"pg_restore --no-owner --no-privileges {args.dump} into {args.scratch_db}",
         f"row counts: {', '.join(COUNT_TABLES)}",
-        "audit.verify_chain for every tenancy.tenants row",
+        "audit.verify_chain for every tenancy.tenants row, in that tenant's context",
+        "fail on 0 tenants (unless --allow-empty) or a tenant without audit events",
     ]
     if args.cleanup:
         steps.append(f"drop database {args.scratch_db} (created by this run)")
     return steps
+
+
+def verify_restore(target: str, *, allow_empty: bool) -> bool:
+    """Row counts and every tenant's chain; False on a broken chain, VerificationError when
+    the restore cannot be verified at all."""
+    ok = True
+    counts = {t: int(_psql(target, f"SELECT count(*) FROM {t}")) for t in COUNT_TABLES}
+    for table, n in counts.items():
+        print(f"rows {table}: {n}")
+    tenants = _psql(target, "SELECT id FROM tenancy.tenants ORDER BY id").splitlines()
+    if not tenants:
+        if not allow_empty:
+            raise VerificationError(
+                "no tenants visible in the restore: an empty dump, or a role that RLS"
+                " hides tenancy.tenants from (use a superuser/BYPASSRLS admin);"
+                " pass --allow-empty only for a dump known to be empty"
+            )
+        print("no tenants (accepted: --allow-empty)")
+    checked_total = 0
+    for tid in tenants:
+        checked, broken = verify_tenant(target, tid)
+        checked_total += checked
+        status = "ok" if not broken else f"BROKEN at seq {broken}"
+        print(f"verify_chain {tid}: checked={checked} {status}")
+        ok = ok and not broken
+    if ok and checked_total != counts["audit.events"]:
+        raise VerificationError(
+            f"chains cover {checked_total} of {counts['audit.events']} audit events"
+            " (events of tenants that are not in tenancy.tenants?)"
+        )
+    return ok
 
 
 def run(args: argparse.Namespace, admin_url: str) -> int:
@@ -111,6 +200,7 @@ def run(args: argparse.Namespace, admin_url: str) -> int:
     _psql(admin_url, f'CREATE DATABASE "{name}"')
     target = db_url(admin_url, name)
     ok = True
+    restore_url, restore_env = _conn(target)
     try:
         subprocess.run(
             [
@@ -119,26 +209,19 @@ def run(args: argparse.Namespace, admin_url: str) -> int:
                 "--no-privileges",
                 "--exit-on-error",
                 "-d",
-                target,
+                restore_url,
                 str(args.dump),
             ],
             check=True,
+            env=restore_env,
         )
-        for table in COUNT_TABLES:
-            print(f"rows {table}: {_psql(target, f'SELECT count(*) FROM {table}')}")
-        tenants = _psql(target, "SELECT id FROM tenancy.tenants ORDER BY id").splitlines()
-        for tid in tenants:
-            row = _psql(
-                target,
-                "SELECT checked || '|' || coalesce(first_broken_seq::text, '') "
-                f"FROM audit.verify_chain('{tid}')",
-            )
-            checked, _, broken = row.partition("|")
-            status = "ok" if not broken else f"BROKEN at seq {broken}"
-            print(f"verify_chain {tid}: checked={checked} {status}")
-            ok = ok and not broken
+        ok = verify_restore(target, allow_empty=args.allow_empty)
+    except VerificationError as exc:
+        print(f"restore drill cannot verify: {exc}", file=sys.stderr)
+        ok = False
     except subprocess.CalledProcessError as exc:
-        print(f"restore drill failed: {exc}", file=sys.stderr)
+        detail = (exc.stderr or "").strip() if isinstance(exc.stderr, str) else ""
+        print(f"restore drill failed: {exc} {detail}".rstrip(), file=sys.stderr)
         ok = False
     finally:
         if args.cleanup:
