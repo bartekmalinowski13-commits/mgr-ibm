@@ -71,14 +71,21 @@ def test_no_drop_against_the_baseline(tmp_path, capsys):
     assert "packages/py/bom" in capsys.readouterr().out
 
 
-def test_small_noise_and_new_packages_are_tolerated(tmp_path):
+def test_small_noise_is_tolerated(tmp_path):
     baseline = tmp_path / "baseline.json"
     cc.main([str(report(tmp_path, GOOD)), "--write-baseline", str(baseline)])
-    noisy = GOOD | {
-        "packages/py/bom/src/a.py": (1798, 2000),  # 89.9 %: within the tolerance
-        "packages/py/new/src/d.py": (90, 100),  # not in the baseline yet
-    }
+    noisy = GOOD | {"packages/py/bom/src/a.py": (1798, 2000)}  # 89.9 %: within the tolerance
     assert cc.main([str(report(tmp_path, noisy)), "--baseline", str(baseline)]) == 0
+
+
+def test_a_package_missing_from_the_baseline_fails(tmp_path, capsys):
+    """A new package must be added to the committed baseline (reviewed by the owner), or
+    it could enter with any coverage and never be held to "no drop"."""
+    baseline = tmp_path / "baseline.json"
+    cc.main([str(report(tmp_path, GOOD)), "--write-baseline", str(baseline)])
+    new = GOOD | {"packages/py/new/src/d.py": (90, 100)}
+    assert cc.main([str(report(tmp_path, new)), "--baseline", str(baseline)]) == 1
+    assert "packages/py/new" in capsys.readouterr().out
 
 
 def test_a_package_missing_from_the_report_fails(tmp_path):
@@ -93,3 +100,8 @@ def test_the_committed_baseline_is_well_formed():
     assert data, "tools/coverage-baseline.json must not be empty"
     assert all(k.startswith(("packages/py/", "services/")) for k in data)
     assert all(0 < v <= 100 for v in data.values())
+
+
+def test_the_baseline_is_owned_by_the_owner():
+    owners = (Path(__file__).resolve().parents[2] / ".github/CODEOWNERS").read_text()
+    assert "/tools/coverage-baseline.json @" in owners

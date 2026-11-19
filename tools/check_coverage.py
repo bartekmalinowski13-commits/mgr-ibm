@@ -5,7 +5,8 @@
   source must not pass silently).
 * No drop in a PR: each package (``packages/py/<name>``, ``services/<name>``) is compared with
   the committed baseline (``tools/coverage-baseline.json``); a drop of more than
-  ``TOLERANCE_PP`` percentage points, or a baselined package missing from the report, fails.
+  ``TOLERANCE_PP`` percentage points, a baselined package missing from the report, or a
+  package missing from the baseline fails (the baseline is owner-reviewed, CODEOWNERS).
   Raise the baseline when coverage rises: ``--write-baseline tools/coverage-baseline.json``.
 
 Usage: check_coverage.py [coverage.xml] [--baseline FILE] [--write-baseline FILE]
@@ -90,6 +91,9 @@ def main(argv: list[str] | None = None) -> int:
             elif now < before - TOLERANCE_PP:
                 print(f"{name}: coverage dropped {before:.2f} % -> {now:.2f} % FAIL")
                 failed = True
+        for name in sorted(set(current) - set(baseline)):
+            print(f"{name}: not in {args.baseline.name} - add it (--write-baseline) FAIL")
+            failed = True
         if not failed:
             print(f"no drop against {args.baseline.name} (tolerance {TOLERANCE_PP} pp)")
     if args.write_baseline is not None and not failed:

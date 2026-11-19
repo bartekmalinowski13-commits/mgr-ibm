@@ -9,5 +9,6 @@
 /deploy/ @bartekmalinowski13-commits
 /infra/ @bartekmalinowski13-commits
 /.github/ @bartekmalinowski13-commits
+/tools/coverage-baseline.json @bartekmalinowski13-commits
 /docs/platform/ @bartekmalinowski13-commits
 /docs/adr/ @bartekmalinowski13-commits
