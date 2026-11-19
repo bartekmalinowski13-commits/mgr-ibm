@@ -1,5 +1,5 @@
 {
-  "packages/py/agents": 94.94,
+  "packages/py/agents": 94.96,
   "packages/py/bom-core": 98.8,
   "packages/py/cad-parsers": 90.93,
   "packages/py/cli": 96.68,
@@ -7,11 +7,11 @@
   "packages/py/eval": 97.07,
   "packages/py/kb": 98.3,
   "packages/py/llm": 96.66,
-  "packages/py/platform-common": 96.21,
+  "packages/py/platform-common": 96.23,
   "packages/py/rules": 98.91,
   "services/agent-worker": 95.51,
   "services/all-in-one": 96.47,
-  "services/api": 91.1,
+  "services/api": 91.29,
   "services/ingest-worker": 92.95,
   "services/kb-indexer": 87.65
 }

@@ -18,7 +18,7 @@ export default defineConfig({
       // No-drop gate: the measured coverage at the time the gate was added (rounded down).
       // TESTING.md's target for the frontend is 75 % lines - raise these as tests are added,
       // never lower them (docs/DECISIONS_LOG.md, 2026-11-19).
-      thresholds: { lines: 35, statements: 34, functions: 31, branches: 32 },
+      thresholds: { lines: 49, statements: 48, functions: 45, branches: 42 },
     },
   },
 });
