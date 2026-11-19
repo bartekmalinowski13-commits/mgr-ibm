@@ -412,6 +412,7 @@
     "forbidden-action": "Twoja rola nie pozwala na tę czynność. Poproś właściciela organizacji o dostęp.",
     "idempotency-key": "Nie udało się bezpiecznie wysłać żądania. Odśwież stronę i spróbuj ponownie.",
     "idempotency-mismatch": "To żądanie zostało już wysłane z inną treścią. Odśwież stronę i spróbuj ponownie.",
+    "internal": "Wystąpił błąd po naszej stronie. Spróbuj ponownie za chwilę; jeśli błąd się powtarza, skontaktuj się z pomocą techniczną.",
     "invalid-cursor": "Pozycja na liście wygasła. Odśwież listę.",
     "invalid-reference": "BOM referencyjny musi być plikiem CSV z kolumną oznaczeń (np. Reference) i co najmniej jedną linią.",
     "invalid-token": "Sesja wygasła. Zaloguj się ponownie.",

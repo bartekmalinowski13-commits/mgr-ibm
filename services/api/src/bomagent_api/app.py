@@ -46,6 +46,7 @@ from bomagent_common.messaging import InMemoryQueue, Queue, make_queue
 from bomagent_common.problems import ProblemError, problem_response
 from bomagent_common.service import create_service_app
 from bomagent_common.storage import InMemoryObjectStore, ObjectStore, make_object_store
+from bomagent_common.telemetry import instrument_sqlalchemy
 from bomagent_kb import KnowledgeBase
 from bomagent_llm.catalog import load_catalog
 from bomagent_llm.embeddings import EmbeddingClient, GatewayEmbeddings, HashingEmbeddings
@@ -303,6 +304,9 @@ def create_app(
     if platform_engine is None and settings.platform_database_url:
         platform_engine = make_engine(settings.platform_database_url, pool_size=2)
 
+    for traced in (engine, platform_engine):  # engines passed in (idempotent for ours)
+        if traced is not None:
+            instrument_sqlalchemy(traced)
     checks: dict[str, ReadinessCheck] = dict(readiness or {})
     if engine is not None:
         db = engine
@@ -318,6 +322,7 @@ def create_app(
         title="BOM Agent API",
         readiness=checks,
         docs=settings.docs_enabled,
+        error_headers=SECURITY_HEADERS,
         lifespan=maintenance.lifespan(
             settings.maintenance_interval_s, settings.run_timeout_s, anchor_sink_for(settings)
         ),

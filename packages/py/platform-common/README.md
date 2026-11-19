@@ -11,9 +11,9 @@
 | `messaging` | `Message` envelope with `tenant_id` + W3C trace carrier; `SqsQueue` (AWS), `PostgresQueue` (Supabase pilot: `app.queue_messages`, migration 0013 - producer engine = app role inserting in the message's tenant, consumer engine = platform role; visibility timeout, receive count, `dead_at` after `max_receive_count` receives, `FOR UPDATE SKIP LOCKED`, long polling by re-query, `dead_letter_count()`/`purge_dead()`), `InMemoryQueue`; `process_one()`/`consume_forever()` restore tenant + trace context, ack only on success, poison messages are dead-lettered |
 | `storage` | `tenant_key()` (`tenants/{id}/...`, traversal-safe); `S3ObjectStore`/`InMemoryObjectStore` refuse keys outside the active tenant's prefix; `make_object_store(settings, bucket)` builds AWS S3 by default or an S3-compatible store (Supabase Storage) from `BOMAGENT_S3_ENDPOINT_URL`, `BOMAGENT_S3_REGION`, `BOMAGENT_S3_FORCE_PATH_STYLE` (credentials from the standard `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY`; optional CRC checksums off for non-AWS endpoints) |
 | `logging` | structlog JSON; drops content-like keys (`prompt`, `content`, ...), masks secrets, adds `trace_id`/`tenant_id` |
-| `telemetry` | OTel tracer provider (OTLP/HTTP), FastAPI/SQLAlchemy/httpx instrumentation |
+| `telemetry` | OTel tracer provider (OTLP/HTTP), FastAPI/SQLAlchemy/httpx instrumentation (`make_engine` traces every engine; `outbox.deliver` is a PRODUCER span) |
 | `outbox` | transactional outbox: `enqueue()`, `deliver()` (SKIP LOCKED; after `MAX_ATTEMPTS`=10 failures a row gets `dead_at` and is no longer retried, `outbox_message_dead` is logged), `cleanup_sent()` (default retention 7 days) |
-| `problems` | RFC 9457 `application/problem+json` handlers, `ProblemError` |
+| `problems` | RFC 9457 `application/problem+json` handlers (incl. a catch-all 500 `internal`, with optional `error_headers`), `ProblemError` |
 | `health`, `service` | `/healthz`, `/readyz`; `create_service_app()` used by all four services |
 
 ## Testing

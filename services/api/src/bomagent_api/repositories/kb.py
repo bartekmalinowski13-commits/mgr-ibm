@@ -36,6 +36,21 @@ async def get_document(conn: AsyncConnection, doc_id: uuid.UUID) -> dict[str, An
     return dict(row._mapping)
 
 
+async def find_current(conn: AsyncConnection, sha256: str) -> uuid.UUID | None:
+    """The organisation's current document with this content, if any."""
+    found = (
+        await conn.execute(
+            select(_d.c.id).where(
+                _d.c.scope == "tenant",
+                _d.c.tenant_id == func.app.current_tenant_id(),
+                _d.c.sha256 == sha256,
+                _d.c.superseded_at.is_(None),
+            )
+        )
+    ).scalar()
+    return None if found is None else uuid.UUID(str(found))
+
+
 async def list_page(
     conn: AsyncConnection, *, scope: str, after: ColumnElement[bool] | None, limit: int
 ) -> list[dict[str, Any]]:

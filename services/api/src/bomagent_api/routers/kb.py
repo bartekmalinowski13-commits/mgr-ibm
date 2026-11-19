@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Form, Request, UploadFile
+from fastapi import APIRouter, Form, Request, Response, UploadFile
 
 from bomagent_api.auth import OrgContext
 from bomagent_api.authz import require
@@ -40,10 +40,16 @@ async def list_documents(
 
 
 @router.post(
-    "/documents", status_code=201, summary="Add a document to the organisation's knowledge"
+    "/documents",
+    status_code=201,
+    summary="Add a document to the organisation's knowledge",
+    responses={
+        200: {"model": KbDocument, "description": "A document with this content already exists"}
+    },
 )
 async def upload_document(
     request: Request,
+    response: Response,
     ctx: OrgContext,
     file: UploadFile,
     kind: Annotated[
@@ -52,7 +58,8 @@ async def upload_document(
     ] = "datasheet",
     manufacturer: Annotated[str, Form(max_length=120)] = "",
 ) -> KbDocument:
-    """Duplicates (same content) return the existing document."""
+    """201 with the new document; a duplicate (same content) returns the existing document
+    with 200 and is not indexed again."""
     require(ctx, "kb.write")
     name = service.safe_filename(file.filename)
     mime = service.mime_of_upload(name)
@@ -62,7 +69,7 @@ async def upload_document(
             413, "Payload Too Large", "document larger than 32 MB", slug="file-too-large"
         )
     state = request.app.state
-    return await service.upload_document(
+    doc, created = await service.upload_document(
         state.engine,
         state.store,
         state.kb,
@@ -74,3 +81,6 @@ async def upload_document(
         kind=kind,
         manufacturer=manufacturer,
     )
+    if not created:
+        response.status_code = 200
+    return doc

@@ -35,10 +35,12 @@ router = APIRouter(
 
 # --------------------------------------------------------------------------- members
 @router.get("/members", summary="List members of the organisation")
-async def list_members(request: Request, ctx: OrgContext) -> Page[Member]:
-    """All members (organisations are small; the page has no next cursor)."""
+async def list_members(
+    request: Request, ctx: OrgContext, cursor: str | None = None, limit: int = 100
+) -> Page[Member]:
+    """Active members, oldest first (cursor-paginated; at most 100 per page)."""
     require(ctx, "member.read")
-    return await service.list_members(request.app.state.engine)
+    return await service.list_members(request.app.state.engine, cursor=cursor, limit=limit)
 
 
 @router.patch("/members/{user_sub}", summary="Change the roles of a member")

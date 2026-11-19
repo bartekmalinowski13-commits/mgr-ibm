@@ -6,7 +6,7 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import ColumnElement, any_, delete, func, literal, select, text, update
+from sqlalchemy import ColumnElement, any_, delete, func, literal, select, text, tuple_, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncConnection
 
@@ -81,12 +81,18 @@ async def lock_owner_subs(conn: AsyncConnection) -> list[str]:
     )
 
 
-async def list_active(conn: AsyncConnection, limit: int) -> list[dict[str, Any]]:
+async def list_active(
+    conn: AsyncConnection, limit: int, after: tuple[datetime, str] | None = None
+) -> list[dict[str, Any]]:
+    """Active members, oldest first; ``after`` is the keyset ``(created_at, user_sub)`` of
+    the last row of the previous page."""
+    stmt = select(*_MEMBER_COLS).where(
+        memberships.c.tenant_id == _THIS_TENANT, memberships.c.status == "active"
+    )
+    if after is not None:
+        stmt = stmt.where(tuple_(memberships.c.created_at, memberships.c.user_sub) > tuple_(*after))
     rows = await conn.execute(
-        select(*_MEMBER_COLS)
-        .where(memberships.c.tenant_id == _THIS_TENANT, memberships.c.status == "active")
-        .order_by(memberships.c.created_at, memberships.c.user_sub)
-        .limit(limit)
+        stmt.order_by(memberships.c.created_at, memberships.c.user_sub).limit(limit)
     )
     return [dict(r._mapping) for r in rows]
 

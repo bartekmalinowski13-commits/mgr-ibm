@@ -9,6 +9,7 @@ GenAI calls use the semantic conventions ``gen_ai.*`` (see ``bomagent_llm``).
 
 from __future__ import annotations
 
+import weakref
 from typing import TYPE_CHECKING
 
 from opentelemetry import metrics as otel_metrics
@@ -30,11 +31,13 @@ from opentelemetry.sdk.trace.export import (
 
 if TYPE_CHECKING:
     from fastapi import FastAPI
+    from sqlalchemy import Engine
     from sqlalchemy.ext.asyncio import AsyncEngine
 
     from bomagent_common.config import ServiceSettings
 
 _provider: TracerProvider | None = None
+_traced_engines: weakref.WeakSet[Engine] = weakref.WeakSet()
 _metric_reader: InMemoryMetricReader | None = None
 #: seconds between metric exports to the collector
 METRIC_EXPORT_INTERVAL_MS = 30_000
@@ -110,9 +113,34 @@ def instrument_fastapi(app: FastAPI) -> None:
 
 
 def instrument_sqlalchemy(engine: AsyncEngine) -> None:
-    from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
+    """Trace every statement of ``engine`` (ADR-0010); idempotent per engine.
 
-    SQLAlchemyInstrumentor().instrument(engine=engine.sync_engine)
+    ``SQLAlchemyInstrumentor.instrument`` is a process-wide singleton that ignores every
+    call after the first, so later engines get their own ``EngineTracer``. Statements are
+    traced as written (bound values are never recorded)."""
+    from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
+    from opentelemetry.instrumentation.sqlalchemy.engine import EngineTracer
+
+    sync = engine.sync_engine
+    if sync in _traced_engines:
+        return
+    _traced_engines.add(sync)
+    instrumentor = SQLAlchemyInstrumentor()
+    if not instrumentor.is_instrumented_by_opentelemetry:
+        # the instrumentation declares "sqlalchemy < 2.1" and silently does nothing for 2.1;
+        # the engine event API it hooks is unchanged in 2.1 (covered by test_api_hardening)
+        instrumentor.instrument(engine=sync, skip_dep_check=True)
+        return
+    usage = otel_metrics.get_meter(
+        "opentelemetry.instrumentation.sqlalchemy"
+    ).create_up_down_counter(
+        name="db.client.connections.usage",
+        unit="connections",
+        description="The number of connections that are currently in the state described by"
+        " the state attribute.",
+    )
+    tracer = trace.get_tracer("opentelemetry.instrumentation.sqlalchemy")
+    EngineTracer(tracer, sync, usage)  # type: ignore[no-untyped-call]  # untyped upstream
 
 
 def instrument_httpx() -> None:

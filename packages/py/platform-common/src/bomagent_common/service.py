@@ -24,6 +24,7 @@ def create_service_app(
     readiness: Mapping[str, ReadinessCheck] | None = None,
     lifespan: Lifespan | None = None,
     docs: bool = False,
+    error_headers: Mapping[str, str] | None = None,
 ) -> FastAPI:
     configure_logging(settings.service_name, level=settings.log_level, json=settings.log_json)
     configure_telemetry(settings)
@@ -36,7 +37,7 @@ def create_service_app(
         redoc_url=None,
         openapi_url="/openapi.json" if docs else None,
     )
-    install_problem_handlers(app)
+    install_problem_handlers(app, error_headers=error_headers)
     app.include_router(health_router(settings.service_name, version, readiness))
     instrument_fastapi(app)
     return app
