@@ -113,7 +113,7 @@ services:
     ports: ["127.0.0.1:4000:4000"]
 
   ollama:
-    image: ollama/ollama:0.40.15
+    image: ollama/ollama:0.40.16
     profiles: ["ollama"]
     volumes: ["ollama:/root/.ollama"]
     ports: ["127.0.0.1:11434:11434"]
