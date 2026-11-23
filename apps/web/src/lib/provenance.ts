@@ -13,8 +13,8 @@ export function lineProvenance(item: Pick<BomItem, "provenance">): ProvenanceKin
 }
 
 export const PROVENANCE_COLOR: Record<ProvenanceKind, string> = {
-  agent: "bg-llm",
-  rule: "bg-rule",
+  agent: "bg-prov-llm",
+  rule: "bg-prov-rule",
   parser: "bg-parser",
   user: "bg-user",
 };

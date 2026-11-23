@@ -223,7 +223,8 @@
     "defib": "Odporność na defibrylację",
     "submit": "Uruchom przebieg",
     "started": "Uruchomiono przebieg",
-    "partlyStarted": "Wariant {{variants}} został już uruchomiony; ponowna próba uruchomi tylko pozostałe."
+    "partlyStarted": "Wariant {{variants}} został już uruchomiony; ponowna próba uruchomi tylko pozostałe.",
+    "pathSketch": "Ścieżka wariantu {{variant}}: {{stages}}"
   },
   "run": {
     "title": "Przebieg",
@@ -266,7 +267,40 @@
     "findings_few": "{{count}} uwagi walidacji",
     "findings_many": "{{count}} uwag walidacji",
     "findings_other": "{{count}} uwagi walidacji",
-    "statusColumn": "Status"
+    "statusColumn": "Status",
+    "nodes": {
+      "extract_group": "Ekstrakcja pozycji",
+      "normalize_group": "Normalizacja",
+      "select_mpn": "Dobór MPN",
+      "validate": "Weryfikacja",
+      "repair": "Naprawa",
+      "assemble": "Składanie",
+      "compose": "Kompozycja",
+      "claude_agent_sdk": "Przebieg agenta",
+      "parse": "Parsowanie projektu"
+    },
+    "actor": {
+      "llm": "LLM",
+      "rule": "reguły",
+      "parser": "parser",
+      "user": "człowiek"
+    },
+    "path": {
+      "label": "Ścieżka przebiegu",
+      "pending": "trwa kolejny etap",
+      "describe": "Ścieżka przebiegu wariantu {{variant}}, {{count}} etapów. {{stages}}.",
+      "stage": "{{n}}. {{label}}, {{actor}}, {{state}}",
+      "state": {
+        "done": "zakończony",
+        "running": "w toku",
+        "pending": "oczekuje"
+      },
+      "end": "koniec"
+    },
+    "pathBoth": "Oba warianty obok siebie",
+    "counters": "Liczniki przebiegu",
+    "live": "Przebieg na żywo",
+    "elapsed": "Upłynęło"
   },
   "bom": {
     "title": "Zestawienie BOM",
@@ -299,7 +333,26 @@
     "csvCopied_one": "Skopiowano CSV ({{count}} linia)",
     "csvCopied_few": "Skopiowano CSV ({{count}} linie)",
     "csvCopied_many": "Skopiowano CSV ({{count}} linii)",
-    "csvCopied_other": "Skopiowano CSV ({{count}} linii)"
+    "csvCopied_other": "Skopiowano CSV ({{count}} linii)",
+    "filters": {
+      "label": "Filtry zestawienia",
+      "all": "Wszystkie",
+      "findings": "Tylko z uwagami",
+      "agent": "Decyzje LLM",
+      "rule": "Decyzje reguł"
+    },
+    "status": {
+      "column": "Stan",
+      "ok": "Zgodne z regułami",
+      "warn": "Do sprawdzenia",
+      "error": "Wymaga decyzji",
+      "dnp": "Nie montować"
+    },
+    "legend": "Pas po lewej stronie wiersza: kreskowany = agent LLM, pełny zielony = reguła, pełny szary = plik projektu, pełny czarny = człowiek.",
+    "emptyAction": "Uruchom nowy przebieg",
+    "emptyFilter": "Żadna pozycja nie spełnia tych filtrów.",
+    "clearFilters": "Wyczyść filtry",
+    "sheetCaption": "Tabela zestawienia BOM. Enter na wierszu otwiera panel pozycji."
   },
   "panel": {
     "title": "Pozycja {{line}}",
@@ -319,7 +372,26 @@
     "agent": "{{agent}} · model {{model}}",
     "parser": "Odczytane z pliku ({{parser}})",
     "user": "Zmienione przez {{user}}",
-    "savedLive": "Zapisano. Wersja BOM {{version}}."
+    "savedLive": "Zapisano. Wersja BOM {{version}}.",
+    "decision": {
+      "agent": "Decyzja agenta LLM",
+      "rule": "Decyzja reguły",
+      "parser": "Odczytane z pliku projektu",
+      "user": "Decyzja człowieka"
+    },
+    "source": "Źródło w bazie wiedzy",
+    "openSource": "{{doc}}, str. {{page}}",
+    "openSourceNoPage": "{{doc}}",
+    "sourceLink": "Otwórz bazę wiedzy",
+    "unknownDoc": "Dokument bazy wiedzy",
+    "rules": "Wyniki reguł",
+    "rulesPassed": "Żadna reguła nie zgłosiła uwag do tej pozycji.",
+    "history": "Historia zmian",
+    "historyEmpty": "Nikt jeszcze nie zmieniał tej pozycji. Historia wersji jest pod tabelą.",
+    "historyUser": "{{field}}: zmienił {{user}}",
+    "change": "Zmień",
+    "rationaleLabel": "Uzasadnienie",
+    "close": "Zamknij panel pozycji"
   },
   "runs": {
     "title": "Przebiegi",
@@ -455,7 +527,19 @@
     "differences_many": "{{count}} różnic między wariantami",
     "differences_other": "{{count}} różnicy między wariantami",
     "same": "Oba warianty zdecydowały tak samo dla każdego oznaczenia.",
-    "missing": "Brak w tym wariancie"
+    "missing": "Brak w tym wariancie",
+    "framed": "Wariant {{variant}}: {{label}}",
+    "variantA": "tylko LLM",
+    "variantB": "hybryda",
+    "metricsTitle": "Zgodność z referencyjnym BOM",
+    "needTwoAction": "Uruchom drugi wariant",
+    "pathTitle": "Ścieżki przebiegów",
+    "reference": "Referencyjny BOM",
+    "referenceNone": "Ten projekt nie ma referencyjnego BOM: tabela porównuje tylko oba warianty.",
+    "illustrative": "Dane poglądowe, makieta",
+    "lead": "Warianty {{a}} i {{b}} tego samego projektu obok siebie",
+    "variantsBoth": "Warianty {{a}} i {{b}}",
+    "sheetTitle": "{{project}}: porównanie wariantów"
   },
   "reference": {
     "title": "Porównanie z BOM referencyjnym",
@@ -616,5 +700,50 @@
     "429": "Zbyt wiele żądań w krótkim czasie. Odczekaj chwilę i spróbuj ponownie.",
     "5xx": "Serwer jest chwilowo niedostępny. Spróbuj ponownie za chwilę.",
     "generic": "Żądanie nie powiodło się (HTTP {{status}}). Spróbuj ponownie; jeśli błąd się powtarza, skontaktuj się z administratorem."
+  },
+  "titleBlock": {
+    "label": "Tabliczka rysunkowa",
+    "revision": "Rew. {{rev}}",
+    "run": "Przebieg {{id}}",
+    "sheet": "Arkusz",
+    "sheetOf": "{{n}}/{{total}}",
+    "illustrative": "Poglądowe",
+    "revisionLetter": "{{n}}"
+  },
+  "demoData": "Dane poglądowe",
+  "empty": {
+    "runs": {
+      "title": "Brak przebiegów",
+      "body": "Przebieg zamienia pliki projektu w BOM i pokazuje, kto zdecydował o każdej pozycji.",
+      "action": "Uruchom nowy przebieg"
+    },
+    "audit": {
+      "title": "Brak zdarzeń dla tych filtrów",
+      "body": "Zdarzenia pojawiają się, gdy ktoś zmienia dane. Poszerz filtry, żeby zobaczyć więcej.",
+      "action": "Wyczyść filtry"
+    },
+    "kb": {
+      "title": "Brak dokumentów w bazie wiedzy",
+      "body": "Dodaj karty katalogowe i normy: agenci cytują je przy każdej pozycji.",
+      "action": "Dodaj dokument"
+    },
+    "projects": {
+      "title": "Brak projektów",
+      "action": "Nazwij pierwszy projekt"
+    },
+    "projectRuns": {
+      "title": "Ten projekt nie ma przebiegów",
+      "body": "Wgraj pliki projektu, a potem uruchom przebieg, żeby dostać pierwszy BOM.",
+      "action": "Uruchom pierwszy przebieg"
+    },
+    "auditNone": {
+      "body": "Zdarzenia pojawiają się, gdy ktoś zmienia dane w tej organizacji."
+    }
+  },
+  "brand": {
+    "example": "Przykładowe wiersze",
+    "legend": "Pochodzenie w wierszu: kreskowany pas oznacza decyzję agenta LLM, pełny zielony pas decyzję reguły. Działa w druku czarno-białym i dla osób z zaburzeniem widzenia barw.",
+    "sampleLlm": "U2 STM32L432KC",
+    "sampleRule": "U1 ADS1292R"
   }
 }

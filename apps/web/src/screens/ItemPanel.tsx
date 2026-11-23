@@ -1,7 +1,8 @@
-import { Button, Input, Textarea } from "@bomagent/ui";
+import { Button, Input, ProvenanceRail, ProvenanceSwatch, Textarea } from "@bomagent/ui";
 import { useQueryClient } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import type { TFunction } from "i18next";
-import { X } from "lucide-react";
+import { Check, TriangleAlert, X } from "lucide-react";
 import {
   type FormEvent,
   type KeyboardEvent as ReactKeyboardEvent,
@@ -11,10 +12,11 @@ import {
 } from "react";
 import { useTranslation } from "react-i18next";
 import { api, call, problemMessage, type Schemas } from "../lib/api";
-import { type BomItem, PROVENANCE_COLOR, type ProvenanceKind } from "../lib/provenance";
+import { type BomItem, lineProvenance, type ProvenanceKind } from "../lib/provenance";
+import { useKbDocuments } from "../lib/queries";
 import { useSession } from "../lib/session";
 import { useToast } from "../lib/toast";
-import { findingsFor } from "./BomTable";
+import { findingsFor, rowStatus } from "./BomTable";
 
 const EDITABLE = ["mpn", "manufacturer", "value", "footprint"] as const;
 type Editable = (typeof EDITABLE)[number];
@@ -120,6 +122,24 @@ export function ItemPanel({
     }
   };
   const changed = EDITABLE.some((f) => values[f] !== (item[f] ?? ""));
+  const kind = lineProvenance(item);
+  const status = rowStatus(item, findings);
+  // the rationale and citations shown first: the MPN decision is the one a reviewer checks
+  const lead = provenance.find(([f]) => f === "mpn")?.[1] ?? provenance[0]?.[1];
+  const citations = provenance.flatMap(([, p]) => p.citations ?? []);
+  const tenantDocs = useKbDocuments(
+    "tenant",
+    citations.some((c) => c.scope === "tenant"),
+  );
+  const globalDocs = useKbDocuments(
+    "global",
+    citations.some((c) => c.scope === "global"),
+  );
+  const docTitle = (id: string, scope: "tenant" | "global") =>
+    (scope === "tenant" ? tenantDocs : globalDocs).data?.items.find((d) => d.id === id)?.title ??
+    t("panel.unknownDoc");
+  const userChanges = provenance.filter(([, p]) => p.kind === "user");
+  const editFirst = useRef<HTMLInputElement>(null);
 
   return (
     <aside
@@ -127,117 +147,186 @@ export function ItemPanel({
       onKeyDown={trapTab}
       aria-labelledby="panel-title"
       className={
-        "fixed inset-x-0 bottom-0 z-30 max-h-[80vh] w-full overflow-y-auto rounded-t-panel border border-line bg-surface p-5 shadow-dialog " +
-        "md:inset-x-auto md:right-0 md:top-0 md:max-h-none md:h-screen md:w-[420px] md:rounded-none md:border-y-0 md:border-r-0 " +
-        "2xl:sticky 2xl:top-20 2xl:z-auto 2xl:h-auto 2xl:max-h-[calc(100vh-6rem)] 2xl:w-[400px] 2xl:shrink-0 2xl:rounded-panel 2xl:border 2xl:shadow-none"
+        "fixed inset-x-0 bottom-0 z-30 max-h-[80vh] w-full overflow-y-auto border border-ink bg-sheet " +
+        "md:inset-x-auto md:right-0 md:top-0 md:h-screen md:max-h-none md:w-[420px] md:border-y-0 md:border-r-0 " +
+        "xl:sticky xl:top-0 xl:z-auto xl:h-auto xl:max-h-screen xl:w-[390px] xl:shrink-0 xl:self-start xl:border-y-0 xl:border-r-0"
       }
     >
       <p role="status" aria-live="polite" className="sr-only">
         {announcement}
       </p>
-      <div className="flex items-start justify-between gap-3">
-        <div>
+      <header className="relative flex items-start justify-between gap-3 border-b border-ink py-4 pl-8 pr-4">
+        <ProvenanceRail kind={kind} />
+        <div className="min-w-0">
           <h3
             id="panel-title"
             ref={titleRef}
             tabIndex={-1}
-            className="font-display text-xl font-bold focus-visible:outline-2 focus-visible:outline-focus"
+            className="break-words font-display text-3xl font-semibold leading-none tracking-[-0.01em]"
           >
-            {t("panel.title", { line: item.line })}
+            {item.refdes.join(", ") || t("panel.title", { line: item.line })}
           </h3>
-          <p className="font-mono text-[13px] text-muted">{item.refdes.join(", ")}</p>
+          <p className="mt-1.5 font-mono text-sm">{item.mpn || "–"}</p>
+          <p
+            className={`mt-1 text-sm font-semibold ${kind === "agent" ? "text-prov-llm" : kind === "rule" ? "text-prov-rule" : ""}`}
+          >
+            {t(`panel.decision.${kind}`)}
+          </p>
         </div>
         <button
           type="button"
           aria-label={t("common.close")}
           onClick={onClose}
-          className="rounded-control p-1.5 text-muted hover:bg-paper hover:text-ink"
+          className="shrink-0 p-1.5 hover:bg-tint"
         >
           <X size={18} aria-hidden />
         </button>
-      </div>
+      </header>
 
-      <h4 className="mt-5 font-medium">{t("panel.fields")}</h4>
-      <ul className="mt-2 flex flex-col gap-3">
-        {provenance.map(([field, p]) => (
-          <li key={field} className="flex gap-3">
-            <span
-              aria-hidden
-              className={`mt-1.5 size-2.5 shrink-0 rounded-full ${PROVENANCE_COLOR[p.kind as ProvenanceKind]}`}
-            />
-            <div className="min-w-0">
-              <p>
-                <span className="font-mono text-[13px]">{field}</span>: {origin(p, t)}
-              </p>
-              {p.rationale ? <p className="text-sm text-muted">{p.rationale}</p> : null}
-              {p.citations?.length ? (
-                <ul className="mt-1 flex flex-col gap-1">
-                  {p.citations.map((c) => (
-                    <li key={c.chunk_id} className="rounded-control bg-paper px-2.5 py-1.5 text-sm">
-                      {c.quote ? <q>{c.quote}</q> : null}{" "}
-                      <span className="text-muted">
-                        ({c.scope}
-                        {c.page ? `, ${t("panel.page", { page: c.page })}` : ""})
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
-            </div>
-          </li>
-        ))}
-      </ul>
+      <div className="flex flex-col gap-5 p-5">
+        <p className="text-sm text-ink-soft">
+          {t("panel.title", { line: item.line })} · {t(`bom.status.${status}`)}
+        </p>
+        {lead?.rationale ? (
+          <div>
+            <h4 className="font-semibold">{t("panel.rationaleLabel")}</h4>
+            <p className="mt-1 max-w-[65ch] leading-relaxed">{lead.rationale}</p>
+          </div>
+        ) : null}
 
-      <h4 className="mt-5 font-medium">{t("panel.findings")}</h4>
-      {own.length ? (
-        <ul className="mt-2 flex flex-col gap-2">
-          {own.map((f) => (
-            <li
-              key={`${f.rule_id}-${f.message}`}
-              className="rounded-control border border-warn/30 bg-warn/5 px-3 py-2 text-sm"
-            >
-              <span className="font-mono text-[13px]">{f.rule_id}</span> – {f.message}
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p className="mt-1 text-sm text-muted">{t("panel.noFindings")}</p>
-      )}
+        {citations.length ? (
+          <div className="border border-ink p-3">
+            <h4 className="text-sm text-ink-soft">{t("panel.source")}</h4>
+            <ul className="mt-1.5 flex flex-col gap-2">
+              {citations.map((c) => (
+                <li key={c.chunk_id}>
+                  {c.quote ? (
+                    <q className="block underline decoration-cite decoration-2 underline-offset-4">
+                      {c.quote}
+                    </q>
+                  ) : null}
+                  <Link
+                    to="/kb"
+                    className="mt-1 inline-block text-sm font-medium underline underline-offset-4"
+                  >
+                    {c.page
+                      ? t("panel.openSource", {
+                          doc: docTitle(c.document_id, c.scope),
+                          page: c.page,
+                        })
+                      : t("panel.openSourceNoPage", { doc: docTitle(c.document_id, c.scope) })}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
 
-      <form onSubmit={save} className="mt-5 border-t border-line pt-4">
-        <h4 className="font-medium">{t("panel.edit")}</h4>
-        <p className="mt-1 text-sm text-muted">{t("panel.editLead")}</p>
-        <div className="mt-3 grid gap-3">
-          {EDITABLE.map((f) => (
-            <label key={f} className="flex flex-col gap-1 text-sm font-medium">
-              {t(`bom.columns.${f}`)}
-              <Input
-                value={values[f]}
-                className={f === "mpn" || f === "footprint" ? "font-mono" : undefined}
-                onChange={(e) => setValues((v) => ({ ...v, [f]: e.target.value }))}
+        <div>
+          <h4 className="font-semibold">{t("panel.rules")}</h4>
+          {own.length ? (
+            <ul className="mt-2 flex flex-col gap-2">
+              {own.map((f) => (
+                <li key={`${f.rule_id}-${f.message}`} className="flex gap-2 text-sm">
+                  <TriangleAlert
+                    size={14}
+                    strokeWidth={2.75}
+                    aria-hidden
+                    className="mt-0.5 shrink-0 text-status-warn"
+                  />
+                  <span>
+                    <span className="font-mono text-[13px]">{f.rule_id}</span>: {f.message}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="mt-1.5 flex items-center gap-2 text-sm">
+              <Check size={14} strokeWidth={2.75} aria-hidden /> {t("panel.rulesPassed")}
+            </p>
+          )}
+        </div>
+
+        <div>
+          <h4 className="font-semibold">{t("panel.fields")}</h4>
+          <ul className="mt-2 flex flex-col gap-3">
+            {provenance.map(([field, p]) => (
+              <li key={field} className="flex gap-3">
+                <span className="mt-1">
+                  <ProvenanceSwatch kind={p.kind as ProvenanceKind} />
+                </span>
+                <div className="min-w-0">
+                  <p>
+                    <span className="font-mono text-[13px]">{field}</span>: {origin(p, t)}
+                  </p>
+                  {p.rationale ? <p className="text-sm text-ink-soft">{p.rationale}</p> : null}
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        <div>
+          <h4 className="font-semibold">{t("panel.history")}</h4>
+          {userChanges.length ? (
+            <ul className="mt-2 flex flex-col gap-1.5 text-sm">
+              {userChanges.map(([field, p]) => (
+                <li key={field}>
+                  {t("panel.historyUser", { field, user: p.kind === "user" ? p.user_id : "" })}
+                  {p.rationale ? <span className="text-ink-soft"> – {p.rationale}</span> : null}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="mt-1.5 text-sm text-ink-soft">{t("panel.historyEmpty")}</p>
+          )}
+        </div>
+
+        <form onSubmit={save} className="border-t border-ink pt-4">
+          <h4 className="font-semibold">{t("panel.edit")}</h4>
+          <p className="mt-1 text-sm text-ink-soft">{t("panel.editLead")}</p>
+          <div className="mt-3 grid gap-3">
+            {EDITABLE.map((f) => (
+              <label key={f} className="flex flex-col gap-1 text-sm font-medium">
+                {t(`bom.columns.${f}`)}
+                <Input
+                  ref={f === "mpn" ? editFirst : undefined}
+                  value={values[f]}
+                  className={f === "mpn" || f === "footprint" ? "font-mono" : undefined}
+                  onChange={(e) => setValues((v) => ({ ...v, [f]: e.target.value }))}
+                />
+              </label>
+            ))}
+            <label className="flex flex-col gap-1 text-sm font-medium">
+              {t("panel.reason")}
+              <Textarea
+                required
+                maxLength={1000}
+                value={reason}
+                placeholder={t("panel.reasonHint")}
+                onChange={(e) => setReason(e.target.value)}
               />
             </label>
-          ))}
-          <label className="flex flex-col gap-1 text-sm font-medium">
-            {t("panel.reason")}
-            <Textarea
-              required
-              maxLength={1000}
-              value={reason}
-              placeholder={t("panel.reasonHint")}
-              onChange={(e) => setReason(e.target.value)}
-            />
-          </label>
-        </div>
-        {error ? (
-          <p role="alert" className="mt-2 text-sm text-error">
-            {error}
-          </p>
-        ) : null}
-        <Button type="submit" className="mt-3" disabled={!changed || !reason.trim()}>
-          {t("panel.saveFix")}
-        </Button>
-      </form>
+          </div>
+          {error ? (
+            <p role="alert" className="mt-2 text-sm text-status-error">
+              {error}
+            </p>
+          ) : null}
+          <div className="mt-3 flex">
+            <Button type="submit" className="flex-1" disabled={!changed || !reason.trim()}>
+              {t("panel.saveFix")}
+            </Button>
+            <Button
+              variant="secondary"
+              className="-ml-px flex-1"
+              onClick={() => editFirst.current?.focus()}
+            >
+              {t("panel.change")}
+            </Button>
+          </div>
+        </form>
+      </div>
     </aside>
   );
 }

@@ -1,4 +1,4 @@
-import { Button, Input } from "@bomagent/ui";
+import { Button, EmptyState, Input } from "@bomagent/ui";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { type FormEvent, useRef, useState } from "react";
@@ -22,6 +22,7 @@ export function ProjectsScreen() {
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState(false);
   const pending = useRef(false);
+  const nameInput = useRef<HTMLInputElement>(null);
   const keys = useIntentKeys();
   const isOwner = useIsOwner();
   const noSamples = !!projects.data && !projects.data.items.some((p) => p.is_sample);
@@ -56,11 +57,12 @@ export function ProjectsScreen() {
     <div className="flex flex-col gap-6">
       <form
         onSubmit={create}
-        className="flex flex-col gap-2 rounded-card border border-line bg-surface p-4 sm:flex-row sm:items-end"
+        className="flex flex-col gap-2 border border-ink bg-sheet p-4 sm:flex-row sm:items-end"
       >
         <label className="flex flex-1 flex-col gap-1.5 font-medium">
           {t("projects.name")}
           <Input
+            ref={nameInput}
             required
             maxLength={200}
             value={name}
@@ -72,7 +74,7 @@ export function ProjectsScreen() {
           {t("projects.create")}
         </Button>
         {error ? (
-          <p role="alert" className="text-sm text-error sm:basis-full">
+          <p role="alert" className="text-sm text-status-error sm:basis-full">
             {error}
           </p>
         ) : null}
@@ -80,13 +82,13 @@ export function ProjectsScreen() {
       {isOwner && noSamples ? (
         <section
           aria-labelledby="samples-title"
-          className="flex flex-col gap-3 rounded-card border border-line bg-surface p-4 sm:flex-row sm:items-center sm:justify-between"
+          className="flex flex-col gap-3 border border-ink bg-sheet p-4 sm:flex-row sm:items-center sm:justify-between"
         >
           <div>
-            <h3 id="samples-title" className="font-display text-lg font-bold">
+            <h3 id="samples-title" className="font-display text-lg font-semibold">
               {t("samples.title")}
             </h3>
-            <p className="max-w-[70ch] text-muted">{t("samples.lead")}</p>
+            <p className="max-w-[70ch] text-ink-soft">{t("samples.lead")}</p>
           </div>
           <AddSamplesButton />
         </section>
@@ -96,9 +98,13 @@ export function ProjectsScreen() {
       ) : projects.isError ? (
         <LoadError error={projects.error} onRetry={() => void projects.refetch()} />
       ) : projects.data.items.length === 0 ? (
-        <p className="max-w-[70ch] rounded-card border border-dashed border-line p-6 text-muted">
-          {t("projects.empty")}
-        </p>
+        <EmptyState
+          title={t("empty.projects.title")}
+          body={t("projects.empty")}
+          action={
+            <Button onClick={() => nameInput.current?.focus()}>{t("empty.projects.action")}</Button>
+          }
+        />
       ) : (
         <ul className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {projects.data.items.map((p) => (
@@ -106,13 +112,13 @@ export function ProjectsScreen() {
               <Link
                 to="/projects/$projectId"
                 params={{ projectId: p.id }}
-                className="block rounded-card border border-line bg-surface p-4 hover:border-ink/40 focus-visible:outline-2 focus-visible:outline-focus"
+                className="block border border-ink bg-sheet p-4 hover:bg-tint focus-visible:outline-2 focus-visible:outline-focus"
               >
-                <span className="block font-display text-lg font-bold">
+                <span className="block font-display text-lg font-semibold">
                   {p.name}
                   {p.is_sample ? <SampleBadge /> : null}
                 </span>
-                <span className="block text-sm text-muted">
+                <span className="block text-sm text-ink-soft">
                   {formatDate(p.created_at, i18n.language)}
                 </span>
               </Link>

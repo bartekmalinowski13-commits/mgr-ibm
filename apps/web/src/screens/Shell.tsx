@@ -33,10 +33,11 @@ export function Shell() {
   const [title, setTitle] = useState("");
   const [newRun, setNewRun] = useState<NewRunPreset | null>(null);
   const [navOpen, setNavOpen] = useState(false);
+  const [desk, setDesk] = useState(false);
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const openNewRun = useCallback((preset?: NewRunPreset) => setNewRun(preset ?? {}), []);
-  const shell = useMemo(() => ({ setTitle, openNewRun }), [openNewRun]);
+  const shell = useMemo(() => ({ setTitle, openNewRun, setDesk }), [openNewRun]);
 
   const orgs = me.data?.organizations ?? [];
   const org = orgs.find((o) => o.org_id === orgId);
@@ -62,27 +63,30 @@ export function Shell() {
   const lang = i18n.language.startsWith("pl") ? "pl-PL" : "en-GB";
 
   const navItem =
-    "flex items-center gap-3 rounded-control px-3 py-2 text-[15px] text-ink/80 hover:bg-paper hover:text-ink " +
-    "focus-visible:outline-2 focus-visible:outline-focus data-[status=active]:bg-paper data-[status=active]:font-medium data-[status=active]:text-ink";
+    "flex items-center gap-3 px-3 py-2 text-[15px] text-on-ink hover:bg-ink-hover hover:text-sheet " +
+    "data-[status=active]:bg-sheet data-[status=active]:font-semibold data-[status=active]:text-ink";
 
   const sidebar = (
-    <nav aria-label={t("nav.label")} className="flex h-full flex-col gap-6 p-4">
+    <nav
+      aria-label={t("nav.label")}
+      className="on-ink flex h-full flex-col gap-6 bg-ink p-4 text-sheet"
+    >
       <Menu>
-        <MenuTrigger className="flex w-full items-center gap-3 rounded-card border border-line bg-surface p-2.5 text-left hover:border-ink/30 focus-visible:outline-2 focus-visible:outline-focus">
+        <MenuTrigger className="flex w-full items-center gap-3 border border-sheet p-2.5 text-left hover:bg-ink-hover">
           <span
             aria-hidden
-            className="grid size-9 shrink-0 place-items-center rounded-control bg-ink font-display text-lg font-extrabold text-surface"
+            className="grid size-9 shrink-0 place-items-center bg-sheet font-display text-lg font-semibold text-ink"
           >
             {(org?.name ?? "?").slice(0, 1).toUpperCase()}
           </span>
           <span className="min-w-0 flex-1">
             <span className="sr-only">{t("nav.switchOrg")}: </span>
             <span className="block truncate font-medium">{org?.name ?? t("common.loading")}</span>
-            <span className="block truncate text-sm text-muted">
+            <span className="block truncate text-sm text-desk">
               {org?.roles.map((r) => t(`settings.roles.${r}`)).join(", ")}
             </span>
           </span>
-          <ChevronsUpDown size={16} aria-hidden className="text-muted" />
+          <ChevronsUpDown size={16} aria-hidden className="text-desk" />
         </MenuTrigger>
         <MenuContent>
           {orgs.map((o) => (
@@ -107,7 +111,7 @@ export function Shell() {
             setNavOpen(false);
             openNewRun();
           }}
-          className={cn(navItem, "text-left font-medium text-ink")}
+          className={cn(navItem, "border border-sheet text-left font-semibold text-sheet")}
         >
           <Plus size={18} aria-hidden /> {t("nav.newRun")}
         </button>
@@ -115,7 +119,7 @@ export function Shell() {
 
       {projects.data?.items.length ? (
         <div>
-          <p className="px-3 pb-1 text-sm text-muted">{t("nav.recent")}</p>
+          <p className="px-3 pb-1 text-sm text-desk">{t("nav.recent")}</p>
           <div className="flex flex-col gap-0.5">
             {projects.data.items.slice(0, 4).map((p) => (
               <Link
@@ -133,7 +137,7 @@ export function Shell() {
       ) : null}
 
       <div className="flex flex-col gap-1">
-        <p className="px-3 pb-1 text-sm text-muted">{org?.name}</p>
+        <p className="px-3 pb-1 text-sm text-desk">{org?.name}</p>
         <Link to="/projects" className={navItem} onClick={() => setNavOpen(false)}>
           <FolderKanban size={18} aria-hidden /> {t("nav.projects")}
         </Link>
@@ -151,7 +155,7 @@ export function Shell() {
         </Link>
       </div>
 
-      <div className="mt-auto flex flex-col gap-1 border-t border-line pt-4">
+      <div className="mt-auto flex flex-col gap-1 border-t border-ink-soft pt-4">
         <button
           type="button"
           className={cn(navItem, "text-left")}
@@ -173,7 +177,7 @@ export function Shell() {
         >
           <LogOut size={18} aria-hidden />
           <span className="min-w-0 truncate">
-            {t("nav.signOut")} <span className="text-muted">({session.email})</span>
+            {t("nav.signOut")} <span className="text-desk">({session.email})</span>
           </span>
         </button>
       </div>
@@ -183,11 +187,11 @@ export function Shell() {
   return (
     <ShellCtx.Provider value={shell}>
       <div className="min-h-screen lg:grid lg:grid-cols-[264px_1fr]">
-        <aside className="hidden border-r border-line bg-surface lg:block">
+        <aside className="hidden border-r border-ink bg-ink lg:block">
           <div className="sticky top-0 h-screen overflow-y-auto">{sidebar}</div>
         </aside>
         <div className="min-w-0">
-          <header className="flex items-center gap-3 border-b border-line bg-paper/90 px-4 py-3 backdrop-blur sm:px-8">
+          <header className="flex items-center gap-3 border-b border-ink bg-sheet px-4 py-3 sm:px-8">
             <NavDrawer
               open={navOpen}
               onOpenChange={setNavOpen}
@@ -196,22 +200,24 @@ export function Shell() {
             >
               {sidebar}
             </NavDrawer>
-            <h1 className="min-w-0 flex-1 truncate font-display text-xl font-bold">{title}</h1>
+            <h1 className="min-w-0 flex-1 truncate font-display text-2xl font-semibold tracking-[-0.01em]">
+              {title}
+            </h1>
             {usage.data ? (
               <QuotaChips usage={usage.data.usage} limits={usage.data.limits} scope={orgId} />
             ) : null}
             {usage.data ? (
               <Link
                 to="/settings"
-                className="hidden items-center gap-3 rounded-full border border-line bg-surface py-1 pl-3 pr-1 text-sm sm:flex"
+                className="hidden items-center gap-3 border border-ink bg-sheet py-1 pl-3 pr-1 text-sm hover:bg-tint sm:flex"
               >
-                <span className="text-muted">
+                <span className="text-ink-soft">
                   {t("plan.budget", {
                     used: formatEur(used, lang),
                     limit: formatEur(limit, lang),
                   })}
                 </span>
-                <span className="rounded-full bg-llm/10 px-2.5 py-0.5 font-medium text-llm">
+                <span className="border-l border-ink px-2.5 py-0.5 font-medium">
                   {t("plan.pill", {
                     plan: t(`plan.names.${usage.data.plan}`, {
                       defaultValue: usage.data.plan ?? "",
@@ -221,7 +227,13 @@ export function Shell() {
               </Link>
             ) : null}
           </header>
-          <main className="mx-auto w-full max-w-[1280px] px-4 py-6 sm:px-8 sm:py-8">
+          <main
+            className={
+              desk
+                ? "min-h-[calc(100vh-57px)] bg-desk p-3 sm:p-5"
+                : "mx-auto w-full max-w-[1280px] px-4 py-6 sm:px-8 sm:py-8"
+            }
+          >
             <Outlet />
           </main>
         </div>

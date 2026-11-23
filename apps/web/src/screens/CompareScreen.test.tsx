@@ -12,6 +12,8 @@ vi.mock("../lib/api", async (orig) => ({
 const runsData = vi.fn();
 vi.mock("../lib/queries", () => ({
   useRuns: () => ({ isPending: false, isError: false, data: { items: runsData() } }),
+  useRuntime: () => ({ data: undefined }),
+  useProjects: () => ({ data: undefined }),
 }));
 vi.mock("../lib/session", () => ({ useSession: () => ({ orgId: "org" }) }));
 vi.mock("@tanstack/react-router", () => ({ useNavigate: () => vi.fn() }));
@@ -26,6 +28,9 @@ const run = (id: string, variant: "A" | "B") => ({
   variant,
   status: "completed",
   model_id: "m",
+  project_id: "p",
+  created_at: "2026-11-23T10:00:00Z",
+  started_at: "2026-11-23T10:00:00Z",
   usage: {},
 });
 const bom = {

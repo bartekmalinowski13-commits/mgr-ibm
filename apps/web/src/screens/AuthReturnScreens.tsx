@@ -45,17 +45,14 @@ export function ResetPasswordScreen() {
   return (
     <AuthLayout title={t("login.reset.title")} lead={t("login.reset.lead")}>
       {done ? (
-        <p role="status" className="rounded-card border border-line bg-surface p-4">
+        <p role="status" className=" border border-ink bg-sheet p-4">
           {t("login.reset.done")}{" "}
           <Link to="/login" className={link}>
             {t("login.reset.signIn")}
           </Link>
         </p>
       ) : token ? (
-        <form
-          onSubmit={submit}
-          className="flex flex-col gap-4 rounded-panel border border-line bg-surface p-6"
-        >
+        <form onSubmit={submit} className="flex flex-col gap-4 border border-ink bg-sheet p-6">
           <label className="flex flex-col gap-1.5 font-medium">
             {t("login.reset.newPassword")}
             <Input
@@ -68,7 +65,7 @@ export function ResetPasswordScreen() {
             />
           </label>
           {error ? (
-            <p role="alert" className="text-sm text-error">
+            <p role="alert" className="text-sm text-status-error">
               {error}
             </p>
           ) : null}
@@ -77,7 +74,7 @@ export function ResetPasswordScreen() {
           </Button>
         </form>
       ) : (
-        <p role="alert" className="rounded-card border border-error/30 bg-error/5 p-4">
+        <p role="alert" className=" border border-status-error/30 bg-status-error/5 p-4">
           {t("login.reset.missing")}{" "}
           <Link to="/login" className={link}>
             {t("login.retry")}

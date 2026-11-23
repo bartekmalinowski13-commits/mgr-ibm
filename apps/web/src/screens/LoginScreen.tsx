@@ -48,7 +48,7 @@ export function LoginScreen() {
       <AuthLayout title={t("login.title")} lead={t("login.lead")}>
         <form
           onSubmit={continueLogin}
-          className="flex flex-col gap-4 rounded-panel border border-line bg-surface p-6"
+          className="flex flex-col gap-4 border border-ink bg-sheet p-6"
         >
           <label className="flex flex-col gap-1.5 font-medium">
             {t("login.email")}
@@ -60,14 +60,14 @@ export function LoginScreen() {
             />
           </label>
           {error ? (
-            <p role="alert" className="text-sm text-error">
+            <p role="alert" className="text-sm text-status-error">
               {error}
             </p>
           ) : null}
           <Button type="submit" disabled={busy} className="self-start">
             {t("login.continue")}
           </Button>
-          <p className="text-sm text-muted">{t("login.cloudNote")}</p>
+          <p className="text-sm text-ink-soft">{t("login.cloudNote")}</p>
         </form>
       </AuthLayout>
     );
@@ -90,10 +90,7 @@ export function LoginScreen() {
 
   return (
     <AuthLayout title={t("login.title")} lead={t("login.lead")}>
-      <form
-        onSubmit={submit}
-        className="flex flex-col gap-4 rounded-panel border border-line bg-surface p-6"
-      >
+      <form onSubmit={submit} className="flex flex-col gap-4 border border-ink bg-sheet p-6">
         <label className="flex flex-col gap-1.5 font-medium">
           {t("login.email")}
           <Input
@@ -114,14 +111,14 @@ export function LoginScreen() {
           />
         </label>
         {error ? (
-          <p role="alert" className="text-sm text-error">
+          <p role="alert" className="text-sm text-status-error">
             {error}
           </p>
         ) : null}
         <Button type="submit" disabled={busy} className="mt-2 self-start">
           {t("login.submit")}
         </Button>
-        <p className="border-t border-line pt-4 text-sm text-muted">{t("login.devNote")}</p>
+        <p className="border-t border-rule pt-4 text-sm text-ink-soft">{t("login.devNote")}</p>
       </form>
     </AuthLayout>
   );

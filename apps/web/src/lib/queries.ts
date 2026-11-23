@@ -78,3 +78,13 @@ export function useModels() {
     staleTime: 5 * 60_000,
   });
 }
+
+/** Knowledge-base documents of one scope (shared cache key with the knowledge-base screen). */
+export function useKbDocuments(scope: "tenant" | "global", enabled = true) {
+  const { orgId } = useSession();
+  return useQuery({
+    queryKey: ["kb", orgId, scope],
+    queryFn: () => call(api.GET("/v1/kb/documents", { params: { query: { scope, limit: 100 } } })),
+    enabled: enabled && !!orgId,
+  });
+}

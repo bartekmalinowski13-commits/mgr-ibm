@@ -22,28 +22,27 @@ export function DialogContent({
 }) {
   return (
     <D.Portal>
-      <D.Overlay className="fixed inset-0 bg-ink/30 motion-safe:animate-[fade_120ms_ease-out]" />
+      <D.Overlay className="fixed inset-0 bg-ink/40" />
       <D.Content
         className={cn(
           "fixed left-1/2 top-[8vh] w-[min(720px,calc(100vw-32px))] -translate-x-1/2",
-          "max-h-[84vh] overflow-y-auto rounded-panel bg-surface p-6 shadow-dialog",
+          "max-h-[84vh] overflow-y-auto border border-ink bg-sheet p-6",
           "focus-visible:outline-none",
           className,
         )}
       >
         <div className="mb-5 flex items-start justify-between gap-4">
           <div>
-            <D.Title className="font-display text-2xl font-extrabold leading-tight text-ink">
+            <D.Title className="font-display text-2xl font-semibold leading-tight tracking-[-0.01em] text-ink">
               {title}
             </D.Title>
             {description ? (
-              <D.Description className="mt-1 text-[15px] text-muted">{description}</D.Description>
+              <D.Description className="mt-1 text-[15px] text-ink-soft">
+                {description}
+              </D.Description>
             ) : null}
           </div>
-          <D.Close
-            aria-label={closeLabel}
-            className="rounded-control p-1.5 text-muted hover:bg-paper hover:text-ink focus-visible:outline-2 focus-visible:outline-focus"
-          >
+          <D.Close aria-label={closeLabel} className="p-1.5 text-ink hover:bg-tint">
             <X size={18} aria-hidden />
           </D.Close>
         </div>
@@ -71,11 +70,11 @@ export function SheetContent({
 }) {
   return (
     <D.Portal>
-      <D.Overlay className="fixed inset-0 z-40 bg-ink/30 motion-safe:animate-[fade_120ms_ease-out]" />
+      <D.Overlay className="fixed inset-0 z-40 bg-ink/40" />
       <D.Content
         aria-describedby={undefined}
         className={cn(
-          "fixed inset-y-0 left-0 z-50 w-[min(280px,calc(100vw-48px))] overflow-y-auto bg-surface shadow-dialog",
+          "on-ink fixed inset-y-0 left-0 z-50 w-[min(280px,calc(100vw-48px))] overflow-y-auto border-r border-ink bg-ink text-sheet",
           "focus-visible:outline-none",
           className,
         )}
@@ -83,7 +82,7 @@ export function SheetContent({
         <D.Title className="sr-only">{title}</D.Title>
         <D.Close
           aria-label={closeLabel}
-          className="absolute right-2 top-2 z-10 rounded-control p-1.5 text-muted hover:bg-paper hover:text-ink focus-visible:outline-2 focus-visible:outline-focus"
+          className="absolute right-2 top-2 z-10 p-1.5 text-sheet hover:bg-ink-hover"
         >
           <X size={18} aria-hidden />
         </D.Close>
@@ -94,5 +93,5 @@ export function SheetContent({
 }
 
 export function DialogFooter({ children }: { children: ReactNode }) {
-  return <div className="mt-6 flex justify-end gap-3 border-t border-line pt-4">{children}</div>;
+  return <div className="mt-6 flex justify-end gap-3 border-t border-rule pt-4">{children}</div>;
 }

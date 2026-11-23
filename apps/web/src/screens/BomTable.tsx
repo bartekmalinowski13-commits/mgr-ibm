@@ -1,3 +1,4 @@
+import { ProvenanceRail, Segmented, type Status, StatusBadge } from "@bomagent/ui";
 import {
   type ColumnDef,
   flexRender,
@@ -9,18 +10,30 @@ import {
   type VisibilityState,
 } from "@tanstack/react-table";
 import { observeElementRect, useVirtualizer } from "@tanstack/react-virtual";
-import { AlertTriangle, ArrowDown, ArrowUp, ArrowUpDown, Columns3, Copy } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, Columns3, Copy } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { Schemas } from "../lib/api";
 import { bomToCsv, type CsvColumn, matchesQuery } from "../lib/bomView";
-import { type BomItem, lineProvenance, PROVENANCE_COLOR } from "../lib/provenance";
+import { type BomItem, lineProvenance } from "../lib/provenance";
 import { useToast } from "../lib/toast";
 
 export function findingsFor(item: BomItem, findings: Schemas["Finding"][]): Schemas["Finding"][] {
   const refs = new Set(item.refdes);
   return findings.filter((f) => f.line === item.line || (f.refdes ?? []).some((r) => refs.has(r)));
 }
+
+export type RowStatus = Extract<Status, "ok" | "warn" | "error">;
+
+/** Worst severity among the findings of a line: error = needs a decision, warning/review = check. */
+export function rowStatus(item: BomItem, findings: Schemas["Finding"][]): RowStatus {
+  const own = findingsFor(item, findings);
+  if (own.some((f) => f.severity === "error")) return "error";
+  if (own.some((f) => f.severity === "warning" || f.severity === "review")) return "warn";
+  return "ok";
+}
+
+type Filter = "all" | "findings" | "agent" | "rule";
 
 const ROW_HEIGHT = 44;
 const FALLBACK_HEIGHT = 600;
@@ -46,15 +59,21 @@ export function BomTable({
 }) {
   const { t } = useTranslation();
   const toast = useToast();
-  const [onlyFindings, setOnlyFindings] = useState(false);
+  const [filter, setFilter] = useState<Filter>("all");
   const [query, setQuery] = useState("");
   const [sorting, setSorting] = useState<SortingState>([]);
   const [visibility, setVisibility] = useState<VisibilityState>({});
   const findings = bom.findings ?? [];
-  const data = useMemo(
-    () => (onlyFindings ? bom.items.filter((i) => findingsFor(i, findings).length) : bom.items),
-    [bom.items, findings, onlyFindings],
+  const withFindings = useMemo(
+    () => bom.items.filter((i) => findingsFor(i, findings).length).length,
+    [bom.items, findings],
   );
+  const data = useMemo(() => {
+    if (filter === "findings") return bom.items.filter((i) => findingsFor(i, findings).length);
+    if (filter === "agent" || filter === "rule")
+      return bom.items.filter((i) => lineProvenance(i) === filter);
+    return bom.items;
+  }, [bom.items, findings, filter]);
   const columns = useMemo<ColumnDef<BomItem>[]>(
     () => [
       { id: "line", header: t("bom.columns.line"), accessorFn: (i) => i.line },
@@ -103,17 +122,18 @@ export function BomTable({
       },
       {
         id: "notes",
-        header: t("bom.columns.notes"),
+        header: t("bom.status.column"),
         accessorFn: (i) => findingsFor(i, findings).length,
         cell: ({ row }) => {
-          const n = findingsFor(row.original, findings).length;
-          return n ? (
-            <span className="inline-flex items-center gap-1 text-warn">
-              <AlertTriangle size={14} aria-hidden /> {n}
+          const st = rowStatus(row.original, findings);
+          return (
+            <span className="inline-flex flex-wrap items-center gap-x-3 gap-y-0.5">
+              <StatusBadge status={st} label={t(`bom.status.${st}`)} />
+              {row.original.dnp ? (
+                <span className="text-sm text-ink-soft">{t("bom.status.dnp")}</span>
+              ) : null}
             </span>
-          ) : row.original.dnp ? (
-            <span className="text-muted">{t("bom.dnp")}</span>
-          ) : null;
+          );
         },
       },
     ],
@@ -168,32 +188,37 @@ export function BomTable({
     }
   };
 
-  const filtered = onlyFindings || query.trim() !== "";
+  const filtered = filter !== "all" || query.trim() !== "";
+  const filterOptions: { value: Filter; label: string; count?: number }[] = [
+    { value: "findings", label: t("bom.filters.findings"), count: withFindings },
+    { value: "all", label: t("bom.filters.all"), count: bom.items.length },
+    { value: "agent", label: t("bom.filters.agent") },
+    { value: "rule", label: t("bom.filters.rule") },
+  ];
+  const control =
+    "inline-flex h-9 items-center gap-1.5 border border-ink bg-sheet px-3 text-[13.5px] font-medium hover:bg-tint";
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+        <Segmented
+          label={t("bom.filters.label")}
+          options={filterOptions}
+          value={filter}
+          onChange={(v) => setFilter(filter === v && v !== "all" ? "all" : v)}
+        />
         <input
           type="search"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder={t("bom.search")}
           aria-label={t("bom.search")}
-          className="min-w-[200px] flex-1 rounded-control border border-line bg-surface px-3 py-1.5 focus-visible:outline-2 focus-visible:outline-focus sm:max-w-xs"
+          className="h-9 min-w-[200px] flex-1 border border-ink bg-sheet px-3 sm:max-w-xs"
         />
-        <label className="inline-flex items-center gap-2">
-          <input
-            type="checkbox"
-            checked={onlyFindings}
-            onChange={(e) => setOnlyFindings(e.target.checked)}
-            className="size-4 accent-ink"
-          />
-          {t("bom.onlyFindings")}
-        </label>
         <details className="relative">
-          <summary className="flex cursor-pointer list-none items-center gap-1.5 rounded-control border border-line bg-surface px-3 py-1.5 focus-visible:outline-2 focus-visible:outline-focus">
+          <summary className={`${control} cursor-pointer list-none`}>
             <Columns3 size={16} aria-hidden /> {t("bom.columnsMenu")}
           </summary>
-          <fieldset className="absolute z-20 mt-1 flex min-w-[180px] flex-col gap-1 rounded-card border border-line bg-surface p-3 shadow-dialog">
+          <fieldset className="absolute z-20 mt-1 flex min-w-[180px] flex-col gap-1 border border-ink bg-sheet p-3">
             <legend className="sr-only">{t("bom.columnsMenu")}</legend>
             {table.getAllLeafColumns().map((c) => (
               <label key={c.id} className="inline-flex items-center gap-2">
@@ -203,31 +228,32 @@ export function BomTable({
                   onChange={c.getToggleVisibilityHandler()}
                   className="size-4 accent-ink"
                 />
-                {t(`bom.columns.${c.id}`)}
+                {t(c.id === "notes" ? "bom.status.column" : `bom.columns.${c.id}`)}
               </label>
             ))}
           </fieldset>
         </details>
-        <button
-          type="button"
-          onClick={() => void copyCsv()}
-          className="flex items-center gap-1.5 rounded-control border border-line bg-surface px-3 py-1.5 hover:border-ink/40 focus-visible:outline-2 focus-visible:outline-focus"
-        >
+        <button type="button" onClick={() => void copyCsv()} className={control}>
           <Copy size={16} aria-hidden /> {t("bom.copyCsv")}
         </button>
-        <span className="text-sm text-muted" aria-live="polite">
+        <span className="font-mono text-sm text-ink-soft" aria-live="polite">
           {t("bom.count", { shown: rows.length, total: bom.items.length })}
         </span>
       </div>
-      <div
+      <p className="text-sm text-ink-soft">{t("bom.legend")}</p>
+      <section
         ref={scrollRef}
-        className="max-h-[70vh] overflow-auto rounded-card border border-line bg-surface"
+        // biome-ignore lint/a11y/noNoninteractiveTabindex: scrollable region must be focusable
+        tabIndex={0}
+        aria-label={t("bom.title")}
+        className="max-h-[70vh] overflow-auto border-y border-ink bg-sheet"
       >
         <table className="w-full min-w-[860px] border-collapse text-left text-[14px]">
-          <thead className="sticky top-0 z-10 border-b border-line bg-surface text-[13px] text-muted">
+          <caption className="sr-only">{t("bom.sheetCaption")}</caption>
+          <thead className="sticky top-0 z-10 bg-sheet text-[13px] text-ink-soft">
             {table.getHeaderGroups().map((g) => (
               <tr key={g.id}>
-                <th scope="col" className="w-1 p-0">
+                <th scope="col" className="w-2 border-b border-ink p-0">
                   <span className="sr-only">{t("bom.origin")}</span>
                 </th>
                 {g.headers.map((h) => {
@@ -236,7 +262,7 @@ export function BomTable({
                     <th
                       key={h.id}
                       scope="col"
-                      className="px-3 py-2.5 font-medium"
+                      className="border-b border-ink px-3 py-2 font-medium"
                       aria-sort={
                         dir === "asc" ? "ascending" : dir === "desc" ? "descending" : "none"
                       }
@@ -244,7 +270,7 @@ export function BomTable({
                       <button
                         type="button"
                         onClick={h.column.getToggleSortingHandler()}
-                        className="inline-flex items-center gap-1 font-medium hover:text-ink focus-visible:outline-2 focus-visible:outline-focus"
+                        className="inline-flex items-center gap-1 font-medium hover:text-ink"
                       >
                         {flexRender(h.column.columnDef.header, h.getContext())}
                         {dir === "asc" ? (
@@ -286,16 +312,14 @@ export function BomTable({
                       onSelect(row.original.line);
                     }
                   }}
-                  className={`cursor-pointer border-b border-line focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus ${
-                    active ? "bg-paper" : "hover:bg-paper/60"
-                  } ${row.original.dnp ? "text-muted" : ""}`}
+                  className={`cursor-pointer border-b border-rule ${
+                    active
+                      ? "bg-tint outline outline-2 -outline-offset-2 outline-ink"
+                      : "hover:bg-tint"
+                  } ${row.original.dnp ? "text-ink-soft" : ""}`}
                 >
-                  <td className="relative w-1 p-0">
-                    <span
-                      className={`absolute inset-y-0 left-0 w-1 ${PROVENANCE_COLOR[kind]}`}
-                      title={t(`bom.provenance.${kind}`)}
-                    />
-                    <span className="sr-only">{t(`bom.provenance.${kind}`)}</span>
+                  <td className="relative w-2 p-0">
+                    <ProvenanceRail kind={kind} label={t(`bom.provenance.${kind}`)} />
                   </td>
                   {row.getVisibleCells().map((cell) => (
                     <td key={cell.id} className="px-3 py-2.5 align-top">
@@ -313,9 +337,23 @@ export function BomTable({
           </tbody>
         </table>
         {rows.length === 0 ? (
-          <p className="p-6 text-muted">{filtered ? t("bom.noMatches") : t("bom.empty")}</p>
+          <div className="flex flex-col items-start gap-2 p-6">
+            <p>{filtered ? t("bom.emptyFilter") : t("bom.empty")}</p>
+            {filtered ? (
+              <button
+                type="button"
+                className="font-medium underline underline-offset-4"
+                onClick={() => {
+                  setFilter("all");
+                  setQuery("");
+                }}
+              >
+                {t("bom.clearFilters")}
+              </button>
+            ) : null}
+          </div>
         ) : null}
-      </div>
+      </section>
     </div>
   );
 }

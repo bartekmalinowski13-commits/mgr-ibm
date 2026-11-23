@@ -106,10 +106,7 @@ export function SupabaseLogin({ cfg }: { cfg: SupabaseConfig }) {
 
   return (
     <AuthLayout title={t("login.title")} lead={t("login.lead")}>
-      <form
-        onSubmit={submit}
-        className="flex flex-col gap-4 rounded-panel border border-line bg-surface p-6"
-      >
+      <form onSubmit={submit} className="flex flex-col gap-4 border border-ink bg-sheet p-6">
         {providers.length > 0 ? (
           <>
             <fieldset className="m-0 flex min-w-0 flex-col gap-2 border-0 p-0">
@@ -129,10 +126,10 @@ export function SupabaseLogin({ cfg }: { cfg: SupabaseConfig }) {
                 </Button>
               ))}
             </fieldset>
-            <div className="flex items-center gap-3 text-sm text-muted" aria-hidden>
-              <span className="h-px flex-1 bg-line" />
+            <div className="flex items-center gap-3 text-sm text-ink-soft" aria-hidden>
+              <span className="h-px flex-1 bg-rule" />
               {t("login.supabase.social.or")}
-              <span className="h-px flex-1 bg-line" />
+              <span className="h-px flex-1 bg-rule" />
             </div>
           </>
         ) : null}
@@ -169,7 +166,7 @@ export function SupabaseLogin({ cfg }: { cfg: SupabaseConfig }) {
           />
         </label>
         {error ? (
-          <p role="alert" className="text-sm text-error">
+          <p role="alert" className="text-sm text-status-error">
             {error}
           </p>
         ) : null}
@@ -198,7 +195,9 @@ export function SupabaseLogin({ cfg }: { cfg: SupabaseConfig }) {
             </button>
           )}
         </div>
-        <p className="border-t border-line pt-4 text-sm text-muted">{t("login.supabase.note")}</p>
+        <p className="border-t border-rule pt-4 text-sm text-ink-soft">
+          {t("login.supabase.note")}
+        </p>
       </form>
     </AuthLayout>
   );

@@ -36,41 +36,41 @@ export function TemplateArt({ template }: { template: Template }) {
       {template === "ecg" ? (
         <path
           {...stroke}
-          className="stroke-llm"
+          className="stroke-ink"
           d="M0 60 H52 l6-8 6 8 H86 l5 10 7-52 7 60 5-18 H134 q8-14 16 0 H200"
         />
       ) : null}
       {template === "pulseox" ? (
         <>
           <path {...stroke} className="stroke-ink" d="M60 70 V38 a20 20 0 0 1 40 0 V70" />
-          <circle cx="80" cy="44" r="6" className="fill-error/80" />
-          <path {...stroke} className="stroke-llm" d="M116 56 q10-24 20 0 t20 0 t20 0" />
+          <circle cx="80" cy="44" r="6" className="fill-ink" />
+          <path {...stroke} className="stroke-ink" d="M116 56 q10-24 20 0 t20 0 t20 0" />
         </>
       ) : null}
       {template === "eeg" ? (
         <>
           <path
             {...stroke}
-            className="stroke-llm"
+            className="stroke-ink"
             d="M0 30 q10-10 20 0 t20 0 t20 0 t20 0 t20 0 t20 0 t20 0 t20 0 t20 0 t20 0"
           />
           <path
             {...stroke}
-            className="stroke-rule"
+            className="stroke-ink-soft"
             d="M0 52 q8 8 16 0 t16 0 t16 0 t16 0 t16 0 t16 0 t16 0 t16 0 t16 0 t16 0 t16 0 t16 0 t16 0"
           />
           <path
             {...stroke}
-            className="stroke-ink/60"
+            className="stroke-ink-soft"
             d="M0 74 q12-6 24 0 t24 0 t24 0 t24 0 t24 0 t24 0 t24 0 t24 0 t24 0"
           />
         </>
       ) : null}
       {template === "infusion" ? (
         <>
-          <rect x="70" y="14" width="34" height="52" rx="6" {...stroke} className="stroke-ink" />
+          <rect x="70" y="14" width="34" height="52" {...stroke} className="stroke-ink" />
           <path {...stroke} className="stroke-ink" d="M87 66 V80 H150" />
-          <path className="fill-llm" d="M150 70 q6 9 0 14 q-6-5 0-14z" />
+          <path className="fill-ink" d="M150 70 q6 9 0 14 q-6-5 0-14z" />
         </>
       ) : null}
     </svg>

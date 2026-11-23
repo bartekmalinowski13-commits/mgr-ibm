@@ -1,4 +1,4 @@
-import { Button, Select } from "@bomagent/ui";
+import { Button, EmptyState, ScrollRegion, Select } from "@bomagent/ui";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { ShieldCheck } from "lucide-react";
 import { useState } from "react";
@@ -83,7 +83,7 @@ export function AuditScreen() {
       {verdict ? (
         <p
           role="status"
-          className={`rounded-card border p-3 ${verdict.ok ? "border-ok/30 bg-ok/5" : "border-error/30 bg-error/5"}`}
+          className={`border p-3 ${verdict.ok ? "border-ink bg-tint" : "border-status-error bg-sheet text-status-error"}`}
         >
           {verdict.text}
         </p>
@@ -93,11 +93,21 @@ export function AuditScreen() {
       ) : events.isError ? (
         <LoadError error={events.error} onRetry={() => void events.refetch()} />
       ) : rows.length === 0 ? (
-        <p className="text-muted">{t("audit.empty")}</p>
+        <EmptyState
+          title={t("empty.audit.title")}
+          body={objectType ? t("empty.audit.body") : t("empty.auditNone.body")}
+          action={
+            objectType ? (
+              <Button variant="secondary" onClick={() => setObjectType("")}>
+                {t("empty.audit.action")}
+              </Button>
+            ) : undefined
+          }
+        />
       ) : (
-        <div className="overflow-x-auto rounded-card border border-line bg-surface">
+        <ScrollRegion label={t("audit.title")} className="border border-ink bg-sheet">
           <table className="w-full min-w-[720px] text-left text-[14px]">
-            <thead className="border-b border-line text-[13px] text-muted">
+            <thead className="border-b border-rule text-[13px] text-ink-soft">
               <tr>
                 <th scope="col" className="px-4 py-2.5 font-medium">
                   #
@@ -118,24 +128,24 @@ export function AuditScreen() {
             </thead>
             <tbody>
               {rows.map((e) => (
-                <tr key={e.seq} className="border-b border-line last:border-0">
-                  <td className="px-4 py-2.5 tabular-nums text-muted">{e.seq}</td>
+                <tr key={e.seq} className="border-b border-rule last:border-0">
+                  <td className="px-4 py-2.5 tabular-nums text-ink-soft">{e.seq}</td>
                   <td className="px-4 py-2.5">{formatDate(e.occurred_at, i18n.language)}</td>
                   <td className="px-4 py-2.5 font-mono text-[13px]">{e.action}</td>
                   <td className="px-4 py-2.5">
                     {e.object_type}{" "}
-                    <span className="font-mono text-[12px] text-muted">
+                    <span className="font-mono text-[12px] text-ink-soft">
                       {e.object_id.slice(0, 8)}
                     </span>
                   </td>
                   <td className="px-4 py-2.5">
-                    {e.actor_id} <span className="text-muted">({e.actor_type})</span>
+                    {e.actor_id} <span className="text-ink-soft">({e.actor_type})</span>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
-        </div>
+        </ScrollRegion>
       )}
       {events.hasNextPage ? (
         <Button

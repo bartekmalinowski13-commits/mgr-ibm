@@ -20,11 +20,11 @@ function Secret({ label, value }: { label: string; value: string }) {
   const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
   return (
-    <div role="status" className="rounded-card border border-llm/30 bg-llm/5 p-4">
+    <div role="status" className=" border border-ink bg-tint p-4">
       <p>{label}</p>
       <div className="mt-2 flex flex-col gap-2 sm:flex-row">
         <code
-          className="min-w-0 flex-1 break-all rounded-control bg-surface px-3 py-2 font-mono text-[13px]"
+          className="min-w-0 flex-1 break-all bg-sheet px-3 py-2 font-mono text-[13px]"
           data-testid="secret"
         >
           {value}
@@ -48,8 +48,8 @@ function Section({ title, lead, children }: { title: string; lead?: string; chil
   return (
     <section className="flex flex-col gap-3">
       <div>
-        <h2 className="font-display text-2xl font-bold">{title}</h2>
-        {lead ? <p className="max-w-[70ch] text-muted">{lead}</p> : null}
+        <h2 className="font-display text-2xl font-semibold">{title}</h2>
+        {lead ? <p className="max-w-[70ch] text-ink-soft">{lead}</p> : null}
       </div>
       {children}
     </section>
@@ -108,12 +108,12 @@ function Members() {
         ) : members.isError ? (
           <LoadError error={members.error} />
         ) : (
-          <ul className="divide-y divide-line rounded-card border border-line bg-surface">
+          <ul className="divide-y divide-rule border border-ink bg-sheet">
             {members.data.items.map((m) => (
               <li key={m.user_sub} className="flex flex-wrap items-center gap-3 px-4 py-3">
                 <div className="min-w-0 flex-1">
                   <p className="font-medium">{m.display_name || m.email}</p>
-                  <p className="text-sm text-muted">{m.email}</p>
+                  <p className="text-sm text-ink-soft">{m.email}</p>
                 </div>
                 <label className="sr-only" htmlFor={`role-${m.user_sub}`}>
                   {t("settings.role")}
@@ -181,7 +181,7 @@ function Members() {
       <Section title={t("settings.invite")}>
         <form
           onSubmit={invite}
-          className="flex flex-col gap-3 rounded-card border border-line bg-surface p-4 sm:flex-row sm:items-end"
+          className="flex flex-col gap-3 border border-ink bg-sheet p-4 sm:flex-row sm:items-end"
         >
           <label className="flex flex-1 flex-col gap-1.5 font-medium">
             {t("settings.inviteEmail")}
@@ -200,21 +200,21 @@ function Members() {
           <Button type="submit">{t("settings.sendInvite")}</Button>
         </form>
         {error ? (
-          <p role="alert" className="text-sm text-error">
+          <p role="alert" className="text-sm text-status-error">
             {error}
           </p>
         ) : null}
         {token ? <Secret label={t("settings.invited")} value={token} /> : null}
         <h3 className="mt-2 font-medium">{t("settings.pending")}</h3>
         {invites.data?.items.length ? (
-          <ul className="divide-y divide-line rounded-card border border-line bg-surface">
+          <ul className="divide-y divide-rule border border-ink bg-sheet">
             {invites.data.items.map((i) => (
               <li key={i.id} className="flex flex-wrap items-center gap-3 px-4 py-3">
                 <span className="min-w-0 flex-1">{i.email}</span>
-                <span className="text-sm text-muted">
+                <span className="text-sm text-ink-soft">
                   {i.roles.map((r) => t(`settings.roles.${r}`)).join(", ")}
                 </span>
-                <span className="text-sm text-muted">
+                <span className="text-sm text-ink-soft">
                   {t("settings.expires", { date: formatDate(i.expires_at, i18n.language) })}
                 </span>
                 <Button
@@ -240,7 +240,7 @@ function Members() {
             ))}
           </ul>
         ) : (
-          <p className="text-muted">{t("settings.noPending")}</p>
+          <p className="text-ink-soft">{t("settings.noPending")}</p>
         )}
       </Section>
     </div>
@@ -256,7 +256,7 @@ function Sso() {
   if (supabase) {
     return (
       <Section title={t("settings.sso")} lead={t("settings.ssoLead")}>
-        <p className="text-muted">{t("settings.ssoUnavailable")}</p>
+        <p className="text-ink-soft">{t("settings.ssoUnavailable")}</p>
       </Section>
     );
   }
@@ -305,9 +305,9 @@ function SsoSettings() {
 
   return (
     <Section title={t("settings.sso")} lead={t("settings.ssoLead")}>
-      <div className="flex flex-col gap-3 rounded-card border border-line bg-surface p-4">
-        <h3 className="font-display text-lg font-bold">{t("sso.domains")}</h3>
-        <p className="text-sm text-muted">{t("sso.domainsLead")}</p>
+      <div className="flex flex-col gap-3 border border-ink bg-sheet p-4">
+        <h3 className="font-display text-lg font-semibold">{t("sso.domains")}</h3>
+        <p className="text-sm text-ink-soft">{t("sso.domainsLead")}</p>
         <form
           className="flex flex-col gap-3 sm:flex-row sm:items-end"
           onSubmit={(e) => {
@@ -332,12 +332,12 @@ function SsoSettings() {
           <Button type="submit">{t("sso.addDomain")}</Button>
         </form>
         {sso.data.domains.length ? (
-          <ul className="divide-y divide-line">
+          <ul className="divide-y divide-rule">
             {sso.data.domains.map((d) => (
               <li key={d.domain} className="flex flex-col gap-2 py-3">
                 <div className="flex flex-wrap items-center gap-3">
                   <span className="flex-1 font-medium">{d.domain}</span>
-                  <span className={d.verified ? "text-sm text-ok" : "text-sm text-muted"}>
+                  <span className={d.verified ? "text-sm text-ink" : "text-sm text-ink-soft"}>
                     {d.verified ? t("sso.verified") : t("sso.notVerified")}
                   </span>
                   {d.verified ? null : (
@@ -379,7 +379,7 @@ function SsoSettings() {
                   </Button>
                 </div>
                 {d.verified ? null : (
-                  <p className="text-sm text-muted">
+                  <p className="text-sm text-ink-soft">
                     {t("sso.txtHint")}{" "}
                     <code className="break-all font-mono text-[13px] text-ink">{d.txt_name}</code> ={" "}
                     <code className="break-all font-mono text-[13px] text-ink">{d.txt_value}</code>
@@ -392,7 +392,7 @@ function SsoSettings() {
       </div>
 
       <form
-        className="flex flex-col gap-3 rounded-card border border-line bg-surface p-4"
+        className="flex flex-col gap-3 border border-ink bg-sheet p-4"
         onSubmit={(e) => {
           e.preventDefault();
           void run(async () => {
@@ -417,7 +417,7 @@ function SsoSettings() {
           });
         }}
       >
-        <h3 className="font-display text-lg font-bold">{t("sso.provider")}</h3>
+        <h3 className="font-display text-lg font-semibold">{t("sso.provider")}</h3>
         <label className="flex flex-col gap-1.5 font-medium sm:w-60">
           {t("sso.protocol")}
           <Select value={protocol} onChange={(e) => setProtocol(e.target.value as typeof protocol)}>
@@ -484,12 +484,12 @@ function SsoSettings() {
           />
           <span>
             <span className="font-medium">{t("sso.enforce")}</span>
-            <span className="block text-sm text-muted">{t("sso.enforceHint")}</span>
+            <span className="block text-sm text-ink-soft">{t("sso.enforceHint")}</span>
           </span>
         </label>
         {conn ? (
           <dl className="grid gap-1 text-sm sm:grid-cols-[max-content_1fr] sm:gap-x-4">
-            <dt className="text-muted">{t("sso.status")}</dt>
+            <dt className="text-ink-soft">{t("sso.status")}</dt>
             <dd>
               <span role="status">
                 {t(`sso.statuses.${conn.status}`)}
@@ -498,13 +498,13 @@ function SsoSettings() {
             </dd>
             {conn.sp_acs_url ? (
               <>
-                <dt className="text-muted">{t("sso.acsUrl")}</dt>
+                <dt className="text-ink-soft">{t("sso.acsUrl")}</dt>
                 <dd className="break-all font-mono text-[13px]">{conn.sp_acs_url}</dd>
               </>
             ) : null}
             {conn.sp_entity_id ? (
               <>
-                <dt className="text-muted">{t("sso.entityId")}</dt>
+                <dt className="text-ink-soft">{t("sso.entityId")}</dt>
                 <dd className="break-all font-mono text-[13px]">{conn.sp_entity_id}</dd>
               </>
             ) : null}
@@ -563,7 +563,7 @@ function Keys() {
     <Section title={t("settings.keys")} lead={t("settings.keysLead")}>
       <form
         onSubmit={create}
-        className="flex flex-col gap-3 rounded-card border border-line bg-surface p-4 sm:flex-row sm:items-end"
+        className="flex flex-col gap-3 border border-ink bg-sheet p-4 sm:flex-row sm:items-end"
       >
         <label className="flex flex-1 flex-col gap-1.5 font-medium">
           {t("settings.keyName")}
@@ -587,12 +587,12 @@ function Keys() {
       </form>
       {secret ? <Secret label={t("settings.keyCreated")} value={secret} /> : null}
       {keys.data?.items.length ? (
-        <ul className="divide-y divide-line rounded-card border border-line bg-surface">
+        <ul className="divide-y divide-rule border border-ink bg-sheet">
           {keys.data.items.map((k) => (
             <li key={k.id} className="flex flex-wrap items-center gap-3 px-4 py-3">
               <div className="min-w-0 flex-1">
                 <p className="font-medium">{k.name}</p>
-                <p className="text-sm text-muted">
+                <p className="text-sm text-ink-soft">
                   <span className="font-mono">{k.prefix}…</span> –{" "}
                   {t("settings.lastUsed", {
                     date: k.last_used_at
@@ -601,7 +601,7 @@ function Keys() {
                   })}
                 </p>
               </div>
-              <span className="text-sm text-muted">
+              <span className="text-sm text-ink-soft">
                 {k.roles.map((r) => t(`settings.roles.${r}`)).join(", ")}
               </span>
               <Button
@@ -647,7 +647,7 @@ function Keys() {
           ))}
         </ul>
       ) : (
-        <p className="text-muted">{t("settings.noKeys")}</p>
+        <p className="text-ink-soft">{t("settings.noKeys")}</p>
       )}
     </Section>
   );
@@ -687,12 +687,12 @@ function Usage() {
     <Section title={t("settings.usage")}>
       <dl className="grid gap-4 sm:grid-cols-2">
         {rows.map((r) => (
-          <div key={r.key} className="rounded-card border border-line bg-surface p-4">
-            <dt className="text-muted">{t(`settings.usageItems.${r.key}`)}</dt>
-            <dd className="mt-1 font-display text-2xl font-bold tabular-nums">
+          <div key={r.key} className=" border border-ink bg-sheet p-4">
+            <dt className="text-ink-soft">{t(`settings.usageItems.${r.key}`)}</dt>
+            <dd className="mt-1 font-display text-2xl font-semibold tabular-nums">
               {r.fmt(r.used)}{" "}
               {r.limit ? (
-                <span className="font-sans text-base font-normal text-muted">
+                <span className="font-sans text-base font-normal text-ink-soft">
                   {t("settings.of", { limit: r.fmt(r.limit) })}
                 </span>
               ) : null}
@@ -704,10 +704,10 @@ function Usage() {
                   aria-valuemax={r.limit}
                   aria-valuenow={r.used}
                   aria-label={t(`settings.usageItems.${r.key}`)}
-                  className="mt-3 h-2 overflow-hidden rounded-full bg-line"
+                  className="mt-3 h-2 overflow-hidden bg-rule"
                 >
                   <div
-                    className={r.used / r.limit > 0.8 ? "h-full bg-warn" : "h-full bg-ink"}
+                    className={r.used / r.limit > 0.8 ? "h-full bg-status-warn" : "h-full bg-ink"}
                     style={{ width: `${Math.min(100, (r.used / r.limit) * 100)}%` }}
                   />
                 </div>
@@ -729,14 +729,14 @@ export function SettingsScreen() {
   const admin = roles.includes("owner") || roles.includes("admin");
   const [tab, setTab] = useState<Tab>("members");
   if (me.isPending) return <Skeleton />;
-  if (!admin) return <p className="text-muted">{t("errors.notMember")}</p>;
+  if (!admin) return <p className="text-ink-soft">{t("errors.notMember")}</p>;
   const tabs: Tab[] = ["members", "keys", "usage", "sso"];
   return (
     <div className="flex flex-col gap-6">
       <div
         role="tablist"
         aria-label={t("settings.title")}
-        className="flex flex-wrap gap-1 border-b border-line"
+        className="flex flex-wrap gap-1 border-b border-rule"
       >
         {tabs.map((id) => (
           <button
@@ -746,7 +746,7 @@ export function SettingsScreen() {
             aria-selected={tab === id}
             onClick={() => setTab(id)}
             className={`-mb-px border-b-2 px-3 py-2 font-medium focus-visible:outline-2 focus-visible:outline-focus ${
-              tab === id ? "border-ink text-ink" : "border-transparent text-muted hover:text-ink"
+              tab === id ? "border-ink text-ink" : "border-transparent text-ink-soft hover:text-ink"
             }`}
           >
             {t(`settings.tabs.${id}`)}
