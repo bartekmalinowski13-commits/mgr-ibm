@@ -22,3 +22,4 @@ Format: Context → Decision → Consequences → Alternatives considered. Statu
 | [0016](0016-db-migrations-package.md) | One migration package with hand-written DDL and database roles |
 | [0017](0017-supabase-pilot-variant.md) | Second, lightweight deployment variant on Supabase (EU) for pilots (proposed) |
 | [0018](0018-deployment-tiers.md) | Deployment tiers: Standard (Fly + Supabase) and Enterprise (AWS) (proposed) |
+| [0020](0020-visual-identity-drawing-sheet.md) | Visual identity: the technical drawing sheet |
