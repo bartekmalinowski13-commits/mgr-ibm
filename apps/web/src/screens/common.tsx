@@ -1,4 +1,11 @@
-import { Button, type Status, StatusBadge } from "@bomagent/ui";
+import {
+  Button,
+  ProvenanceSwatch,
+  ScrollRegion,
+  type Status,
+  StatusBadge,
+  VARIANT_TEXT,
+} from "@bomagent/ui";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useState } from "react";
@@ -35,9 +42,9 @@ export function RunTable({
 }) {
   const { t, i18n } = useTranslation();
   return (
-    <div className="overflow-x-auto rounded-card border border-line bg-surface">
+    <ScrollRegion label={t("run.title")} className="border border-ink bg-sheet">
       <table className="w-full min-w-[640px] text-left">
-        <thead className="border-b border-line text-sm text-muted">
+        <thead className="border-b border-rule text-sm text-ink-soft">
           <tr>
             <th className="px-4 py-2.5 font-medium">{t("run.title")}</th>
             {projects ? <th className="px-4 py-2.5 font-medium">{t("newRun.project")}</th> : null}
@@ -48,19 +55,20 @@ export function RunTable({
         </thead>
         <tbody>
           {runs.map((r) => (
-            <tr key={r.id} className="border-b border-line last:border-0 hover:bg-paper/50">
+            <tr key={r.id} className="border-b border-rule last:border-0 hover:bg-tint/50">
               <td className="px-4 py-3">
                 <Link
                   to="/runs/$runId"
                   params={{ runId: r.id }}
-                  className="font-medium underline-offset-4 hover:underline"
+                  className={`inline-flex items-center gap-2 font-semibold underline-offset-4 hover:underline ${r.variant === "A" || r.variant === "B" ? VARIANT_TEXT[r.variant] : ""}`}
                 >
+                  <ProvenanceSwatch kind={r.variant === "A" ? "agent" : "rule"} />
                   {t("run.variant", { variant: r.variant })}
                 </Link>
               </td>
               {projects ? <td className="px-4 py-3">{projects.get(r.project_id) ?? "–"}</td> : null}
               <td className="px-4 py-3 font-mono text-sm">{r.model_id}</td>
-              <td className="px-4 py-3 text-muted">{formatDate(r.created_at, i18n.language)}</td>
+              <td className="px-4 py-3 text-ink-soft">{formatDate(r.created_at, i18n.language)}</td>
               <td className="px-4 py-3">
                 <RunStatus status={r.status} />
               </td>
@@ -68,14 +76,14 @@ export function RunTable({
           ))}
         </tbody>
       </table>
-    </div>
+    </ScrollRegion>
   );
 }
 
 export function LoadError({ error, onRetry }: { error: unknown; onRetry?: () => void }) {
   const { t } = useTranslation();
   return (
-    <div role="alert" className="rounded-card border border-error/30 bg-error/5 p-4">
+    <div role="alert" className=" border border-status-error/30 bg-status-error/5 p-4">
       <p>{problemMessage(error) || t("common.unknownError")}</p>
       {onRetry ? (
         <button
@@ -101,7 +109,7 @@ export function Skeleton({ rows = 3 }: { rows?: number }) {
     >
       {Array.from({ length: rows }, (_, i) => (
         // biome-ignore lint/suspicious/noArrayIndexKey: placeholders
-        <div key={i} className="h-12 rounded-card bg-line/50 motion-safe:animate-pulse" />
+        <div key={i} className="h-12 bg-rule/50" />
       ))}
     </div>
   );
@@ -110,7 +118,7 @@ export function Skeleton({ rows = 3 }: { rows?: number }) {
 export function SampleBadge() {
   const { t } = useTranslation();
   return (
-    <span className="ml-2 rounded-control border border-line px-1.5 py-0.5 align-middle text-xs font-medium text-muted">
+    <span className="ml-2 border border-ink px-1.5 py-0.5 align-middle text-xs font-medium text-ink-soft">
       {t("samples.badge")}
     </span>
   );

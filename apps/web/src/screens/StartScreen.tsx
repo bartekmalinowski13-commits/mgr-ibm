@@ -49,7 +49,7 @@ export function StartScreen() {
 
   return (
     <div className="flex flex-col gap-10">
-      <h2 className="font-display text-[44px] font-extrabold leading-[1.02] tracking-tight sm:text-[64px]">
+      <h2 className="font-display text-[44px] font-semibold leading-[1.02] tracking-tight sm:text-[64px]">
         {t("start.greeting", { name: session?.name || session?.email })}
       </h2>
 
@@ -66,22 +66,19 @@ export function StartScreen() {
       ) : null}
 
       {panelOpen ? (
-        <section
-          aria-labelledby="new-run-title"
-          className="rounded-panel border border-line bg-surface p-6"
-        >
+        <section aria-labelledby="new-run-title" className=" border border-ink bg-sheet p-6">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <h3 id="new-run-title" className="font-display text-2xl font-bold">
+              <h3 id="new-run-title" className="font-display text-2xl font-semibold">
                 {t("start.newRunTitle")}
               </h3>
-              <p className="mt-1 max-w-[70ch] text-muted">{t("start.newRunLead")}</p>
+              <p className="mt-1 max-w-[70ch] text-ink-soft">{t("start.newRunLead")}</p>
             </div>
             <button
               type="button"
               aria-label={t("common.close")}
               onClick={() => setPanelOpen(false)}
-              className="rounded-control p-1.5 text-muted hover:bg-paper hover:text-ink"
+              className=" p-1.5 text-ink-soft hover:bg-tint hover:text-ink"
             >
               <X size={18} aria-hidden />
             </button>
@@ -91,13 +88,13 @@ export function StartScreen() {
               <button
                 type="button"
                 onClick={() => openNewRun()}
-                className="flex h-full w-full flex-col items-center justify-center gap-2 rounded-card border-2 border-dashed border-line p-6 text-center hover:border-ink/40 focus-visible:outline-2 focus-visible:outline-focus"
+                className="flex h-full w-full flex-col items-center justify-center gap-2 border-2 border-dashed border-ink p-6 text-center hover:bg-tint focus-visible:outline-2 focus-visible:outline-focus"
               >
-                <span className="grid size-10 place-items-center rounded-full bg-ink text-surface">
+                <span className="grid size-10 place-items-center bg-ink text-sheet">
                   <Plus size={20} aria-hidden />
                 </span>
                 <span className="font-medium">{t("start.blank")}</span>
-                <span className="text-sm text-muted">{t("start.blankHint")}</span>
+                <span className="text-sm text-ink-soft">{t("start.blankHint")}</span>
               </button>
             </li>
             {(Object.keys(TEMPLATES) as (keyof typeof TEMPLATES)[]).map((key) => (
@@ -105,14 +102,14 @@ export function StartScreen() {
                 <button
                   type="button"
                   onClick={() => openNewRun({ template: key })}
-                  className="w-full overflow-hidden rounded-card border border-line text-left hover:border-ink/40 focus-visible:outline-2 focus-visible:outline-focus"
+                  className="w-full overflow-hidden border border-ink text-left hover:bg-tint focus-visible:outline-2 focus-visible:outline-focus"
                 >
-                  <span className="block bg-paper/60">
+                  <span className="block bg-tint/60">
                     <TemplateArt template={key} />
                   </span>
                   <span className="block p-3">
                     <span className="block font-medium">{t(`start.templates.${key}.title`)}</span>
-                    <span className="block text-sm text-muted">
+                    <span className="block text-sm text-ink-soft">
                       {t(`start.templates.${key}.hint`)}
                     </span>
                   </span>
@@ -125,13 +122,10 @@ export function StartScreen() {
 
       <section className="grid gap-4 md:grid-cols-3">
         {stats.map((s) => (
-          <div
-            key={s.label}
-            className="flex flex-col gap-2 rounded-card border border-line bg-surface p-5"
-          >
-            <h3 className="text-muted">{s.label}</h3>
+          <div key={s.label} className="flex flex-col gap-2 border border-ink bg-sheet p-5">
+            <h3 className="text-ink-soft">{s.label}</h3>
             {s.value > 0 ? (
-              <Link to={s.to} className="font-display text-4xl font-extrabold hover:underline">
+              <Link to={s.to} className="font-display text-4xl font-semibold hover:underline">
                 {s.value}
               </Link>
             ) : (

@@ -49,28 +49,28 @@ export function VersionHistory({ runId, current }: { runId: string; current: num
 
   return (
     <section aria-labelledby="history-title" className="flex flex-col gap-3">
-      <h3 id="history-title" className="font-display text-xl font-bold">
+      <h3 id="history-title" className="font-display text-xl font-semibold">
         {t("history.title")}
       </h3>
-      <ol className="divide-y divide-line rounded-card border border-line bg-surface">
+      <ol className="divide-y divide-rule border border-ink bg-sheet">
         {list.map((v) => (
           <li key={v.version} className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-2.5">
             <span className="font-medium">{t("run.version", { version: v.version })}</span>
-            <span className="min-w-0 flex-1 truncate text-sm text-muted">
+            <span className="min-w-0 flex-1 truncate text-sm text-ink-soft">
               {v.reason === "generated" ? t("history.generated") : v.reason}
             </span>
-            <span className="text-sm text-muted">{formatDate(v.created_at, i18n.language)}</span>
-            <span className="text-sm text-muted">{t("history.lines", { count: v.lines })}</span>
+            <span className="text-sm text-ink-soft">{formatDate(v.created_at, i18n.language)}</span>
+            <span className="text-sm text-ink-soft">{t("history.lines", { count: v.lines })}</span>
           </li>
         ))}
       </ol>
       {list.length > 1 ? (
-        <div className="flex flex-col gap-3 rounded-card border border-line bg-surface p-4">
+        <div className="flex flex-col gap-3 border border-ink bg-sheet p-4">
           <div className="flex flex-wrap items-center gap-3">
             <label className="flex items-center gap-2 text-sm">
               {t("history.from")}
               <select
-                className="h-9 rounded-control border border-line bg-surface px-2"
+                className="h-9 border border-ink bg-sheet px-2"
                 value={from}
                 onChange={(e) => setPicked({ ...picked, from: Number(e.target.value) })}
               >
@@ -80,7 +80,7 @@ export function VersionHistory({ runId, current }: { runId: string; current: num
             <label className="flex items-center gap-2 text-sm">
               {t("history.to")}
               <select
-                className="h-9 rounded-control border border-line bg-surface px-2"
+                className="h-9 border border-ink bg-sheet px-2"
                 value={to}
                 onChange={(e) => setPicked({ ...picked, to: Number(e.target.value) })}
               >
@@ -89,9 +89,9 @@ export function VersionHistory({ runId, current }: { runId: string; current: num
             </label>
           </div>
           <div aria-live="polite">
-            {from === to ? <p className="text-muted">{t("history.pickTwo")}</p> : null}
+            {from === to ? <p className="text-ink-soft">{t("history.pickTwo")}</p> : null}
             {diff.isError ? <LoadError error={diff.error} /> : null}
-            {same ? <p className="text-muted">{t("history.noChanges")}</p> : null}
+            {same ? <p className="text-ink-soft">{t("history.noChanges")}</p> : null}
             {diff.data && !same ? (
               <ul className="flex flex-col gap-2 text-sm">
                 {diff.data.changed.map((c) => (
@@ -102,8 +102,8 @@ export function VersionHistory({ runId, current }: { runId: string; current: num
                     <ul className="ml-4 list-disc">
                       {c.fields.map((f) => (
                         <li key={f.field}>
-                          {f.field}: <del className="text-error">{f.before || "–"}</del>{" "}
-                          <ins className="text-ok no-underline">{f.after || "–"}</ins>
+                          {f.field}: <del className="text-status-error">{f.before || "–"}</del>{" "}
+                          <ins className="text-ink no-underline">{f.after || "–"}</ins>
                         </li>
                       ))}
                     </ul>

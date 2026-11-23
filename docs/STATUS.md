@@ -4,6 +4,13 @@
 
 _Updated by Claude Code after every milestone (see `docs/prompts/CLAUDE_CODE_MASTER_PROMPT.md` §5)._
 
+## 2026-11-23 - visual identity: the technical drawing sheet (ADR-0020)
+
+- `apps/web` and `packages/ts/ui` restyled: tokens, Plex Sans Condensed/Sans/Mono (local, latin + latin-ext), square 1px-outline components, black sidebar, white sheet on a grey desk on the BOM/run/comparison screens. No logic, API or schema change.
+- New signature components: `ProvenanceRail` (hatched LLM / solid rule), `TitleBlock` (real run data, "Illustrative" in demo), `RunPath` (+ `RunPathMini` in the new-run cards), `Segmented` filters, `EmptyState`, `ZoneFrame` (brand screen only). One animation: the 240 ms path draw when a stage finishes.
+- Guards: `design-rules.test.ts` (no radius/shadow/gradient/extra animation, violet/green only for provenance), `a11y.test.ts` (token contrast), `e2e/identity.spec.ts` (axe + screenshots of every screen at 375 and 1440 px, `docs/design/screenshots/`).
+- Not done, see `docs/DECISIONS_LOG.md`: "Approve item" (no API endpoint), Mobbin references (MCP unavailable), PDF export of the BOM (does not exist).
+
 ## 2026-11-17 - audit PRs merged, Mistral enabled in the catalogue
 
 - Merged on request of the owner: migrations 0015 (SECURITY DEFINER `tenancy.create_organization`, the platform role loses direct INSERT on tenants and memberships) and 0016 (concurrent indexes), the Supabase access-token hook SQL and runbook, step-up MFA (`BOMAGENT_MFA_ENFORCED`, off by default), SSO hardening (discovery as POST: the web app and API ship in one image and must be deployed together), the rest of the ARCH-04 service/repository layers, and the downgrade round-trip test with the fixes it needed (revisions 0010 and 0003).

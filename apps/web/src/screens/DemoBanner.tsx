@@ -11,7 +11,7 @@ export function DemoBanner() {
     <aside
       aria-label={t("demo.title")}
       data-testid="demo-banner"
-      className="flex items-start gap-2 border-b border-warn/40 bg-warn/10 px-4 py-2 text-sm text-ink sm:px-8"
+      className="flex items-start gap-2 border-b border-status-warn/40 bg-status-warn/10 px-4 py-2 text-sm text-ink sm:px-8"
     >
       <FlaskConical size={16} aria-hidden className="mt-0.5 shrink-0" />
       <p>

@@ -54,14 +54,14 @@ export function FirstBomChecklist({
     <section
       aria-labelledby="checklist-title"
       data-testid="first-bom-checklist"
-      className="rounded-panel border border-line bg-surface p-6"
+      className=" border border-ink bg-sheet p-6"
     >
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h3 id="checklist-title" className="font-display text-2xl font-bold">
+          <h3 id="checklist-title" className="font-display text-2xl font-semibold">
             {t("checklist.title")}
           </h3>
-          <p className="mt-1 text-muted">{t("checklist.progress", { done })}</p>
+          <p className="mt-1 text-ink-soft">{t("checklist.progress", { done })}</p>
         </div>
         <button
           type="button"
@@ -74,7 +74,7 @@ export function FirstBomChecklist({
               /* private mode: the card just returns next visit */
             }
           }}
-          className="rounded-control p-1.5 text-muted hover:bg-paper hover:text-ink"
+          className=" p-1.5 text-ink-soft hover:bg-tint hover:text-ink"
         >
           <X size={18} aria-hidden />
         </button>
@@ -84,21 +84,19 @@ export function FirstBomChecklist({
           <li
             key={s.key}
             aria-current={s.key === next ? "step" : undefined}
-            className={`flex gap-3 rounded-card border p-4 ${
-              s.key === next ? "border-ink" : "border-line"
-            }`}
+            className={`flex gap-3 border p-4 ${s.key === next ? "border-ink" : "border-rule"}`}
           >
             <span
               aria-hidden
-              className={`grid size-7 shrink-0 place-items-center rounded-full text-sm font-bold ${
-                s.done ? "bg-ink text-surface" : "border border-line text-muted"
+              className={`grid size-7 shrink-0 place-items-center text-sm font-semibold ${
+                s.done ? "bg-ink text-sheet" : "border border-ink text-ink-soft"
               }`}
             >
               {s.done ? <Check size={16} /> : i + 1}
             </span>
             <div className="flex flex-col gap-1">
               <p className="font-medium">{t(`checklist.steps.${s.key}.title`)}</p>
-              <p className="text-sm text-muted">{t(`checklist.steps.${s.key}.hint`)}</p>
+              <p className="text-sm text-ink-soft">{t(`checklist.steps.${s.key}.hint`)}</p>
               {s.done ? <span className="sr-only">{t("checklist.done")}</span> : null}
               {s.key === next ? <p className="text-[15px]">{action(s.key)}</p> : null}
             </div>

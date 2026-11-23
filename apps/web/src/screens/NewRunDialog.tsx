@@ -6,6 +6,7 @@ import {
   DialogFooter,
   Field,
   Input,
+  RunPathMini,
   Select,
 } from "@bomagent/ui";
 import { useQueryClient } from "@tanstack/react-query";
@@ -21,37 +22,20 @@ import { TEMPLATES } from "./templates";
 
 type Choice = "A" | "B" | "both";
 
-/** Pipeline sketch in provenance colours: violet = LLM step, green = rule step. */
-function PipelineSketch({ steps }: { steps: ("llm" | "rule")[] }) {
-  return (
-    <svg viewBox={`0 0 ${steps.length * 28} 16`} aria-hidden className="h-4">
-      <line
-        x1="8"
-        y1="8"
-        x2={steps.length * 28 - 20}
-        y2="8"
-        className="stroke-line"
-        strokeWidth="2"
-      />
-      {steps.map((s, i) => (
-        <circle
-          // biome-ignore lint/suspicious/noArrayIndexKey: fixed decorative sequence
-          key={i}
-          cx={8 + i * 28}
-          cy="8"
-          r="6"
-          className={s === "llm" ? "fill-llm" : "fill-rule"}
-        />
-      ))}
-    </svg>
-  );
-}
+/**
+ * Stages per variant as the run path shows them: A is LLM all the way, B is parsed and
+ * normalised by rules with an LLM step for the MPN choice (the pipelines in the agents package).
+ */
+const PATHS: Record<Choice, ("llm" | "rule")[][]> = {
+  A: [["llm", "llm", "llm", "llm"]],
+  B: [["rule", "rule", "llm", "rule"]],
+  both: [
+    ["llm", "llm", "llm", "llm"],
+    ["rule", "rule", "llm", "rule"],
+  ],
+};
 
-const VARIANTS: { id: Choice; steps: ("llm" | "rule")[] }[] = [
-  { id: "A", steps: ["llm", "llm", "llm", "llm"] },
-  { id: "B", steps: ["rule", "rule", "llm", "rule"] },
-  { id: "both", steps: ["llm", "rule", "llm", "rule"] },
-];
+const VARIANTS: { id: Choice }[] = [{ id: "A" }, { id: "B" }, { id: "both" }];
 
 export function NewRunDialog({ preset, onClose }: { preset: NewRunPreset; onClose: () => void }) {
   const { t } = useTranslation();
@@ -161,7 +145,7 @@ export function NewRunDialog({ preset, onClose }: { preset: NewRunPreset; onClos
                   ))}
                 </Select>
               ) : (
-                <p className="pt-2 text-muted">
+                <p className="pt-2 text-ink-soft">
                   {t("newRun.noProjects")}{" "}
                   <Link
                     to="/projects"
@@ -185,9 +169,11 @@ export function NewRunDialog({ preset, onClose }: { preset: NewRunPreset; onClos
                 <label
                   key={v.id}
                   className={cn(
-                    "flex cursor-pointer flex-col gap-2 rounded-card border p-3",
+                    "flex cursor-pointer flex-col gap-2 border p-3",
                     "has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-focus",
-                    variant === v.id ? "border-ink bg-paper/60" : "border-line hover:border-ink/40",
+                    variant === v.id
+                      ? "border-2 border-ink bg-tint"
+                      : "border border-ink hover:bg-tint",
                   )}
                 >
                   <input
@@ -198,11 +184,19 @@ export function NewRunDialog({ preset, onClose }: { preset: NewRunPreset; onClos
                     onChange={() => setVariant(v.id)}
                     className="sr-only"
                   />
-                  <PipelineSketch steps={v.steps} />
+                  <RunPathMini
+                    rows={PATHS[v.id]}
+                    description={t("newRun.pathSketch", {
+                      variant: v.id === "both" ? "A, B" : v.id,
+                      stages: PATHS[v.id]
+                        .map((row) => row.map((a) => t(`run.actor.${a}`)).join(", "))
+                        .join("; "),
+                    })}
+                  />
                   <span className="font-medium">
                     {t(`newRun.variant${v.id === "both" ? "Both" : v.id}`)}
                   </span>
-                  <span className="text-sm text-muted">
+                  <span className="text-sm text-ink-soft">
                     {t(`newRun.variant${v.id === "both" ? "Both" : v.id}Hint`)}
                   </span>
                 </label>
@@ -266,7 +260,7 @@ export function NewRunDialog({ preset, onClose }: { preset: NewRunPreset; onClos
             </label>
           </div>
           {error ? (
-            <p role="alert" className="mt-2 text-error">
+            <p role="alert" className="mt-2 text-status-error">
               {error}
             </p>
           ) : null}

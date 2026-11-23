@@ -3,6 +3,7 @@ import {
   Dialog,
   DialogContent,
   DialogFooter,
+  EmptyState,
   Field,
   Input,
   StatusBadge,
@@ -111,8 +112,8 @@ export function ProjectScreen() {
   return (
     <div className="flex flex-col gap-8">
       {project.data?.is_sample ? (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-card border border-line bg-surface p-4">
-          <p className="max-w-[70ch] text-muted">{t("samples.projectNote")}</p>
+        <div className="flex flex-wrap items-center justify-between gap-3 border border-ink bg-sheet p-4">
+          <p className="max-w-[70ch] text-ink-soft">{t("samples.projectNote")}</p>
           {isAdmin ? (
             <Button type="button" variant="danger" size="sm" onClick={() => void removeProject()}>
               {t("samples.delete")}
@@ -142,7 +143,7 @@ export function ProjectScreen() {
       ) : null}
       <section aria-labelledby="files-title" className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <h2 id="files-title" className="font-display text-2xl font-bold">
+          <h2 id="files-title" className="font-display text-2xl font-semibold">
             {t("projects.files")}
           </h2>
           <Button onClick={() => openNewRun({ projectId })} disabled={!ready}>
@@ -157,11 +158,11 @@ export function ProjectScreen() {
           }}
           onDragLeave={() => setDragging(false)}
           onDrop={onDrop}
-          className={`flex flex-col items-center gap-2 rounded-card border-2 border-dashed p-8 text-center ${
-            dragging ? "border-llm bg-llm/5" : "border-line bg-surface"
+          className={`flex flex-col items-center gap-2 border-2 border-dashed p-8 text-center ${
+            dragging ? "border-ink bg-tint" : "border-ink bg-sheet"
           }`}
         >
-          <UploadCloud size={28} aria-hidden className="text-muted" />
+          <UploadCloud size={28} aria-hidden className="text-ink-soft" />
           <p>
             {t("projects.drop")}{" "}
             <button
@@ -173,7 +174,7 @@ export function ProjectScreen() {
               {t("projects.browse")}
             </button>
           </p>
-          <p className="text-sm text-muted">{t("projects.dropHint")}</p>
+          <p className="text-sm text-ink-soft">{t("projects.dropHint")}</p>
           <input
             ref={input}
             type="file"
@@ -187,17 +188,17 @@ export function ProjectScreen() {
         {files.isPending ? (
           <Skeleton rows={2} />
         ) : files.data?.length ? (
-          <ul className="divide-y divide-line rounded-card border border-line bg-surface">
+          <ul className="divide-y divide-rule border border-ink bg-sheet">
             {files.data.map((f) => (
               <li key={f.id} className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-3">
                 <span className="min-w-0 flex-1 truncate font-mono text-sm">{f.name}</span>
-                <span className="text-sm text-muted">
+                <span className="text-sm text-ink-soft">
                   {f.detected_format ?? ""}
                   {typeof f.summary.components === "number"
                     ? ` – ${t("projects.components", { count: f.summary.components as number })}`
                     : ""}
                 </span>
-                <span className="text-sm text-muted">
+                <span className="text-sm text-ink-soft">
                   {formatBytes(f.size_bytes, i18n.language)}
                 </span>
                 <StatusBadge
@@ -209,7 +210,7 @@ export function ProjectScreen() {
                     type="button"
                     onClick={() => void removeFile(f.id, f.name)}
                     aria-label={t("projects.deleteFile", { name: f.name })}
-                    className="rounded-control p-1.5 text-muted hover:bg-paper hover:text-error focus-visible:outline-2 focus-visible:outline-focus"
+                    className=" p-1.5 text-ink-soft hover:bg-tint hover:text-status-error focus-visible:outline-2 focus-visible:outline-focus"
                   >
                     <Trash2 size={16} aria-hidden />
                   </button>
@@ -218,13 +219,13 @@ export function ProjectScreen() {
             ))}
           </ul>
         ) : (
-          <p className="text-muted">{t("projects.noFiles")}</p>
+          <p className="text-ink-soft">{t("projects.noFiles")}</p>
         )}
       </section>
 
       <section aria-labelledby="runs-title" className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <h2 id="runs-title" className="font-display text-2xl font-bold">
+          <h2 id="runs-title" className="font-display text-2xl font-semibold">
             {t("projects.runs")}
           </h2>
           {comparable ? (
@@ -241,7 +242,15 @@ export function ProjectScreen() {
         {runs.data?.items.length ? (
           <RunTable runs={runs.data.items} />
         ) : (
-          <p className="text-muted">{t("projects.noRuns")}</p>
+          <EmptyState
+            title={t("empty.projectRuns.title")}
+            body={t("empty.projectRuns.body")}
+            action={
+              <Button onClick={() => openNewRun({ projectId })} disabled={!ready}>
+                {t("empty.projectRuns.action")}
+              </Button>
+            }
+          />
         )}
       </section>
     </div>

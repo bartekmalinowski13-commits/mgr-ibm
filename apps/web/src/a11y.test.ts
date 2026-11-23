@@ -29,18 +29,37 @@ describe("accessibility regression gate (UX-08)", () => {
     expect(css).toMatch(/scroll-behavior: auto/);
   });
 
-  // WCAG 1.4.11: provenance dots and stripes are graphical objects, 3:1 minimum.
-  it.each(["llm", "rule", "user", "parser"])("provenance colour %s has 3:1 contrast", (k) => {
-    expect(contrast(token(k), token("surface"))).toBeGreaterThanOrEqual(3);
-    expect(contrast(token(k), token("paper"))).toBeGreaterThanOrEqual(3);
-  });
+  // WCAG 1.4.11: provenance rails and swatches are graphical objects, 3:1 minimum on the sheet.
+  it.each(["prov-llm", "prov-rule", "user", "parser", "rule"].filter((k) => k !== "rule"))(
+    "provenance colour %s has 3:1 contrast on the sheet",
+    (k) => {
+      expect(contrast(token(k), token("sheet"))).toBeGreaterThanOrEqual(3);
+      expect(contrast(token(k), token("tint"))).toBeGreaterThanOrEqual(3);
+    },
+  );
 
-  it.each(["ink", "muted", "error", "warn", "ok"])("text colour %s has 4.5:1 on surface", (k) => {
-    expect(contrast(token(k), token("surface"))).toBeGreaterThanOrEqual(4.5);
+  // Text colours on the sheet and on the tinted (hover/selected) row; cite is a 3:1 underline only.
+  it.each(["ink", "ink-soft", "status-error", "status-warn", "prov-llm", "prov-rule"])(
+    "text colour %s has 4.5:1 on the sheet and the tinted row",
+    (k) => {
+      expect(contrast(token(k), token("sheet"))).toBeGreaterThanOrEqual(4.5);
+      expect(contrast(token(k), token("tint"))).toBeGreaterThanOrEqual(4.5);
+    },
+  );
+  it("cite underline has 3:1 contrast", () => {
+    expect(contrast(token("cite"), token("sheet"))).toBeGreaterThanOrEqual(3);
   });
-
-  it("muted text stays readable on the page background", () => {
-    expect(contrast(token("muted"), token("paper"))).toBeGreaterThanOrEqual(4.5);
+  it("text on the black sidebar has 4.5:1 contrast", () => {
+    expect(contrast(token("on-ink"), token("ink"))).toBeGreaterThanOrEqual(4.5);
+    expect(contrast(token("desk"), token("ink"))).toBeGreaterThanOrEqual(4.5);
+  });
+  it("the brand palette matches docs/design/UX_GUIDELINES.md §3", () => {
+    expect(token("sheet")).toBe("#ffffff");
+    expect(token("desk")).toBe("#b4b9b4");
+    expect(token("ink")).toBe("#111413");
+    expect(token("prov-llm")).toBe("#5b3fd6");
+    expect(token("prov-rule")).toBe("#0c6b4b");
+    expect(token("status-error")).toBe("#c2362b");
   });
 
   it("sets the document language synchronously when i18n loads", async () => {

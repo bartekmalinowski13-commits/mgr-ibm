@@ -219,7 +219,8 @@
     "defib": "Defibrillation-proof",
     "submit": "Start run",
     "started": "Started run",
-    "partlyStarted": "Variant {{variants}} has already started; trying again starts only the rest."
+    "partlyStarted": "Variant {{variants}} has already started; trying again starts only the rest.",
+    "pathSketch": "Path of variant {{variant}}: {{stages}}"
   },
   "run": {
     "title": "Run",
@@ -258,7 +259,40 @@
     "rerunStarted": "New run started with the same settings",
     "findings_one": "{{count}} validation finding",
     "findings_other": "{{count}} validation findings",
-    "statusColumn": "Status"
+    "statusColumn": "Status",
+    "nodes": {
+      "extract_group": "Item extraction",
+      "normalize_group": "Normalisation",
+      "select_mpn": "MPN selection",
+      "validate": "Validation",
+      "repair": "Repair",
+      "assemble": "Assembly",
+      "compose": "Composition",
+      "claude_agent_sdk": "Agent run",
+      "parse": "Design parsing"
+    },
+    "actor": {
+      "llm": "LLM",
+      "rule": "rules",
+      "parser": "parser",
+      "user": "person"
+    },
+    "path": {
+      "label": "Run path",
+      "pending": "next stage running",
+      "describe": "Variant {{variant}} run path, {{count}} stages. {{stages}}.",
+      "stage": "{{n}}. {{label}}, {{actor}}, {{state}}",
+      "state": {
+        "done": "done",
+        "running": "in progress",
+        "pending": "waiting"
+      },
+      "end": "end"
+    },
+    "pathBoth": "Both variants, side by side",
+    "counters": "Run counters",
+    "live": "Live run",
+    "elapsed": "Elapsed"
   },
   "bom": {
     "title": "Bill of materials",
@@ -289,7 +323,26 @@
     "count": "{{shown}} of {{total}} lines",
     "csvFailed": "Could not copy to the clipboard",
     "csvCopied_one": "Copied CSV ({{count}} line)",
-    "csvCopied_other": "Copied CSV ({{count}} lines)"
+    "csvCopied_other": "Copied CSV ({{count}} lines)",
+    "filters": {
+      "label": "BOM filters",
+      "all": "All",
+      "findings": "Only with findings",
+      "agent": "LLM decisions",
+      "rule": "Rule decisions"
+    },
+    "status": {
+      "column": "Status",
+      "ok": "Passed the rules",
+      "warn": "To check",
+      "error": "Needs a decision",
+      "dnp": "Do not place"
+    },
+    "legend": "Rail on the left of a row: hatched = LLM agent, solid green = rule, solid grey = design file, solid black = person.",
+    "emptyAction": "Start a new run",
+    "emptyFilter": "No lines match these filters.",
+    "clearFilters": "Clear filters",
+    "sheetCaption": "BOM table. Press Enter on a row to open the line panel."
   },
   "panel": {
     "title": "Line {{line}}",
@@ -309,7 +362,26 @@
     "agent": "{{agent}} · model {{model}}",
     "parser": "Read from the file ({{parser}})",
     "user": "Changed by {{user}}",
-    "savedLive": "Saved. BOM version {{version}}."
+    "savedLive": "Saved. BOM version {{version}}.",
+    "decision": {
+      "agent": "LLM agent decision",
+      "rule": "Rule decision",
+      "parser": "Read from the design file",
+      "user": "Decision of a person"
+    },
+    "source": "Source in the knowledge base",
+    "openSource": "{{doc}}, page {{page}}",
+    "openSourceNoPage": "{{doc}}",
+    "sourceLink": "Open the knowledge base",
+    "unknownDoc": "Knowledge-base document",
+    "rules": "Rule results",
+    "rulesPassed": "No rule raised a finding for this line.",
+    "history": "Change history",
+    "historyEmpty": "No one has changed this line yet. Version history is below the table.",
+    "historyUser": "{{field}}: changed by {{user}}",
+    "change": "Change",
+    "rationaleLabel": "Rationale",
+    "close": "Close the line panel"
   },
   "runs": {
     "title": "Runs",
@@ -441,7 +513,19 @@
     "differences_one": "{{count}} difference between the variants",
     "differences_other": "{{count}} differences between the variants",
     "same": "Both variants decided the same for every designator.",
-    "missing": "Missing in this variant"
+    "missing": "Missing in this variant",
+    "framed": "Variant {{variant}}: {{label}}",
+    "variantA": "only LLM",
+    "variantB": "hybrid",
+    "metricsTitle": "Agreement with the reference BOM",
+    "needTwoAction": "Start the second variant",
+    "pathTitle": "Run paths",
+    "reference": "Reference BOM",
+    "referenceNone": "No reference BOM for this project: the table compares the two variants only.",
+    "illustrative": "Illustrative data, mock-up",
+    "lead": "Variants {{a}} and {{b}} of the same project, side by side",
+    "variantsBoth": "Variants {{a}} and {{b}}",
+    "sheetTitle": "{{project}}: variant comparison"
   },
   "reference": {
     "title": "Compare with a reference BOM",
@@ -596,5 +680,50 @@
     "429": "Too many requests in a short time. Wait a moment and try again.",
     "5xx": "The server is temporarily unavailable. Try again in a moment.",
     "generic": "The request failed (HTTP {{status}}). Try again; if it keeps failing, contact your administrator."
+  },
+  "titleBlock": {
+    "label": "Drawing title block",
+    "revision": "Rev. {{rev}}",
+    "run": "Run {{id}}",
+    "sheet": "Sheet",
+    "sheetOf": "{{n}}/{{total}}",
+    "illustrative": "Illustrative",
+    "revisionLetter": "{{n}}"
+  },
+  "demoData": "Illustrative data",
+  "empty": {
+    "runs": {
+      "title": "No runs yet",
+      "body": "A run turns design files into a BOM and shows who decided each line.",
+      "action": "Start a new run"
+    },
+    "audit": {
+      "title": "No audit events match",
+      "body": "Events appear when people change data. Widen the filters to see more.",
+      "action": "Clear filters"
+    },
+    "kb": {
+      "title": "No documents in your knowledge base",
+      "body": "Add datasheets and standards; the agents cite them next to each line.",
+      "action": "Add a document"
+    },
+    "projects": {
+      "title": "No projects yet",
+      "action": "Name your first project"
+    },
+    "projectRuns": {
+      "title": "No runs in this project",
+      "body": "Upload the design files, then start a run to get the first BOM.",
+      "action": "Start the first run"
+    },
+    "auditNone": {
+      "body": "Events appear when people change data in this organisation."
+    }
+  },
+  "brand": {
+    "example": "Example rows",
+    "legend": "Provenance in a row: a hatched rail means an LLM agent decided, a solid green rail means a rule. It works in black-and-white print and for colour-blind readers.",
+    "sampleLlm": "U2 STM32L432KC",
+    "sampleRule": "U1 ADS1292R"
   }
 }

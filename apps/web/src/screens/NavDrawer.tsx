@@ -23,7 +23,7 @@ export function NavDrawer({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogTrigger
         aria-label={label}
-        className="rounded-control p-2 hover:bg-surface focus-visible:outline-2 focus-visible:outline-focus lg:hidden"
+        className=" p-2 hover:bg-sheet focus-visible:outline-2 focus-visible:outline-focus lg:hidden"
       >
         <MenuIcon size={20} aria-hidden />
       </DialogTrigger>

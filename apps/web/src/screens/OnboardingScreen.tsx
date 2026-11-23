@@ -54,7 +54,7 @@ export function OnboardingScreen() {
 
   return (
     <AuthLayout title={t("onboarding.title")} lead={t("onboarding.lead")}>
-      <form onSubmit={create} className="rounded-panel border border-line bg-surface p-6">
+      <form onSubmit={create} className=" border border-ink bg-sheet p-6">
         <Field label={t("onboarding.name")} required>
           {(id) => (
             <Input
@@ -91,9 +91,9 @@ export function OnboardingScreen() {
         </div>
       </form>
 
-      <form onSubmit={join} className="mt-6 rounded-panel border border-dashed border-line p-6">
-        <h2 className="font-display text-xl font-bold">{t("onboarding.inviteTitle")}</h2>
-        <p className="mt-1 text-muted">{t("onboarding.inviteLead")}</p>
+      <form onSubmit={join} className="mt-6 border border-dashed border-rule p-6">
+        <h2 className="font-display text-xl font-semibold">{t("onboarding.inviteTitle")}</h2>
+        <p className="mt-1 text-ink-soft">{t("onboarding.inviteLead")}</p>
         <div className="mt-4 flex flex-col gap-3 sm:flex-row">
           <label className="sr-only" htmlFor="invite-token">
             {t("onboarding.token")}
@@ -113,7 +113,7 @@ export function OnboardingScreen() {
           </Button>
         </div>
         {inviteError ? (
-          <p role="alert" className="mt-2 text-sm text-error">
+          <p role="alert" className="mt-2 text-sm text-status-error">
             {inviteError}
           </p>
         ) : null}

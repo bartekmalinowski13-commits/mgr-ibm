@@ -5,9 +5,9 @@ import { type QuotaLevel, quotaChips } from "../lib/quota";
 import { useToast } from "../lib/toast";
 
 const TONE: Record<QuotaLevel, string> = {
-  ok: "border-line text-muted",
-  warn: "border-warn text-warn",
-  full: "border-error text-error",
+  ok: "border-rule text-ink-soft",
+  warn: "border-status-warn text-status-warn",
+  full: "border-status-error text-status-error",
 };
 
 /** Read-only usage chips; a toast is raised once per metric when it crosses 80 % and 100 %. */
@@ -50,7 +50,7 @@ export function QuotaChips({
         <li
           key={c.key}
           data-level={c.level}
-          className={`rounded-full border bg-surface px-2.5 py-0.5 tabular-nums ${TONE[c.level]}`}
+          className={` border bg-sheet px-2.5 py-0.5 tabular-nums ${TONE[c.level]}`}
         >
           {t(`quota.${c.key}`, { used: fmt(c.key, c.used), limit: fmt(c.key, c.limit) })}
         </li>

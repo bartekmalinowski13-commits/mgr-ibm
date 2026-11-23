@@ -46,15 +46,17 @@ export function ReferencePanel({ runId }: { runId: string }) {
   return (
     <section
       aria-labelledby="ref-title"
-      className="flex flex-col gap-4 rounded-panel border border-line bg-surface p-5"
+      className="flex flex-col gap-4 border border-ink bg-sheet p-5"
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 id="ref-title" className="font-display text-xl font-bold">
+          <h2 id="ref-title" className="font-display text-xl font-semibold">
             {t("reference.title")}
           </h2>
-          <p className="max-w-[70ch] text-sm text-muted">{t("reference.lead")}</p>
-          {demo ? <p className="max-w-[70ch] text-sm text-warn">{t("demo.reference")}</p> : null}
+          <p className="max-w-[70ch] text-sm text-ink-soft">{t("reference.lead")}</p>
+          {demo ? (
+            <p className="max-w-[70ch] text-sm text-status-warn">{t("demo.reference")}</p>
+          ) : null}
         </div>
         <Button
           variant="secondary"
@@ -75,7 +77,7 @@ export function ReferencePanel({ runId }: { runId: string }) {
         />
       </div>
       {error ? (
-        <p role="alert" className="text-sm text-error">
+        <p role="alert" className="text-sm text-status-error">
           {error}
         </p>
       ) : null}
@@ -84,8 +86,8 @@ export function ReferencePanel({ runId }: { runId: string }) {
           <dl className="grid grid-cols-2 gap-4 sm:grid-cols-5">
             {HEADLINE.map((k) => (
               <div key={k}>
-                <dt className="text-sm text-muted">{t(`reference.metrics.${k}`)}</dt>
-                <dd className="font-display text-2xl font-bold tabular-nums">
+                <dt className="text-sm text-ink-soft">{t(`reference.metrics.${k}`)}</dt>
+                <dd className="font-display text-2xl font-semibold tabular-nums">
                   {pct(result.summary[k])}
                 </dd>
               </div>
@@ -94,7 +96,7 @@ export function ReferencePanel({ runId }: { runId: string }) {
           <dl className="flex flex-wrap gap-x-6 gap-y-1 text-sm">
             {FIELDS.filter((f) => result.fields[f]).map((f) => (
               <div key={f} className="flex gap-1.5">
-                <dt className="text-muted">{t(`bom.columns.${f}`)}:</dt>
+                <dt className="text-ink-soft">{t(`bom.columns.${f}`)}:</dt>
                 <dd className="tabular-nums">{pct(result.summary[`acc_${f}`])}</dd>
               </div>
             ))}
@@ -105,10 +107,10 @@ export function ReferencePanel({ runId }: { runId: string }) {
               // biome-ignore lint/a11y/noNoninteractiveTabindex: scrollable region must be reachable by keyboard (WCAG 2.1.1)
               tabIndex={0}
               aria-label={t("reference.diffs", { count: result.diffs.length })}
-              className="max-h-80 overflow-auto rounded-card border border-line focus-visible:outline-2 focus-visible:outline-focus"
+              className="max-h-80 overflow-auto border border-ink focus-visible:outline-2 focus-visible:outline-focus"
             >
               <table className="w-full min-w-[560px] text-left text-[14px]">
-                <thead className="sticky top-0 border-b border-line bg-surface text-[13px] text-muted">
+                <thead className="sticky top-0 border-b border-rule bg-sheet text-[13px] text-ink-soft">
                   <tr>
                     <th scope="col" className="px-3 py-2 font-medium">
                       {t("bom.columns.refdes")}
@@ -128,7 +130,7 @@ export function ReferencePanel({ runId }: { runId: string }) {
                   {result.diffs.map((d) => (
                     <tr
                       key={`${d.refdes}-${d.field}`}
-                      className="border-b border-line last:border-0"
+                      className="border-b border-rule last:border-0"
                     >
                       <td className="px-3 py-2 font-mono text-[13px]">{d.refdes}</td>
                       <td className="px-3 py-2">{d.field}</td>

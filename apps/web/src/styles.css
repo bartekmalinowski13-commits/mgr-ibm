@@ -1,51 +1,120 @@
 @import "tailwindcss";
-@import "@fontsource-variable/bricolage-grotesque/wght.css";
-@import "@fontsource/ibm-plex-sans/400.css";
-@import "@fontsource/ibm-plex-sans/500.css";
-@import "@fontsource/ibm-plex-sans/600.css";
-@import "@fontsource/ibm-plex-mono/400.css";
+/* Fonts are local (@fontsource), Latin + Latin Extended only: Polish diacritics need latin-ext. */
+@import "@fontsource/ibm-plex-sans-condensed/latin-600.css";
+@import "@fontsource/ibm-plex-sans-condensed/latin-ext-600.css";
+@import "@fontsource/ibm-plex-sans/latin-400.css";
+@import "@fontsource/ibm-plex-sans/latin-ext-400.css";
+@import "@fontsource/ibm-plex-sans/latin-500.css";
+@import "@fontsource/ibm-plex-sans/latin-ext-500.css";
+@import "@fontsource/ibm-plex-sans/latin-600.css";
+@import "@fontsource/ibm-plex-sans/latin-ext-600.css";
+@import "@fontsource/ibm-plex-mono/latin-400.css";
+@import "@fontsource/ibm-plex-mono/latin-ext-400.css";
+@import "@fontsource/ibm-plex-mono/latin-500.css";
+@import "@fontsource/ibm-plex-mono/latin-ext-500.css";
 @source "../../../packages/ts/ui/src";
 
-/* Tokens (docs/design/UX_GUIDELINES.md §3, plan: docs/plans/M5-frontend.md) */
+/*
+ * Visual identity: a technical drawing sheet (docs/design/UX_GUIDELINES.md §3, ADR-0020).
+ * Square corners, 1px ink outlines, no shadows, no gradients except the hatched LLM rail.
+ * The default radius and shadow scales are cleared on purpose: `rounded-*` and `shadow-*`
+ * utilities do not exist, so they cannot creep back in.
+ */
 @theme {
-  --color-paper: #eceff2;
-  --color-surface: #ffffff;
-  --color-ink: #18212b;
-  --color-ink-hover: #2c3846;
-  --color-muted: #56616d;
-  --color-line: #d3d9df;
-  --color-focus: #2f6fdb;
-  --color-llm: #5b3fd6; /* provenance: agent (LLM) decision */
-  --color-rule: #13704a; /* provenance: deterministic rule (solder-mask green) */
-  --color-parser: #7a8691; /* provenance: read from the design file */
-  --color-user: #18212b; /* provenance: a person decided */
-  --color-ok: #13704a;
-  --color-warn: #a35a00;
-  --color-error: #b42318;
+  --radius-*: initial;
+  --shadow-*: initial;
+  --drop-shadow-*: initial;
+  --blur-*: initial;
 
-  --font-display: "Bricolage Grotesque Variable", system-ui, sans-serif;
+  --color-sheet: #ffffff; /* the sheet: working background */
+  --color-desk: #b4b9b4; /* the desk around the sheet (document screens only; no text on it) */
+  --color-ink: #111413; /* text, outlines, primary action, sidebar */
+  --color-ink-soft: #4d5450;
+  --color-rule: #c9ccc7; /* thin lines inside tables */
+  --color-prov-llm: #5b3fd6; /* decision of an LLM agent, variant A */
+  --color-prov-rule: #0c6b4b; /* decision of a deterministic rule, variant B */
+  --color-cite: #9a6f00; /* underline of a quote from the source */
+  --color-status-warn: #8a5a00;
+  --color-status-error: #c2362b; /* "revision red" */
+  /* derived, not part of the brand palette */
+  --color-tint: #f3f3f1; /* hovered / selected row */
+  --color-ink-hover: #2c322f;
+  --color-parser: #6b726d; /* provenance: read from the design file (solid grey rail) */
+  --color-user: #111413; /* provenance: a person decided (solid ink rail) */
+  --color-focus: #111413;
+  --color-on-ink: #d6d9d5; /* text on the black sidebar */
+
+  --font-display: "IBM Plex Sans Condensed", system-ui, sans-serif;
   --font-sans: "IBM Plex Sans", system-ui, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, monospace;
-
-  /* radius follows hierarchy: panels > cards > controls */
-  --radius-panel: 18px;
-  --radius-card: 12px;
-  --radius-control: 8px;
-  --shadow-dialog: 0 24px 64px -24px rgb(24 33 43 / 0.35);
 }
 
-@keyframes fade {
+@keyframes draw {
   from {
-    opacity: 0;
+    stroke-dashoffset: var(--len, 1);
+  }
+  to {
+    stroke-dashoffset: 0;
   }
 }
 
 html {
-  background: var(--color-paper);
+  background: var(--color-sheet);
   color: var(--color-ink);
   font-family: var(--font-sans);
   font-size: 15px;
   -webkit-font-smoothing: antialiased;
+}
+
+/* Focus: 2px ink ring; on the black sidebar it is white (class `on-ink`). */
+:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+.on-ink :focus-visible {
+  outline-color: #ffffff;
+}
+
+/*
+ * Provenance rail, double-coded so it survives black-and-white print and colour blindness:
+ * LLM = hatched 135deg (3px violet, 3px white), rule = solid green, parser = solid grey,
+ * person = solid ink. Width 8px; the element is a positioned child of a `relative` row.
+ */
+.rail {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+  width: 8px;
+  forced-color-adjust: none;
+}
+.rail-agent {
+  background: repeating-linear-gradient(
+    135deg,
+    var(--color-prov-llm) 0 3px,
+    var(--color-sheet) 3px 6px
+  );
+  border-inline-end: 1px solid var(--color-prov-llm);
+}
+.rail-rule {
+  background: var(--color-prov-rule);
+}
+.rail-parser {
+  background: var(--color-parser);
+}
+.rail-user {
+  background: var(--color-user);
+}
+
+/* The one moment of motion: a finished run stage draws its path segment in 240ms. */
+.path-draw {
+  stroke-dasharray: var(--len, 1);
+  animation: draw 240ms linear both;
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -55,5 +124,9 @@ html {
     animation-duration: 1ms !important;
     transition-duration: 1ms !important;
     scroll-behavior: auto !important;
+  }
+  .path-draw {
+    animation: none;
+    stroke-dasharray: none;
   }
 }

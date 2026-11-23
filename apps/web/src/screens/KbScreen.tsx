@@ -1,4 +1,4 @@
-import { Button, Input, Select, StatusBadge } from "@bomagent/ui";
+import { Button, EmptyState, Input, Select, StatusBadge } from "@bomagent/ui";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { type FormEvent, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -57,8 +57,8 @@ export function KbScreen() {
 
   return (
     <div className="flex flex-col gap-6">
-      <p className="max-w-[75ch] text-muted">{t("kb.lead")}</p>
-      <div role="tablist" aria-label={t("kb.title")} className="flex gap-1 border-b border-line">
+      <p className="max-w-[75ch] text-ink-soft">{t("kb.lead")}</p>
+      <div role="tablist" aria-label={t("kb.title")} className="flex gap-1 border-b border-rule">
         {(["tenant", "global"] as const).map((id) => (
           <button
             key={id}
@@ -67,7 +67,9 @@ export function KbScreen() {
             aria-selected={scope === id}
             onClick={() => setScope(id)}
             className={`-mb-px border-b-2 px-3 py-2 font-medium focus-visible:outline-2 focus-visible:outline-focus ${
-              scope === id ? "border-ink text-ink" : "border-transparent text-muted hover:text-ink"
+              scope === id
+                ? "border-ink text-ink"
+                : "border-transparent text-ink-soft hover:text-ink"
             }`}
           >
             {t(`kb.tabs.${id}`)}
@@ -78,7 +80,7 @@ export function KbScreen() {
         {scope === "tenant" && canWrite ? (
           <form
             onSubmit={upload}
-            className="grid gap-3 rounded-card border border-line bg-surface p-4 md:grid-cols-[1fr_200px_200px_auto] md:items-end"
+            className="grid gap-3 border border-ink bg-sheet p-4 md:grid-cols-[1fr_200px_200px_auto] md:items-end"
           >
             <label className="flex flex-col gap-1.5 font-medium">
               {t("kb.file")}
@@ -87,7 +89,7 @@ export function KbScreen() {
                 type="file"
                 required
                 accept=".pdf,.md,.txt"
-                className="rounded-control border border-line px-3 py-2 text-[15px] file:mr-3 file:rounded-control file:border-0 file:bg-paper file:px-3 file:py-1"
+                className=" border border-ink px-3 py-2 text-[15px] file:mr-3 file: file:border-0 file:bg-tint file:px-3 file:py-1"
               />
             </label>
             <label className="flex flex-col gap-1.5 font-medium">
@@ -111,34 +113,44 @@ export function KbScreen() {
             <Button type="submit" disabled={busy}>
               {t("kb.add")}
             </Button>
-            <p className="text-sm text-muted md:col-span-4">{t("kb.hint")}</p>
+            <p className="text-sm text-ink-soft md:col-span-4">{t("kb.hint")}</p>
           </form>
         ) : null}
-        {scope === "global" ? <p className="text-sm text-muted">{t("kb.globalLead")}</p> : null}
+        {scope === "global" ? <p className="text-sm text-ink-soft">{t("kb.globalLead")}</p> : null}
         {docs.isPending ? (
           <Skeleton />
         ) : docs.isError ? (
           <LoadError error={docs.error} onRetry={() => void docs.refetch()} />
         ) : docs.data.items.length === 0 ? (
-          <p className="text-muted">{scope === "tenant" ? t("kb.empty") : t("kb.globalEmpty")}</p>
+          <EmptyState
+            title={t("empty.kb.title")}
+            body={scope === "tenant" ? t("kb.empty") : t("kb.globalEmpty")}
+            action={
+              scope === "tenant" && canWrite ? (
+                <Button onClick={() => input.current?.focus()}>{t("empty.kb.action")}</Button>
+              ) : undefined
+            }
+          />
         ) : (
-          <ul className="divide-y divide-line rounded-card border border-line bg-surface">
+          <ul className="divide-y divide-rule border border-ink bg-sheet">
             {docs.data.items.map((d) => (
               <li key={d.id} className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-3">
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-medium">{d.title}</p>
-                  <p className="text-sm text-muted">
+                  <p className="text-sm text-ink-soft">
                     {t(`kb.kinds.${d.kind}`, d.kind)}
                     {d.manufacturer ? ` – ${d.manufacturer}` : ""} –{" "}
                     {formatBytes(d.size_bytes, i18n.language)} –{" "}
                     {formatDate(d.created_at, i18n.language)}
                   </p>
                   {d.status === "failed" && d.error ? (
-                    <p className="text-sm text-error">{d.error}</p>
+                    <p className="text-sm text-status-error">{d.error}</p>
                   ) : null}
                 </div>
                 {d.status === "indexed" ? (
-                  <span className="text-sm text-muted">{t("kb.chunks", { count: d.chunks })}</span>
+                  <span className="text-sm text-ink-soft">
+                    {t("kb.chunks", { count: d.chunks })}
+                  </span>
                 ) : null}
                 <StatusBadge status={STATUS[d.status]} label={t(`kb.status.${d.status}`)} />
               </li>

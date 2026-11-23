@@ -45,10 +45,12 @@ test("new run from a template -> live progress -> BOM -> provenance -> correctio
   await expect(page.getByRole("heading", { name: "Zestawienie BOM" })).toBeVisible({
     timeout: 90_000,
   });
-  await expect(page.getByText("Gotowy")).toBeVisible();
+  await expect(
+    page.getByRole("region", { name: "Liczniki przebiegu" }).getByText("Gotowy"),
+  ).toBeVisible();
   await expectAccessible(page);
 
-  await expect(page.getByRole("heading", { name: "Kroki przebiegu" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Ścieżka przebiegu" })).toBeVisible();
   await page.getByTestId("reference-input").setInputFiles(path.join(FIXTURE, "reference_bom.csv"));
   await expect(page.getByText("F1 pozycji")).toBeVisible();
   await expect(page.getByText(/rozbieżnoś/)).toBeVisible();
@@ -56,7 +58,7 @@ test("new run from a template -> live progress -> BOM -> provenance -> correctio
 
   const row = page.locator("tbody tr").filter({ hasText: "C4" });
   await row.click();
-  const panel = page.getByRole("complementary", { name: /Pozycja/ });
+  const panel = page.locator("aside[aria-labelledby=panel-title]");
   await expect(panel.getByText("Pochodzenie pól")).toBeVisible();
   await panel.getByLabel("Producent").fill("Murata Manufacturing");
   await panel.getByLabel("Powód zmiany").fill("Zamiennik z magazynu");

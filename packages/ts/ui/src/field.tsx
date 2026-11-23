@@ -9,9 +9,9 @@ import {
 import { cn } from "./cn";
 
 const CONTROL =
-  "w-full rounded-control border border-line bg-surface px-3 text-[15px] text-ink " +
-  "placeholder:text-muted/70 focus-visible:border-ink focus-visible:outline-2 " +
-  "focus-visible:outline-offset-0 focus-visible:outline-focus aria-[invalid=true]:border-error";
+  "w-full border border-ink bg-sheet px-3 text-[15px] text-ink " +
+  "placeholder:text-ink-soft " +
+  "focus-visible:outline-offset-0 aria-[invalid=true]:border-status-error aria-[invalid=true]:border-2";
 
 /** Label on the left, control on the right (modal pattern from UX_GUIDELINES §2). */
 export function Field({
@@ -34,7 +34,7 @@ export function Field({
       <label htmlFor={id} className="pt-2 text-[15px] font-medium text-ink">
         {label}
         {required ? (
-          <span className="text-error" aria-hidden>
+          <span className="text-status-error" aria-hidden>
             {" "}
             *
           </span>
@@ -43,11 +43,11 @@ export function Field({
       <div>
         {children(id, hintId)}
         {error ? (
-          <p id={hintId} className="mt-1.5 text-sm text-error">
+          <p id={hintId} className="mt-1.5 text-sm text-status-error">
             {error}
           </p>
         ) : hint ? (
-          <p id={hintId} className="mt-1.5 text-sm text-muted">
+          <p id={hintId} className="mt-1.5 text-sm text-ink-soft">
             {hint}
           </p>
         ) : null}
