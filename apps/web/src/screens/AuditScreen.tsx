@@ -83,7 +83,7 @@ export function AuditScreen() {
       {verdict ? (
         <p
           role="status"
-          className={`rounded-card border p-3 ${verdict.ok ? "border-ok/30 bg-ok/5" : "border-error/30 bg-error/5"}`}
+          className={`rounded-control border p-3 ${verdict.ok ? "border-ok/30 bg-ok/5" : "border-error/30 bg-error/5"}`}
         >
           {verdict.text}
         </p>
@@ -95,7 +95,7 @@ export function AuditScreen() {
       ) : rows.length === 0 ? (
         <p className="text-muted">{t("audit.empty")}</p>
       ) : (
-        <div className="overflow-x-auto rounded-card border border-line bg-surface">
+        <div className="overflow-x-auto rounded-control border border-line bg-sheet">
           <table className="w-full min-w-[720px] text-left text-[14px]">
             <thead className="border-b border-line text-[13px] text-muted">
               <tr>

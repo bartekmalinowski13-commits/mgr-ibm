@@ -59,7 +59,7 @@ export function AuthCallbackScreen() {
   return (
     <AuthLayout title={t("login.title")} lead={t("login.lead")}>
       {error ? (
-        <p role="alert" className="rounded-card border border-error/30 bg-error/5 p-4">
+        <p role="alert" className="rounded-control border border-error/30 bg-error/5 p-4">
           {error}{" "}
           <Link to="/login" className="font-medium underline underline-offset-4">
             {t("login.retry")}

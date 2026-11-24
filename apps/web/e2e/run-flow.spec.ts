@@ -33,7 +33,7 @@ test("new run from a template -> live progress -> BOM -> provenance -> correctio
   await expectAccessible(page);
 
   await page.getByRole("link", { name: "Start" }).click();
-  await page.getByRole("button", { name: /EKG noszony/ }).click();
+  await page.getByRole("button", { name: /Holter EKG/ }).click();
   const dialog = page.getByRole("dialog", { name: "Nowy przebieg" });
   await expect(dialog.getByLabel("Część aplikacyjna")).toHaveValue("BF");
   await dialog.getByLabel("Projekt").selectOption({ label: "EKG front-end" });
@@ -42,13 +42,16 @@ test("new run from a template -> live progress -> BOM -> provenance -> correctio
   await dialog.getByRole("button", { name: "Uruchom przebieg" }).click();
 
   await page.waitForURL("**/runs/*");
-  await expect(page.getByRole("heading", { name: "Zestawienie BOM" })).toBeVisible({
-    timeout: 90_000,
-  });
+  // ADR-0019: the run sheet shows the steps; the BOM is its own sheet
+  const openBom = page.getByRole("link", { name: "Otwórz zestawienie BOM" });
+  await expect(openBom).toBeVisible({ timeout: 90_000 });
   await expect(page.getByText("Gotowy")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Kroki przebiegu" })).toBeAttached();
   await expectAccessible(page);
 
-  await expect(page.getByRole("heading", { name: "Kroki przebiegu" })).toBeVisible();
+  await openBom.click();
+  await page.waitForURL("**/runs/*/bom");
+  await expect(page.getByRole("heading", { name: /BOM, wersja 1/ })).toBeVisible();
   await page.getByTestId("reference-input").setInputFiles(path.join(FIXTURE, "reference_bom.csv"));
   await expect(page.getByText("F1 pozycji")).toBeVisible();
   await expect(page.getByText(/rozbieżnoś/)).toBeVisible();
@@ -57,12 +60,13 @@ test("new run from a template -> live progress -> BOM -> provenance -> correctio
   const row = page.locator("tbody tr").filter({ hasText: "C4" });
   await row.click();
   const panel = page.getByRole("complementary", { name: /Pozycja/ });
-  await expect(panel.getByText("Pochodzenie pól")).toBeVisible();
+  await expect(panel.getByText("Wynik reguł")).toBeVisible();
+  await panel.getByRole("button", { name: "Zmień MPN" }).click();
   await panel.getByLabel("Producent").fill("Murata Manufacturing");
   await panel.getByLabel("Powód zmiany").fill("Zamiennik z magazynu");
   await panel.getByRole("button", { name: "Zapisz poprawkę" }).click();
   await expect(page.getByText("Zapisano poprawkę jako wersję 2")).toBeVisible();
-  // "Wersja 2" is now shown in the run header, in the version history and in its pickers
+  // "Wersja 2" is now shown in the sheet header, in the version history and in its pickers
   await expect(page.getByText(/Wersja 2/).first()).toBeVisible();
   await expect(
     page

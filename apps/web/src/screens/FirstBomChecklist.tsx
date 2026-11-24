@@ -54,7 +54,7 @@ export function FirstBomChecklist({
     <section
       aria-labelledby="checklist-title"
       data-testid="first-bom-checklist"
-      className="rounded-panel border border-line bg-surface p-6"
+      className="rounded-control border border-line bg-sheet p-6"
     >
       <div className="flex items-start justify-between gap-4">
         <div>
@@ -74,7 +74,7 @@ export function FirstBomChecklist({
               /* private mode: the card just returns next visit */
             }
           }}
-          className="rounded-control p-1.5 text-muted hover:bg-paper hover:text-ink"
+          className="rounded-control p-1.5 text-muted hover:bg-vellum/60 hover:text-ink"
         >
           <X size={18} aria-hidden />
         </button>
@@ -84,14 +84,14 @@ export function FirstBomChecklist({
           <li
             key={s.key}
             aria-current={s.key === next ? "step" : undefined}
-            className={`flex gap-3 rounded-card border p-4 ${
+            className={`flex gap-3 rounded-control border p-4 ${
               s.key === next ? "border-ink" : "border-line"
             }`}
           >
             <span
               aria-hidden
               className={`grid size-7 shrink-0 place-items-center rounded-full text-sm font-bold ${
-                s.done ? "bg-ink text-surface" : "border border-line text-muted"
+                s.done ? "bg-ink text-sheet" : "border border-line text-muted"
               }`}
             >
               {s.done ? <Check size={16} /> : i + 1}

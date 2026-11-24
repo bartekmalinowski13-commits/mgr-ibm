@@ -31,16 +31,31 @@ describe("accessibility regression gate (UX-08)", () => {
 
   // WCAG 1.4.11: provenance dots and stripes are graphical objects, 3:1 minimum.
   it.each(["llm", "rule", "user", "parser"])("provenance colour %s has 3:1 contrast", (k) => {
-    expect(contrast(token(k), token("surface"))).toBeGreaterThanOrEqual(3);
-    expect(contrast(token(k), token("paper"))).toBeGreaterThanOrEqual(3);
+    expect(contrast(token(k), token("sheet"))).toBeGreaterThanOrEqual(3);
+    expect(contrast(token(k), token("vellum"))).toBeGreaterThanOrEqual(3);
   });
 
-  it.each(["ink", "muted", "error", "warn", "ok"])("text colour %s has 4.5:1 on surface", (k) => {
-    expect(contrast(token(k), token("surface"))).toBeGreaterThanOrEqual(4.5);
+  it.each(["ink", "muted", "error", "warn", "ok"])("text colour %s has 4.5:1 on sheet", (k) => {
+    expect(contrast(token(k), token("sheet"))).toBeGreaterThanOrEqual(4.5);
   });
 
   it("muted text stays readable on the page background", () => {
-    expect(contrast(token("muted"), token("paper"))).toBeGreaterThanOrEqual(4.5);
+    expect(contrast(token("muted"), token("vellum"))).toBeGreaterThanOrEqual(4.5);
+  });
+
+  // ADR-0019: chips (text on tinted backgrounds) and the board panel
+  it.each([
+    ["llm", "llm-bg"],
+    ["rule", "rule-bg"],
+    ["error", "error-bg"],
+    ["silk", "mask"],
+    ["llm-light", "mask"],
+  ])("text %s has 4.5:1 on %s", (fg, bg) => {
+    expect(contrast(token(fg), token(bg))).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it("gold (holes, focus and selection on the board) has 3:1 on the mask", () => {
+    expect(contrast(token("gold"), token("mask"))).toBeGreaterThanOrEqual(3);
   });
 
   it("sets the document language synchronously when i18n loads", async () => {

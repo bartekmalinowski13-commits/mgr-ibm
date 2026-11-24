@@ -4,6 +4,15 @@
 
 _Updated by Claude Code after every milestone (see `docs/prompts/CLAUDE_CODE_MASTER_PROMPT.md` §5)._
 
+## 2026-11-24 - new visual direction "fabrication drawing" (ADR-0019)
+
+- `docs/adr/0019-visual-direction-fabrication-drawing.md` + `docs/design/UX_GUIDELINES.md` §2–3 rewritten; mock-ups in `docs/design/direction-v1/`, Playwright screenshots of the implementation in `docs/design/direction-v1/implemented/`.
+- Tokens and fonts (`apps/web/src/styles.css`): vellum/sheet/ink/mask/silk/gold + provenance colours; Archivo (wdth 86/100/125) and Martian Mono replace Bricolage Grotesque and IBM Plex.
+- New base components in `@bomagent/ui`: `Sheet` (zone frame A–H / 1–6), `TitleBlock`, `MaskPanel` + `Silk`, `ProvenanceGlyph` + `ProvenanceLegend` (shape-coded provenance), `VariantChip`, `ViaTimeline`; restyled `Button`, `StatusBadge`, `Dialog`, `Field`. Preview page `/design`.
+- Screens rebuilt: BOM (new route `/runs/$runId/bom`, filters as buttons, provenance stripe and glyph, item panel with the board map, rationale with datasheet quote, rule results), A/B comparison (board-panel verdict computed from the runs, differing lines), live run (A/B copper tracks with vias, counters, live events, sibling run of "both" shown together), Start (greeting + status sentence, template strip with line drawings, recent runs, organisation title block). Shell: sidebar + drawing sheet; the plan pill moved into the Start title block.
+- Not done (assumptions in `docs/DECISIONS_LOG.md` 2026-11-24): board placement for the map/zone is not produced by the parser yet (the map shows an empty state); no "approve line" action (no API).
+- Tests: web unit 171 green; `e2e/visual.spec.ts` (mocked API, axe on every screen at 1440 px and 375 px + `/design`) 9 green. The stack-backed E2E (`run-flow`, `compare`, `mobile`, ...) were updated for the new flow but not run here (no database in the session).
+
 ## 2026-11-17 - audit PRs merged, Mistral enabled in the catalogue
 
 - Merged on request of the owner: migrations 0015 (SECURITY DEFINER `tenancy.create_organization`, the platform role loses direct INSERT on tenants and memberships) and 0016 (concurrent indexes), the Supabase access-token hook SQL and runbook, step-up MFA (`BOMAGENT_MFA_ENFORCED`, off by default), SSO hardening (discovery as POST: the web app and API ship in one image and must be deployed together), the rest of the ARCH-04 service/repository layers, and the downgrade round-trip test with the fixes it needed (revisions 0010 and 0003).

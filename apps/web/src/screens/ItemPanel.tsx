@@ -1,7 +1,14 @@
-import { Button, Input, Textarea } from "@bomagent/ui";
+import {
+  Button,
+  cn,
+  Input,
+  type Provenance,
+  ProvenanceGlyph,
+  StatusBadge,
+  Textarea,
+} from "@bomagent/ui";
 import { useQueryClient } from "@tanstack/react-query";
 import type { TFunction } from "i18next";
-import { X } from "lucide-react";
 import {
   type FormEvent,
   type KeyboardEvent as ReactKeyboardEvent,
@@ -11,9 +18,11 @@ import {
 } from "react";
 import { useTranslation } from "react-i18next";
 import { api, call, problemMessage, type Schemas } from "../lib/api";
-import { type BomItem, PROVENANCE_COLOR, type ProvenanceKind } from "../lib/provenance";
+import { ruleLabel } from "../lib/bomView";
+import type { BomItem } from "../lib/provenance";
 import { useSession } from "../lib/session";
 import { useToast } from "../lib/toast";
+import { BoardMap } from "./BoardMap";
 import { findingsFor } from "./BomTable";
 
 const EDITABLE = ["mpn", "manufacturer", "value", "footprint"] as const;
@@ -35,11 +44,14 @@ function origin(p: Schemas["Provenance"], t: TFunction): string {
 export function ItemPanel({
   runId,
   item,
+  items,
   findings,
   onClose,
 }: {
   runId: string;
   item: BomItem;
+  /** all lines of the BOM, for the board map (defaults to this line only) */
+  items?: BomItem[];
   findings: Schemas["Finding"][];
   onClose: () => void;
 }) {
@@ -53,6 +65,8 @@ export function ItemPanel({
   const [reason, setReason] = useState("");
   const [error, setError] = useState<string>();
   const [announcement, setAnnouncement] = useState("");
+  const [editing, setEditing] = useState(false);
+  const mpnRef = useRef<HTMLInputElement>(null);
   const panelRef = useRef<HTMLElement>(null);
   const titleRef = useRef<HTMLHeadingElement>(null);
   // biome-ignore lint/correctness/useExhaustiveDependencies: reset the form when another line is opened
@@ -60,7 +74,11 @@ export function ItemPanel({
     setValues(initial());
     setReason("");
     setError(undefined);
+    setEditing(false);
   }, [item.line]);
+  useEffect(() => {
+    if (editing) mpnRef.current?.focus();
+  }, [editing]);
   // Focus moves into the panel on open and returns to the row that opened it on close.
   useEffect(() => {
     const opener = document.activeElement as HTMLElement | null;
@@ -97,10 +115,10 @@ export function ItemPanel({
       setError(problemMessage(err));
     }
   };
-  // Below 2xl the panel is a drawer over the page: keep Tab inside it. At 2xl it is a side column.
+  // Below xl the panel is a drawer over the page: keep Tab inside it. At xl it is a side column.
   const trapTab = (e: ReactKeyboardEvent<HTMLElement>) => {
     if (e.key !== "Tab" || !panelRef.current) return;
-    if (typeof window.matchMedia === "function" && window.matchMedia("(min-width: 1536px)").matches)
+    if (typeof window.matchMedia === "function" && window.matchMedia("(min-width: 1280px)").matches)
       return;
     const stops = [
       ...panelRef.current.querySelectorAll<HTMLElement>("button, input, textarea, [tabindex]"),
@@ -120,124 +138,173 @@ export function ItemPanel({
     }
   };
   const changed = EDITABLE.some((f) => values[f] !== (item[f] ?? ""));
+  const why = item.provenance?.mpn ?? item.provenance?.item;
+  const whyKind = (why?.kind ?? "parser") as Provenance;
+  const others = provenance.filter(([field]) => field !== "mpn" || !why);
 
   return (
     <aside
       ref={panelRef}
       onKeyDown={trapTab}
-      aria-labelledby="panel-title"
+      aria-label={`${t("panel.title", { line: item.line })}: ${item.refdes.join(", ")}`}
       className={
-        "fixed inset-x-0 bottom-0 z-30 max-h-[80vh] w-full overflow-y-auto rounded-t-panel border border-line bg-surface p-5 shadow-dialog " +
-        "md:inset-x-auto md:right-0 md:top-0 md:max-h-none md:h-screen md:w-[420px] md:rounded-none md:border-y-0 md:border-r-0 " +
-        "2xl:sticky 2xl:top-20 2xl:z-auto 2xl:h-auto 2xl:max-h-[calc(100vh-6rem)] 2xl:w-[400px] 2xl:shrink-0 2xl:rounded-panel 2xl:border 2xl:shadow-none"
+        "fixed inset-x-0 bottom-0 z-30 max-h-[85vh] w-full overflow-y-auto border-t border-ink bg-sheet px-5 pb-6 pt-5 shadow-dialog " +
+        "md:inset-x-auto md:right-0 md:top-0 md:h-screen md:max-h-none md:w-[400px] md:border-l md:border-t-0 " +
+        "xl:static xl:z-auto xl:h-auto xl:max-h-none xl:w-full xl:overflow-visible xl:border-l-0 xl:px-6 xl:shadow-none"
       }
     >
       <p role="status" aria-live="polite" className="sr-only">
         {announcement}
       </p>
       <div className="flex items-start justify-between gap-3">
-        <div>
-          <h3
-            id="panel-title"
-            ref={titleRef}
-            tabIndex={-1}
-            className="font-display text-xl font-bold focus-visible:outline-2 focus-visible:outline-focus"
-          >
-            {t("panel.title", { line: item.line })}
-          </h3>
-          <p className="font-mono text-[13px] text-muted">{item.refdes.join(", ")}</p>
-        </div>
-        <button
-          type="button"
-          aria-label={t("common.close")}
-          onClick={onClose}
-          className="rounded-control p-1.5 text-muted hover:bg-paper hover:text-ink"
-        >
-          <X size={18} aria-hidden />
-        </button>
+        <p className="pt-1.5 font-data text-[15px]" title={item.refdes.join(", ")}>
+          {item.refdes.join(", ")}
+        </p>
+        <Button variant="secondary" size="sm" onClick={onClose}>
+          {t("common.close")}
+        </Button>
+      </div>
+      <h2
+        id="panel-title"
+        ref={titleRef}
+        tabIndex={-1}
+        className="mt-2 font-display text-[22px] [overflow-wrap:anywhere] focus-visible:outline-2 focus-visible:outline-ink"
+      >
+        {item.mpn || t("panel.noMpn")}
+      </h2>
+      <p className="mt-1 text-[15px] text-muted">
+        {[item.manufacturer, item.description].filter(Boolean).join(", ") || item.value}
+      </p>
+
+      <div className="mt-5">
+        <BoardMap item={item} items={items ?? [item]} />
       </div>
 
-      <h4 className="mt-5 font-medium">{t("panel.fields")}</h4>
-      <ul className="mt-2 flex flex-col gap-3">
-        {provenance.map(([field, p]) => (
-          <li key={field} className="flex gap-3">
-            <span
-              aria-hidden
-              className={`mt-1.5 size-2.5 shrink-0 rounded-full ${PROVENANCE_COLOR[p.kind as ProvenanceKind]}`}
-            />
-            <div className="min-w-0">
-              <p>
-                <span className="font-mono text-[13px]">{field}</span>: {origin(p, t)}
-              </p>
-              {p.rationale ? <p className="text-sm text-muted">{p.rationale}</p> : null}
-              {p.citations?.length ? (
-                <ul className="mt-1 flex flex-col gap-1">
-                  {p.citations.map((c) => (
-                    <li key={c.chunk_id} className="rounded-control bg-paper px-2.5 py-1.5 text-sm">
-                      {c.quote ? <q>{c.quote}</q> : null}{" "}
-                      <span className="text-muted">
-                        ({c.scope}
-                        {c.page ? `, ${t("panel.page", { page: c.page })}` : ""})
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
-            </div>
-          </li>
-        ))}
-      </ul>
-
-      <h4 className="mt-5 font-medium">{t("panel.findings")}</h4>
-      {own.length ? (
-        <ul className="mt-2 flex flex-col gap-2">
-          {own.map((f) => (
-            <li
-              key={`${f.rule_id}-${f.message}`}
-              className="rounded-control border border-warn/30 bg-warn/5 px-3 py-2 text-sm"
+      {why ? (
+        <section aria-labelledby="why-title" className="mt-6">
+          <h3 id="why-title" className="flex items-center gap-2 text-[16px] font-semibold">
+            <ProvenanceGlyph kind={whyKind} />
+            {t("panel.why")}
+          </h3>
+          <p className="mt-1.5 text-[15px]">{why.rationale || origin(why, t)}</p>
+          {why.rationale ? <p className="mt-1 text-[13px] text-muted">{origin(why, t)}</p> : null}
+          {why.citations?.map((c) => (
+            <blockquote
+              key={c.chunk_id}
+              className="mt-3 border-l-[3px] border-llm bg-llm-bg px-4 py-2.5 text-[15px]"
             >
-              <span className="font-mono text-[13px]">{f.rule_id}</span> – {f.message}
-            </li>
+              {c.quote ? <p>„{c.quote}”</p> : null}
+              <cite className="mt-0.5 block text-[14px] not-italic font-semibold text-llm">
+                {c.page ? t("panel.datasheetPage", { page: c.page }) : t("panel.datasheet")}
+                {c.scope === "tenant" ? ` · ${t("panel.tenantSource")}` : ""}
+              </cite>
+            </blockquote>
           ))}
-        </ul>
-      ) : (
-        <p className="mt-1 text-sm text-muted">{t("panel.noFindings")}</p>
-      )}
+        </section>
+      ) : null}
 
-      <form onSubmit={save} className="mt-5 border-t border-line pt-4">
-        <h4 className="font-medium">{t("panel.edit")}</h4>
-        <p className="mt-1 text-sm text-muted">{t("panel.editLead")}</p>
-        <div className="mt-3 grid gap-3">
-          {EDITABLE.map((f) => (
-            <label key={f} className="flex flex-col gap-1 text-sm font-medium">
-              {t(`bom.columns.${f}`)}
-              <Input
-                value={values[f]}
-                className={f === "mpn" || f === "footprint" ? "font-mono" : undefined}
-                onChange={(e) => setValues((v) => ({ ...v, [f]: e.target.value }))}
+      <section aria-labelledby="rules-title" className="mt-6">
+        <h3 id="rules-title" className="flex items-center gap-2 text-[16px] font-semibold">
+          <ProvenanceGlyph kind="rule" />
+          {t("panel.findings")}
+        </h3>
+        {own.length ? (
+          <ul className="mt-2 flex flex-col gap-2">
+            {own.map((f) => (
+              <li key={`${f.rule_id}-${f.message}`} className="flex flex-col gap-0.5 text-[15px]">
+                <StatusBadge
+                  status={
+                    f.severity === "error" ? "error" : f.severity === "info" ? "pending" : "warn"
+                  }
+                  label={ruleLabel(f.rule_id)}
+                  className="self-start"
+                />
+                <span>{f.message}</span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="mt-2">
+            <StatusBadge status="ok" label={t("panel.noFindings")} />
+          </p>
+        )}
+      </section>
+
+      {others.length ? (
+        <section aria-labelledby="fields-title" className="mt-6">
+          <h3 id="fields-title" className="text-[16px] font-semibold">
+            {t("panel.fields")}
+          </h3>
+          <ul className="mt-2 flex flex-col gap-2">
+            {others.map(([field, p]) => (
+              <li key={field} className="flex gap-2.5 text-[14px]">
+                <ProvenanceGlyph
+                  kind={p.kind as Provenance}
+                  label={t(`bom.provenance.${p.kind}`)}
+                  className="mt-1"
+                />
+                <div className="min-w-0">
+                  <p>
+                    <span className="font-data text-[12.5px]">{field}</span>: {origin(p, t)}
+                  </p>
+                  {p.rationale && field !== "mpn" ? (
+                    <p className="text-muted">{p.rationale}</p>
+                  ) : null}
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
+      {editing ? (
+        <form onSubmit={save} className="mt-6 border-t border-line-soft pt-4">
+          <h3 className="text-[16px] font-semibold">{t("panel.edit")}</h3>
+          <p className="mt-1 text-[14px] text-muted">{t("panel.editLead")}</p>
+          <div className="mt-3 grid gap-3">
+            {EDITABLE.map((f) => (
+              <label key={f} className="flex flex-col gap-1 text-[14px] font-semibold">
+                {t(`bom.columns.${f}`)}
+                <Input
+                  ref={f === "mpn" ? mpnRef : undefined}
+                  value={values[f]}
+                  className={cn((f === "mpn" || f === "footprint") && "font-data text-[13px]")}
+                  onChange={(e) => setValues((v) => ({ ...v, [f]: e.target.value }))}
+                />
+              </label>
+            ))}
+            <label className="flex flex-col gap-1 text-[14px] font-semibold">
+              {t("panel.reason")}
+              <Textarea
+                required
+                maxLength={1000}
+                value={reason}
+                placeholder={t("panel.reasonHint")}
+                onChange={(e) => setReason(e.target.value)}
               />
             </label>
-          ))}
-          <label className="flex flex-col gap-1 text-sm font-medium">
-            {t("panel.reason")}
-            <Textarea
-              required
-              maxLength={1000}
-              value={reason}
-              placeholder={t("panel.reasonHint")}
-              onChange={(e) => setReason(e.target.value)}
-            />
-          </label>
+          </div>
+          {error ? (
+            <p role="alert" className="mt-2 text-[14px] text-error">
+              {error}
+            </p>
+          ) : null}
+          <div className="mt-3 flex flex-wrap gap-3">
+            <Button type="submit" disabled={!changed || !reason.trim()}>
+              {t("panel.saveFix")}
+            </Button>
+            <Button variant="secondary" onClick={() => setEditing(false)}>
+              {t("common.cancel")}
+            </Button>
+          </div>
+        </form>
+      ) : (
+        <div className="mt-6 flex flex-wrap gap-3">
+          <Button variant="secondary" onClick={() => setEditing(true)}>
+            {t("panel.changeMpn")}
+          </Button>
         </div>
-        {error ? (
-          <p role="alert" className="mt-2 text-sm text-error">
-            {error}
-          </p>
-        ) : null}
-        <Button type="submit" className="mt-3" disabled={!changed || !reason.trim()}>
-          {t("panel.saveFix")}
-        </Button>
-      </form>
+      )}
     </aside>
   );
 }

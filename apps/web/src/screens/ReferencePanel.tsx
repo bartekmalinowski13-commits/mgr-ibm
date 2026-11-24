@@ -15,7 +15,14 @@ const HEADLINE = [
 const FIELDS = ["value", "footprint", "manufacturer", "mpn"] as const;
 
 /** Thesis metrics against a reference BOM the user provides (nothing is stored). */
-export function ReferencePanel({ runId }: { runId: string }) {
+export function ReferencePanel({
+  runId,
+  onResult,
+}: {
+  runId: string;
+  /** called with each evaluation (the BOM title block shows its line F1) */
+  onResult?: (result: Schemas["Evaluation"]) => void;
+}) {
   const { t, i18n } = useTranslation();
   const demo = useRuntime().data?.mode === "demo";
   const input = useRef<HTMLInputElement>(null);
@@ -34,7 +41,9 @@ export function ReferencePanel({ runId }: { runId: string }) {
     setBusy(true);
     setError(undefined);
     try {
-      setResult(await evaluateRun(runId, file));
+      const evaluation = await evaluateRun(runId, file);
+      setResult(evaluation);
+      onResult?.(evaluation);
     } catch (err) {
       setError(problemMessage(err));
     } finally {
@@ -45,12 +54,13 @@ export function ReferencePanel({ runId }: { runId: string }) {
 
   return (
     <section
+      id="reference"
       aria-labelledby="ref-title"
-      className="flex flex-col gap-4 rounded-panel border border-line bg-surface p-5"
+      className="flex scroll-mt-6 flex-col gap-4 border-t border-ink pt-5"
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 id="ref-title" className="font-display text-xl font-bold">
+          <h2 id="ref-title" className="font-display text-[22px]">
             {t("reference.title")}
           </h2>
           <p className="max-w-[70ch] text-sm text-muted">{t("reference.lead")}</p>
@@ -105,10 +115,10 @@ export function ReferencePanel({ runId }: { runId: string }) {
               // biome-ignore lint/a11y/noNoninteractiveTabindex: scrollable region must be reachable by keyboard (WCAG 2.1.1)
               tabIndex={0}
               aria-label={t("reference.diffs", { count: result.diffs.length })}
-              className="max-h-80 overflow-auto rounded-card border border-line focus-visible:outline-2 focus-visible:outline-focus"
+              className="max-h-80 overflow-auto rounded-control border border-line focus-visible:outline-2 focus-visible:outline-ink"
             >
               <table className="w-full min-w-[560px] text-left text-[14px]">
-                <thead className="sticky top-0 border-b border-line bg-surface text-[13px] text-muted">
+                <thead className="sticky top-0 border-b border-line bg-sheet text-[13px] text-muted">
                   <tr>
                     <th scope="col" className="px-3 py-2 font-medium">
                       {t("bom.columns.refdes")}

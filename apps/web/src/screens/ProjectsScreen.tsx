@@ -56,7 +56,7 @@ export function ProjectsScreen() {
     <div className="flex flex-col gap-6">
       <form
         onSubmit={create}
-        className="flex flex-col gap-2 rounded-card border border-line bg-surface p-4 sm:flex-row sm:items-end"
+        className="flex flex-col gap-2 rounded-control border border-line bg-sheet p-4 sm:flex-row sm:items-end"
       >
         <label className="flex flex-1 flex-col gap-1.5 font-medium">
           {t("projects.name")}
@@ -80,7 +80,7 @@ export function ProjectsScreen() {
       {isOwner && noSamples ? (
         <section
           aria-labelledby="samples-title"
-          className="flex flex-col gap-3 rounded-card border border-line bg-surface p-4 sm:flex-row sm:items-center sm:justify-between"
+          className="flex flex-col gap-3 rounded-control border border-line bg-sheet p-4 sm:flex-row sm:items-center sm:justify-between"
         >
           <div>
             <h3 id="samples-title" className="font-display text-lg font-bold">
@@ -96,7 +96,7 @@ export function ProjectsScreen() {
       ) : projects.isError ? (
         <LoadError error={projects.error} onRetry={() => void projects.refetch()} />
       ) : projects.data.items.length === 0 ? (
-        <p className="max-w-[70ch] rounded-card border border-dashed border-line p-6 text-muted">
+        <p className="max-w-[70ch] rounded-control border border-dashed border-line p-6 text-muted">
           {t("projects.empty")}
         </p>
       ) : (
@@ -106,7 +106,7 @@ export function ProjectsScreen() {
               <Link
                 to="/projects/$projectId"
                 params={{ projectId: p.id }}
-                className="block rounded-card border border-line bg-surface p-4 hover:border-ink/40 focus-visible:outline-2 focus-visible:outline-focus"
+                className="block rounded-control border border-line bg-sheet p-4 hover:border-ink/40 focus-visible:outline-2 focus-visible:outline-ink"
               >
                 <span className="block font-display text-lg font-bold">
                   {p.name}

@@ -50,7 +50,7 @@ export function QuotaChips({
         <li
           key={c.key}
           data-level={c.level}
-          className={`rounded-full border bg-surface px-2.5 py-0.5 tabular-nums ${TONE[c.level]}`}
+          className={`rounded-chip border bg-sheet px-2 py-0.5 font-data text-[12px] ${TONE[c.level]}`}
         >
           {t(`quota.${c.key}`, { used: fmt(c.key, c.used), limit: fmt(c.key, c.limit) })}
         </li>

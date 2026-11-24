@@ -45,7 +45,7 @@ describe("BomTable", () => {
     fireEvent.change(screen.getByRole("searchbox"), { target: { value: "100k" } });
     expect(lines()).toEqual(["3"]);
     fireEvent.change(screen.getByRole("searchbox"), { target: { value: "" } });
-    fireEvent.click(screen.getByRole("checkbox", { name: /Only with findings/ }));
+    fireEvent.click(screen.getByRole("button", { name: /With findings/ }));
     expect(lines()).toEqual(["2"]);
   });
 

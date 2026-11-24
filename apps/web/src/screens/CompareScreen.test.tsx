@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, render, screen } from "@testing-library/react";
+import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import i18n from "../lib/i18n";
 import pl from "../locales/pl.json";
@@ -12,14 +13,18 @@ vi.mock("../lib/api", async (orig) => ({
 const runsData = vi.fn();
 vi.mock("../lib/queries", () => ({
   useRuns: () => ({ isPending: false, isError: false, data: { items: runsData() } }),
+  useProjects: () => ({ data: { items: [{ id: "p", name: "Holter" }] } }),
 }));
 vi.mock("../lib/session", () => ({ useSession: () => ({ orgId: "org" }) }));
-vi.mock("@tanstack/react-router", () => ({ useNavigate: () => vi.fn() }));
+vi.mock("@tanstack/react-router", () => ({
+  useNavigate: () => vi.fn(),
+  Link: ({ children }: { children: ReactNode }) => <a href="/x">{children}</a>,
+}));
 vi.mock("../router", () => ({
   compareRoute: { useParams: () => ({ projectId: "p" }), useSearch: () => ({}) },
 }));
 
-const { CompareScreen } = await import("./CompareScreen");
+const { CompareScreen, diffBoms, verdict } = await import("./CompareScreen");
 
 const run = (id: string, variant: "A" | "B") => ({
   id,
@@ -72,5 +77,61 @@ describe("CompareScreen error states (I-3)", () => {
     renderScreen();
     expect(screen.getByText(pl.compare.needTwo)).toBeTruthy();
     expect(screen.queryByRole("status")).toBeNull();
+  });
+});
+
+describe("verdict", () => {
+  const base = { costA: 0, costB: 0, findingsA: 0, findingsB: 0, differences: 3 };
+  it("says the hybrid is cheaper with the real ratio", () => {
+    expect(verdict({ ...base, costA: 1.2, costB: 0.4 })).toEqual({
+      key: "compare.verdict.cheaper",
+      params: { x: 3 },
+    });
+  });
+  it("says it is pricier when B costs clearly more", () => {
+    expect(verdict({ ...base, costA: 0.2, costB: 0.5 }).key).toBe("compare.verdict.pricier");
+  });
+  it("falls back to findings, then to a neutral sentence", () => {
+    expect(verdict({ ...base, findingsA: 5, findingsB: 2 }).key).toBe(
+      "compare.verdict.fewerFindings",
+    );
+    expect(verdict({ ...base, findingsA: 1, findingsB: 4 }).key).toBe(
+      "compare.verdict.moreFindings",
+    );
+    expect(verdict(base).key).toBe("compare.verdict.differ");
+  });
+  it("reports identical results", () => {
+    expect(verdict({ ...base, differences: 0 }).key).toBe("compare.verdict.same");
+  });
+});
+
+describe("CompareScreen content", () => {
+  it("lists the differing lines with both MPNs and a verdict from real data", async () => {
+    runsData.mockReturnValue([run("a", "A"), run("b", "B")]);
+    const mk = (mpn: string) => ({
+      run_id: "x",
+      bom: {
+        items: [{ line: 1, refdes: ["U1"], quantity: 1, mpn, provenance: {} }],
+        findings: [],
+      },
+    });
+    get.mockImplementation(async (_p: string, opts: { params: { path: { run_id: string } } }) => ({
+      data: opts.params.path.run_id === "a" ? mk("AAA-1") : mk("BBB-2"),
+      response: new Response(null, { status: 200 }),
+    }));
+    renderScreen();
+    expect(await screen.findByText("A AAA-1")).toBeTruthy();
+    expect(screen.getByText("B BBB-2")).toBeTruthy();
+    expect(screen.getByText(pl.compare.result.differ)).toBeTruthy();
+    expect(screen.getByRole("table", { name: pl.compare.metrics })).toBeTruthy();
+  });
+
+  it("diffBoms marks lines present in one variant only", () => {
+    const a = { items: [{ refdes: ["R1"], mpn: "X" }], findings: [] };
+    const b = { items: [], findings: [] };
+    // biome-ignore lint/suspicious/noExplicitAny: minimal fixtures
+    const [d] = diffBoms(a as any, b as any);
+    expect(d?.b).toBeUndefined();
+    expect(d?.changed.length).toBe(3);
   });
 });

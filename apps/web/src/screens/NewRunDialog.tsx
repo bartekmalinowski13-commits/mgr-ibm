@@ -185,9 +185,11 @@ export function NewRunDialog({ preset, onClose }: { preset: NewRunPreset; onClos
                 <label
                   key={v.id}
                   className={cn(
-                    "flex cursor-pointer flex-col gap-2 rounded-card border p-3",
-                    "has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-focus",
-                    variant === v.id ? "border-ink bg-paper/60" : "border-line hover:border-ink/40",
+                    "flex cursor-pointer flex-col gap-2 rounded-control border p-3",
+                    "has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-ink",
+                    variant === v.id
+                      ? "border-ink bg-vellum/60"
+                      : "border-line hover:border-ink/40",
                   )}
                 >
                   <input

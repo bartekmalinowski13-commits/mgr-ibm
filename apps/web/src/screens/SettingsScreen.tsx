@@ -20,11 +20,11 @@ function Secret({ label, value }: { label: string; value: string }) {
   const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
   return (
-    <div role="status" className="rounded-card border border-llm/30 bg-llm/5 p-4">
+    <div role="status" className="rounded-control border border-llm/30 bg-llm/5 p-4">
       <p>{label}</p>
       <div className="mt-2 flex flex-col gap-2 sm:flex-row">
         <code
-          className="min-w-0 flex-1 break-all rounded-control bg-surface px-3 py-2 font-mono text-[13px]"
+          className="min-w-0 flex-1 break-all rounded-control bg-sheet px-3 py-2 font-mono text-[13px]"
           data-testid="secret"
         >
           {value}
@@ -108,7 +108,7 @@ function Members() {
         ) : members.isError ? (
           <LoadError error={members.error} />
         ) : (
-          <ul className="divide-y divide-line rounded-card border border-line bg-surface">
+          <ul className="divide-y divide-line rounded-control border border-line bg-sheet">
             {members.data.items.map((m) => (
               <li key={m.user_sub} className="flex flex-wrap items-center gap-3 px-4 py-3">
                 <div className="min-w-0 flex-1">
@@ -181,7 +181,7 @@ function Members() {
       <Section title={t("settings.invite")}>
         <form
           onSubmit={invite}
-          className="flex flex-col gap-3 rounded-card border border-line bg-surface p-4 sm:flex-row sm:items-end"
+          className="flex flex-col gap-3 rounded-control border border-line bg-sheet p-4 sm:flex-row sm:items-end"
         >
           <label className="flex flex-1 flex-col gap-1.5 font-medium">
             {t("settings.inviteEmail")}
@@ -207,7 +207,7 @@ function Members() {
         {token ? <Secret label={t("settings.invited")} value={token} /> : null}
         <h3 className="mt-2 font-medium">{t("settings.pending")}</h3>
         {invites.data?.items.length ? (
-          <ul className="divide-y divide-line rounded-card border border-line bg-surface">
+          <ul className="divide-y divide-line rounded-control border border-line bg-sheet">
             {invites.data.items.map((i) => (
               <li key={i.id} className="flex flex-wrap items-center gap-3 px-4 py-3">
                 <span className="min-w-0 flex-1">{i.email}</span>
@@ -305,7 +305,7 @@ function SsoSettings() {
 
   return (
     <Section title={t("settings.sso")} lead={t("settings.ssoLead")}>
-      <div className="flex flex-col gap-3 rounded-card border border-line bg-surface p-4">
+      <div className="flex flex-col gap-3 rounded-control border border-line bg-sheet p-4">
         <h3 className="font-display text-lg font-bold">{t("sso.domains")}</h3>
         <p className="text-sm text-muted">{t("sso.domainsLead")}</p>
         <form
@@ -392,7 +392,7 @@ function SsoSettings() {
       </div>
 
       <form
-        className="flex flex-col gap-3 rounded-card border border-line bg-surface p-4"
+        className="flex flex-col gap-3 rounded-control border border-line bg-sheet p-4"
         onSubmit={(e) => {
           e.preventDefault();
           void run(async () => {
@@ -563,7 +563,7 @@ function Keys() {
     <Section title={t("settings.keys")} lead={t("settings.keysLead")}>
       <form
         onSubmit={create}
-        className="flex flex-col gap-3 rounded-card border border-line bg-surface p-4 sm:flex-row sm:items-end"
+        className="flex flex-col gap-3 rounded-control border border-line bg-sheet p-4 sm:flex-row sm:items-end"
       >
         <label className="flex flex-1 flex-col gap-1.5 font-medium">
           {t("settings.keyName")}
@@ -587,7 +587,7 @@ function Keys() {
       </form>
       {secret ? <Secret label={t("settings.keyCreated")} value={secret} /> : null}
       {keys.data?.items.length ? (
-        <ul className="divide-y divide-line rounded-card border border-line bg-surface">
+        <ul className="divide-y divide-line rounded-control border border-line bg-sheet">
           {keys.data.items.map((k) => (
             <li key={k.id} className="flex flex-wrap items-center gap-3 px-4 py-3">
               <div className="min-w-0 flex-1">
@@ -687,7 +687,7 @@ function Usage() {
     <Section title={t("settings.usage")}>
       <dl className="grid gap-4 sm:grid-cols-2">
         {rows.map((r) => (
-          <div key={r.key} className="rounded-card border border-line bg-surface p-4">
+          <div key={r.key} className="rounded-control border border-line bg-sheet p-4">
             <dt className="text-muted">{t(`settings.usageItems.${r.key}`)}</dt>
             <dd className="mt-1 font-display text-2xl font-bold tabular-nums">
               {r.fmt(r.used)}{" "}
@@ -745,7 +745,7 @@ export function SettingsScreen() {
             type="button"
             aria-selected={tab === id}
             onClick={() => setTab(id)}
-            className={`-mb-px border-b-2 px-3 py-2 font-medium focus-visible:outline-2 focus-visible:outline-focus ${
+            className={`-mb-px border-b-2 px-3 py-2 font-medium focus-visible:outline-2 focus-visible:outline-ink ${
               tab === id ? "border-ink text-ink" : "border-transparent text-muted hover:text-ink"
             }`}
           >
