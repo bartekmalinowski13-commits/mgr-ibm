@@ -242,6 +242,7 @@ class InvitationAccept(_M):
 
 class ModelOption(_M):
     id: str
+    display_name: str = Field(description='Human-readable name, e.g. "Mistral Large EU".')
     provider: str
     license_class: Literal["closed", "open-weight"]
     residency: str

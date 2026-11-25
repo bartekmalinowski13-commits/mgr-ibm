@@ -127,3 +127,13 @@ Assumptions made without consultation (the human was unavailable). Format: date 
   EU endpoint (`mistral-medium-2604`, `mistral-small-2603`, `ministral-8b-2512`).
 - **Open point:** costs are list prices from memory plus the 10% EU surcharge; the public pricing
   page shows no per-token table. Recheck in the Mistral console before using cost in the thesis.
+
+## 2026-11-25 – GPT family (Astra, Sol, Terra, Luna, 5.4) and readable model names
+- **Assumption:** the GPT-6.x / 5.4 models use the same Azure resource and Data Zone Standard
+  (EUR data zone) as `openai-eu`, so they add no new provider or data flow. They sit in the
+  catalogue `enabled: false` until the subscription gets EU Data Zone quota (0 TPM on
+  2026-11-25) and the deployments `bomagent-gpt-6-2-astra`, `…-6-2-sol`, `…-6-1-terra`,
+  `…-6-luna`, `…-5-4` exist.
+- **Assumption:** the model picker shows a `display_name` from the catalogue ("Mistral Large EU")
+  instead of the raw id; runs still store and export the id, so thesis data is unchanged.
+- **Open point:** Azure prices are USD list prices used as an EUR approximation (as for `openai-eu`).

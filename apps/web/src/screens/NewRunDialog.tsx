@@ -217,8 +217,8 @@ export function NewRunDialog({ preset, onClose }: { preset: NewRunPreset; onClos
               <Select id={id} value={model} onChange={(e) => setModelId(e.target.value)}>
                 {(models.data ?? []).map((m) => (
                   <option key={m.id} value={m.id}>
-                    {m.id} (
-                    {m.license_class === "closed" ? t("newRun.closed") : t("newRun.openWeight")})
+                    {m.display_name} ·{" "}
+                    {m.license_class === "closed" ? t("newRun.closed") : t("newRun.openWeight")}
                   </option>
                 ))}
               </Select>

@@ -1622,6 +1622,11 @@
       "ModelOption": {
         "additionalProperties": false,
         "properties": {
+          "display_name": {
+            "description": "Human-readable name, e.g. \"Mistral Large EU\".",
+            "title": "Display Name",
+            "type": "string"
+          },
           "id": {
             "title": "Id",
             "type": "string"
@@ -1656,6 +1661,7 @@
         },
         "required": [
           "id",
+          "display_name",
           "provider",
           "license_class",
           "residency",

@@ -283,6 +283,7 @@ async def test_models_lists_only_allowed_chat_models(env):
     owner = await env.org(await env.login(f"o-{s}"), f"mdl-{s}")
     models = (await env.c.get("/v1/models", headers=owner)).json()
     ids = {m["id"] for m in models}
+    assert all(m["display_name"] for m in models)
     assert {"fake-closed", "fake-open-weight"} <= ids
     assert "fake-embedding" not in ids  # not a chat model
     assert "claude-sonnet-eu" not in ids  # unverified in the EU region

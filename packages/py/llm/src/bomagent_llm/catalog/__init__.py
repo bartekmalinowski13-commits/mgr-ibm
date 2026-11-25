@@ -24,6 +24,8 @@ class ModelSpec(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     id: str
+    #: what people see in the model picker, e.g. "Mistral Large EU"; falls back to ``id``
+    display_name: str = ""
     gateway_model: str
     provider: str
     license_class: LicenseClass
@@ -42,6 +44,10 @@ class ModelSpec(BaseModel):
     enabled: bool = False
     verified: bool = False
     notes: str = ""
+
+    @property
+    def label(self) -> str:
+        return self.display_name or self.id
 
     def cost(self, input_tokens: int, output_tokens: int) -> float:
         return round(

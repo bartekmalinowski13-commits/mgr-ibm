@@ -128,3 +128,23 @@ def test_price_provenance_fields_are_validated():
     assert ok.price_checked_on.isoformat() == "2026-11-16"
     with pytest.raises(ValidationError):
         ModelSpec(**base, price_checked_on="not-a-date")
+
+
+def test_hosted_models_have_a_readable_name_ending_in_eu():
+    """The model picker shows names like "Mistral Large EU", never raw ids."""
+    from bomagent_llm.catalog import load_catalog
+
+    for spec in load_catalog().models:
+        if spec.residency == "local" or "chat" not in spec.capabilities:
+            continue
+        assert spec.display_name, f"{spec.id}: display_name missing"
+        assert spec.display_name.endswith(" EU"), spec.display_name
+
+
+def test_label_falls_back_to_the_id():
+    from bomagent_llm.catalog import ModelSpec
+
+    spec = ModelSpec(
+        id="x", gateway_model="x", provider="fake", license_class="closed", residency="local"
+    )
+    assert spec.label == "x"

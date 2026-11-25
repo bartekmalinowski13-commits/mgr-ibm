@@ -17,7 +17,7 @@ import { formatDate, formatDuration, formatNumber } from "../lib/format";
 import { useIntentKeys } from "../lib/idempotency";
 import { SheetSlot, usePageTitle } from "../lib/layout";
 import { formatEur } from "../lib/provenance";
-import { useProjects, useRuns } from "../lib/queries";
+import { useModelLabel, useProjects, useRuns } from "../lib/queries";
 import { useSession } from "../lib/session";
 import {
   collapseTrace,
@@ -88,6 +88,7 @@ export function RunScreen() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const keys = useIntentKeys();
+  const modelLabel = useModelLabel();
   const [rerunning, setRerunning] = useState(false);
   const run = useQuery({
     queryKey: ["run", orgId, runId],
@@ -263,7 +264,7 @@ export function RunScreen() {
           cells={[
             { label: t("titleBlock.project"), value: project?.name ?? "—" },
             { label: t("titleBlock.variant"), value: pairs.map((p) => p.run.variant).join(" + ") },
-            { label: t("titleBlock.model"), value: run.data.model_id },
+            { label: t("titleBlock.model"), value: modelLabel(run.data.model_id) },
             { label: t("titleBlock.runtime"), value: run.data.runtime },
             {
               label: t("titleBlock.kb"),
@@ -294,7 +295,7 @@ export function RunScreen() {
             <p className="mt-4 max-w-[62ch] text-[17px] text-muted">
               {pairs.length === 2
                 ? t("run.leadBoth")
-                : t("run.leadOne", { model: run.data.model_id })}
+                : t("run.leadOne", { model: modelLabel(run.data.model_id) })}
             </p>
             {status === "queued" ? <p className="mt-2 text-muted">{t("run.waiting")}</p> : null}
             {cancelled ? (
