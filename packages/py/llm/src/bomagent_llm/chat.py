@@ -239,7 +239,8 @@ class GatewayChat:
             "model": request.model.gateway_model,
             "messages": [{"role": m.role, "content": m.content} for m in request.messages],
             "temperature": request.temperature,
-            "max_tokens": max_tokens,
+            # OpenAI's current name; GPT-5 on Azure rejects max_tokens, LiteLLM maps it for others
+            "max_completion_tokens": max_tokens,
             "response_format": {
                 "type": "json_schema",
                 "json_schema": {
