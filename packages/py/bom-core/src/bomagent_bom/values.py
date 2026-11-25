@@ -306,7 +306,19 @@ def normalize_value(text: str, kind: str | None = None) -> str | None:
 
 
 def values_equivalent(a: str, b: str, kind: str | None = None) -> bool:
-    """``4k7`` == ``4.7k`` == ``4700 Ω``; non-numeric values compare case-insensitively."""
+    """``4k7`` == ``4.7k`` == ``4700 Ω``; non-numeric values compare case-insensitively.
+    A value with a condition after ``@`` (ferrite bead ``220R@100MHz``) is compared part
+    by part, so ``220R@100MHz`` == ``220 Ω @ 100 MHz`` but != ``220R@1GHz``."""
+    pa, pb = a.split("@"), b.split("@")
+    if len(pa) == len(pb) > 1:
+        return all(
+            _single_equivalent(x, y, kind if i == 0 else None)
+            for i, (x, y) in enumerate(zip(pa, pb, strict=True))
+        )
+    return _single_equivalent(a, b, kind)
+
+
+def _single_equivalent(a: str, b: str, kind: str | None) -> bool:
     na, nb = normalize_value(a, kind), normalize_value(b, kind)
     if na is not None and nb is not None:
         return na == nb

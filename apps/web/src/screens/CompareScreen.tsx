@@ -10,6 +10,7 @@ import { type BomItem, formatEur } from "../lib/provenance";
 import { useProjects, useRuns } from "../lib/queries";
 import { useSession } from "../lib/session";
 import { useToast } from "../lib/toast";
+import { valuesEquivalent } from "../lib/values";
 import { compareRoute } from "../router";
 import { LoadError, Skeleton } from "./common";
 
@@ -22,7 +23,9 @@ interface Diff {
   changed: (typeof FIELDS)[number][];
 }
 
-/** Per designator: what each variant decided, and where they disagree. */
+/** Per designator: what each variant decided, and where they disagree. Values are
+ * compared by meaning, not spelling (`100n` = `100 nF`): variant A writes values in
+ * canonical form, variant B keeps the schematic's notation. */
 export function diffBoms(a: Schemas["BomVersion"], b: Schemas["BomVersion"]): Diff[] {
   const ia = new Map(a.items.flatMap((i) => i.refdes.map((r) => [r, i] as const)));
   const ib = new Map(b.items.flatMap((i) => i.refdes.map((r) => [r, i] as const)));
@@ -32,7 +35,9 @@ export function diffBoms(a: Schemas["BomVersion"], b: Schemas["BomVersion"]): Di
   return refs.map((refdes) => {
     const x = ia.get(refdes);
     const y = ib.get(refdes);
-    const changed = x && y ? FIELDS.filter((f) => (x[f] ?? "") !== (y[f] ?? "")) : [...FIELDS];
+    const same = (f: (typeof FIELDS)[number]) =>
+      f === "value" ? valuesEquivalent(x?.value, y?.value) : (x?.[f] ?? "") === (y?.[f] ?? "");
+    const changed = x && y ? FIELDS.filter((f) => !same(f)) : [...FIELDS];
     return { refdes, a: x, b: y, changed };
   });
 }
