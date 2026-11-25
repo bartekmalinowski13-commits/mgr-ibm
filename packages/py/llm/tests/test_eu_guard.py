@@ -52,8 +52,15 @@ def test_shipped_catalogue_is_clean_even_with_everything_enabled():
     assert config["model_list"], "the fixture must actually render models"
 
 
-# hosted entries a human verified for the pilot (EU endpoint pinned)
-PILOT_ENABLED = {"mistral-large-eu", "mistral-embed-eu"}
+# Hosted entries switched on for the Fly pilot after a human check, EU endpoint pinned
+# (runbook llm-gateway-pilot.md).
+PILOT_ENABLED = {
+    "mistral-large-eu",
+    "mistral-medium-eu",
+    "mistral-small-mistral-eu",
+    "ministral-8b-mistral-eu",
+    "mistral-embed-eu",
+}
 
 
 def test_shipped_catalogue_enables_only_local_entries():

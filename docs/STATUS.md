@@ -4,6 +4,16 @@
 
 _Updated by Claude Code after every milestone (see `docs/prompts/CLAUDE_CODE_MASTER_PROMPT.md` §5)._
 
+## 2026-11-25 - more Mistral models on the pilot
+
+- Enabled in the catalogue: `mistral-medium-eu` (Medium 3.5, `mistral-medium-2604`),
+  `mistral-small-mistral-eu` (Small 4, `mistral-small-2603`), `ministral-8b-mistral-eu`
+  (`ministral-8b-2512`), next to Mistral Large. Same EU endpoint and key; IDs pinned from
+  `GET /v1/models` on `api.eu.mistral.ai`. Costs are approximate (`docs/DECISIONS_LOG.md`).
+- Claude (Bedrock eu-central-1) and GPT (Azure, Data Zone EU) are still off: the Azure resource
+  `bomagent-gpt-eu-pilot` exists in Sweden Central, but the trial subscription has zero Data Zone
+  quota; no AWS account yet.
+
 ## 2026-11-25 - global KB corpus: sample datasheets (`seed-kb`)
 
 - The global corpus had a reader (KB indexer, `kb.global_document.uploaded`) but no writer, so a

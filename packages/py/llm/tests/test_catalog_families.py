@@ -8,6 +8,8 @@ import pytest
 
 from bomagent_llm.catalog import ModelNotAllowedError, load_catalog
 
+from .test_eu_guard import PILOT_ENABLED
+
 OLLAMA = {
     "ollama-qwen3-8b": "qwen3:8b",
     "ollama-qwen3-14b": "qwen3:14b",
@@ -29,8 +31,9 @@ def test_every_new_entry_is_disabled_unverified_and_documented():
     by_id = {m.id: m for m in catalog.models}
     for model_id in [*OLLAMA, *HOSTED_OPEN]:
         spec = by_id[model_id]
-        assert spec.enabled is False
-        assert spec.verified is False
+        if model_id not in PILOT_ENABLED:
+            assert spec.enabled is False
+            assert spec.verified is False
         assert spec.license_class.value == "open-weight"
         assert spec.notes, model_id
 
