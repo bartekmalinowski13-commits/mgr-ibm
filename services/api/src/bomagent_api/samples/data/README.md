@@ -27,4 +27,7 @@ sample, the difference being lines the schematic leaves without an MPN (the work
 the agents). `services/api/tests/test_samples.py` asserts this on every CI run.
 
 Manufacturer datasheets are not included. The synthetic datasheet corpus in
-`evals/fixtures/datasheets/` covers the MPNs used here (except the NTC thermistor, on purpose).
+`evals/fixtures/datasheets/` covers the MPNs used here (except the NTC thermistor, on purpose);
+its copy without the prompt-injection test document, `samples/datasheets/` (with
+`index.csv` = file, manufacturer), is what `python -m bomagent_allinone seed-kb` loads into a
+pilot's global knowledge-base corpus.

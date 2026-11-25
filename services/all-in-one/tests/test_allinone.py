@@ -426,12 +426,15 @@ def test_entrypoint_dispatches_commands(monkeypatch):
     monkeypatch.setattr(sys, "argv", list(sys.argv))  # main() rewrites it for the CLI
     monkeypatch.setattr(bomagent_migrations, "main", lambda: seen.append(list(sys.argv)))
     monkeypatch.setattr(shutdown, "serve", seen.append)  # graceful server (SSE, consumers)
+    monkeypatch.setattr(entry, "seed_kb", lambda: seen.append("seed-kb"))
     main(["migrate"])
     main(["bootstrap"])
+    main(["seed-kb"])
     main([])
     assert seen == [
         ["bomagent-migrate", "upgrade"],
         ["bomagent-migrate", "bootstrap"],
+        "seed-kb",
         entry.build_app,
     ]
     with pytest.raises(SystemExit, match="usage"):

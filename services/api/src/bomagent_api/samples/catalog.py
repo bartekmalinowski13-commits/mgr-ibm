@@ -6,11 +6,15 @@ The files live in ``data/`` (also reachable as ``evals/samples``) and are self-a
 
 from __future__ import annotations
 
+import csv
 from dataclasses import dataclass
 from pathlib import Path
 
 SAMPLE_PREFIX = "[Sample] "
 DATA_DIR = Path(__file__).parent / "data"
+#: synthetic datasheets for the samples' parts (CC0, ``evals/fixtures/datasheets`` minus the
+#: injection test); a pilot loads them into the global KB corpus (``bomagent_allinone seed-kb``)
+DATASHEETS_DIR = Path(__file__).parent / "datasheets"
 
 
 @dataclass(frozen=True)
@@ -71,3 +75,18 @@ SAMPLES: tuple[Sample, ...] = (
 def load_files(sample: Sample) -> list[tuple[str, bytes]]:
     """Design files of a sample as (name, bytes)."""
     return [(name, (sample.directory / name).read_bytes()) for name in sample.files]
+
+
+@dataclass(frozen=True)
+class SampleDatasheet:
+    path: Path
+    manufacturer: str
+
+
+def sample_datasheets() -> list[SampleDatasheet]:
+    """The datasheets listed in ``datasheets/index.csv``, in file-name order."""
+    with (DATASHEETS_DIR / "index.csv").open(encoding="utf-8") as fh:
+        return [
+            SampleDatasheet(DATASHEETS_DIR / row["file"], row["manufacturer"])
+            for row in sorted(csv.DictReader(fh), key=lambda r: r["file"])
+        ]

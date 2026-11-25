@@ -26,8 +26,11 @@ package only composes them.
   `user_metadata.name`.
 - `bomagent_allinone.app.create_app(settings, *, engine, platform_engine, store, chat, kb,
   retriever_factory)` - injectable for tests.
-- `python -m bomagent_allinone [serve|migrate|bootstrap]` - serve (default); `migrate` =
-  `bomagent-migrate upgrade`; `bootstrap` = `bomagent-migrate bootstrap`.
+- `python -m bomagent_allinone [serve|migrate|bootstrap|seed-kb]` - serve (default); `migrate` =
+  `bomagent-migrate upgrade`; `bootstrap` = `bomagent-migrate bootstrap`; `seed-kb` = the
+  sample datasheets (`bomagent_api.samples.catalog.sample_datasheets`) into the **global** KB
+  corpus with the platform role (`bomagent_allinone.seed_kb`): idempotent, sandboxed
+  extraction, gateway embeddings (the fake embeddings are refused outside local/test).
 
 Environment variables and secrets: `deploy/supabase/README.md`.
 

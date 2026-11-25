@@ -3,6 +3,7 @@
     python -m bomagent_allinone            # serve: API + workers + SPA (default)
     python -m bomagent_allinone migrate    # Alembic upgrade as the migrator role
     python -m bomagent_allinone bootstrap  # roles + own database, as the administrator
+    python -m bomagent_allinone seed-kb    # sample datasheets into the global KB corpus
 
 ``migrate``/``bootstrap`` are ``bomagent-migrate upgrade|bootstrap`` (same environment
 variables: ``BOMAGENT_MIGRATOR_DATABASE_URL``; ``BOMAGENT_ADMIN_DATABASE_URL``,
@@ -16,7 +17,7 @@ from typing import Any
 
 from bomagent_common import shutdown
 
-COMMANDS = {"serve", "migrate", "bootstrap"}
+COMMANDS = {"serve", "migrate", "bootstrap", "seed-kb"}
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -30,10 +31,19 @@ def main(argv: list[str] | None = None) -> None:
         sys.argv = ["bomagent-migrate", "upgrade" if command == "migrate" else "bootstrap"]
         bomagent_migrations.main()
         return
+    if command == "seed-kb":
+        seed_kb()
+        return
     # SIGTERM ends open live-progress streams and stops the consumers claiming at once, so
     # the lifespan teardown (consumer grace, message release) runs within the host's kill
     # timeout; BOMAGENT_HOST/PORT, BOMAGENT_SHUTDOWN_GRACE_S (bomagent_common.shutdown)
     shutdown.serve(build_app)
+
+
+def seed_kb() -> None:
+    from bomagent_allinone.seed_kb import run
+
+    run()
 
 
 def build_app() -> Any:

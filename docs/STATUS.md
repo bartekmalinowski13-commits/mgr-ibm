@@ -4,6 +4,15 @@
 
 _Updated by Claude Code after every milestone (see `docs/prompts/CLAUDE_CODE_MASTER_PROMPT.md` §5)._
 
+## 2026-11-25 - global KB corpus: sample datasheets (`seed-kb`)
+
+- The global corpus had a reader (KB indexer, `kb.global_document.uploaded`) but no writer, so a
+  pilot started with an empty corpus and new organisations had no evidence for MPN selection.
+- `python -m bomagent_allinone seed-kb` (`bomagent_allinone.seed_kb`) loads the 17 synthetic
+  sample datasheets (`bomagent_api/samples/datasheets/`, built by `tools/make_sample_pack.py`)
+  into the global scope with the platform role: idempotent, sandboxed extraction, gateway
+  embeddings. Runbook: `docs/platform/runbooks/supabase-pilot.md` section 4.
+
 ## 2026-11-25 - value notation no longer counts as a difference
 
 - Comparison A/B (`apps/web`, `diffBoms`): values are compared by meaning, not spelling
