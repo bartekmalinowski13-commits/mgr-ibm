@@ -107,9 +107,10 @@ def test_seed_kb_command_seeds_with_the_configured_embeddings(monkeypatch, db_ur
 
     _seed_env(monkeypatch, db_urls, "test")
     run()
-    out = capsys.readouterr().out
-    assert out.startswith("global corpus: ")
-    assert "indexed" in out
+    lines = capsys.readouterr().out.splitlines()  # the structured log may come first
+    summary = [line for line in lines if line.startswith("global corpus: ")]
+    assert len(summary) == 1
+    assert "indexed" in summary[0]
 
 
 def test_seed_kb_command_refuses_fake_embeddings_outside_local_and_test(monkeypatch, db_urls):
