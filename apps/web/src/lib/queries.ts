@@ -69,6 +69,13 @@ export function useUsage(enabled: boolean) {
   });
 }
 
+/** Model id -> human-readable name ("Mistral Large EU"); ids the catalogue no longer
+ * offers are shown as they are. */
+export function useModelLabel(): (id: string) => string {
+  const models = useModels();
+  return (id) => models.data?.find((m) => m.id === id)?.display_name ?? id;
+}
+
 export function useModels() {
   const { orgId } = useSession();
   return useQuery({

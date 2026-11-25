@@ -109,6 +109,7 @@ def list_models(catalog: Catalog, allow_local: bool) -> list[ModelOption]:
     return [
         ModelOption(
             id=m.id,
+            display_name=m.label,
             provider=m.provider,
             license_class=m.license_class.value,
             residency=m.residency,

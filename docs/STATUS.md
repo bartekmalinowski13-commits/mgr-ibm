@@ -13,6 +13,10 @@ _Updated by Claude Code after every milestone (see `docs/prompts/CLAUDE_CODE_MAS
 - GPT on: `openai-eu` = Azure resource `bomagent-gpt-eu-pilot` (Sweden Central), deployment
   `bomagent-gpt-eu-datazone` (gpt-5.4-mini, Data Zone Standard EU). Gateway secrets
   `AZURE_API_KEY`, `AZURE_API_BASE` set by the owner.
+- GPT family in the catalogue but off: GPT-6.2 Astra/Sol, GPT-6.1 Terra, GPT-6 Luna, GPT-5.4
+  (Data Zone EU), waiting for Azure EU quota. The model picker now shows readable names
+  ("Mistral Large EU"). PR #114 fixed `max_completion_tokens` for GPT-5 on Azure; BOM check
+  2026-11-25: F1 93–100% on all 5 live models, 0 invented MPNs.
 - Claude (Bedrock eu-central-1) is still off: the AWS account is being created.
 
 ## 2026-11-25 - global KB corpus: sample datasheets (`seed-kb`)

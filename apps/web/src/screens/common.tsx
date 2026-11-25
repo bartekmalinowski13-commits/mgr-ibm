@@ -6,6 +6,7 @@ import { useTranslation } from "react-i18next";
 import type { Schemas } from "../lib/api";
 import { api, call, problemMessage } from "../lib/api";
 import { formatDate } from "../lib/format";
+import { useModelLabel } from "../lib/queries";
 import { useToast } from "../lib/toast";
 
 const RUN_STATUS: Record<string, Status> = {
@@ -34,6 +35,7 @@ export function RunTable({
   projects?: Map<string, string>;
 }) {
   const { t, i18n } = useTranslation();
+  const modelLabel = useModelLabel();
   return (
     <div className="overflow-x-auto rounded-control border border-line bg-sheet">
       <table className="w-full min-w-[640px] text-left">
@@ -59,7 +61,7 @@ export function RunTable({
                 </Link>
               </td>
               {projects ? <td className="px-4 py-3">{projects.get(r.project_id) ?? "–"}</td> : null}
-              <td className="px-4 py-3 font-mono text-sm">{r.model_id}</td>
+              <td className="px-4 py-3">{modelLabel(r.model_id)}</td>
               <td className="px-4 py-3 text-muted">{formatDate(r.created_at, i18n.language)}</td>
               <td className="px-4 py-3">
                 <RunStatus status={r.status} />

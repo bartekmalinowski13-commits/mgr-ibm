@@ -7,7 +7,7 @@ import { api, call, type Schemas, saveBlob } from "../lib/api";
 import { formatDuration, formatNumber } from "../lib/format";
 import { SheetSlot, usePageTitle } from "../lib/layout";
 import { type BomItem, formatEur } from "../lib/provenance";
-import { useProjects, useRuns } from "../lib/queries";
+import { useModelLabel, useProjects, useRuns } from "../lib/queries";
 import { useSession } from "../lib/session";
 import { useToast } from "../lib/toast";
 import { valuesEquivalent } from "../lib/values";
@@ -120,6 +120,7 @@ export function CompareScreen() {
   const navigate = useNavigate();
   const toast = useToast();
   const { t, i18n } = useTranslation();
+  const modelLabel = useModelLabel();
   usePageTitle(t("compare.title"));
   const runs = useRuns(projectId);
   const projects = useProjects();
@@ -273,7 +274,10 @@ export function CompareScreen() {
           cells={[
             { label: t("titleBlock.project"), value: project?.name ?? "—" },
             { label: t("titleBlock.runs"), value: shortIds },
-            { label: t("titleBlock.model"), value: differ(runA.model_id, runB.model_id) },
+            {
+              label: t("titleBlock.model"),
+              value: differ(modelLabel(runA.model_id), modelLabel(runB.model_id)),
+            },
             {
               label: t("titleBlock.costAB"),
               value: differ(formatEur(byKey("cost").a, lang), formatEur(byKey("cost").b, lang)),
@@ -301,7 +305,8 @@ export function CompareScreen() {
               >
                 {done.map((r) => (
                   <option key={r.id} value={r.id}>
-                    {t("run.variant", { variant: r.variant })} – {r.model_id} – {r.id.slice(0, 8)}
+                    {t("run.variant", { variant: r.variant })} – {modelLabel(r.model_id)} –{" "}
+                    {r.id.slice(0, 8)}
                   </option>
                 ))}
               </Select>

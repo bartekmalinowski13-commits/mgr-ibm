@@ -14,6 +14,7 @@ const runsData = vi.fn();
 vi.mock("../lib/queries", () => ({
   useRuns: () => ({ isPending: false, isError: false, data: { items: runsData() } }),
   useProjects: () => ({ data: { items: [{ id: "p", name: "Holter" }] } }),
+  useModelLabel: () => (id: string) => id,
 }));
 vi.mock("../lib/session", () => ({ useSession: () => ({ orgId: "org" }) }));
 vi.mock("@tanstack/react-router", () => ({

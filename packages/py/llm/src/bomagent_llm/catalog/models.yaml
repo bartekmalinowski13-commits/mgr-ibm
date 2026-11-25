@@ -131,6 +131,7 @@ models:
   # Zurich). For strict "EU only" use an application inference profile limited to EU
   # member-state regions (ARCHITECTURE.md §8).
   - id: claude-opus-eu
+    display_name: Claude Opus EU
     gateway_model: bedrock/eu.anthropic.claude-opus-5-5
     provider: bedrock
     license_class: closed
@@ -144,6 +145,7 @@ models:
     verified: false
     notes: id and EU profile checked against https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-anthropic-claude-opus-5-5.html (2026-11-12); the eu. profile routes only to EU member-state regions (eu-central-1, eu-north-1, eu-south-1, eu-south-2, eu-west-1, eu-west-3 from a Frankfurt source) - re-verify with GetInferenceProfile from eu-central-1 and enable model access in the account
   - id: claude-sonnet-eu
+    display_name: Claude Sonnet EU
     gateway_model: bedrock/eu.anthropic.claude-sonnet-5-5
     provider: bedrock
     license_class: closed
@@ -157,6 +159,7 @@ models:
     verified: false
     notes: id and EU profile checked against https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-anthropic-claude-sonnet-5-5.html (2026-11-12); the eu. profile routes only to EU member-state regions (eu-central-1, eu-north-1, eu-south-1, eu-south-2, eu-west-1, eu-west-3 from a Frankfurt source) - re-verify with GetInferenceProfile from eu-central-1 and enable model access in the account
   - id: claude-haiku-eu
+    display_name: Claude Haiku EU
     gateway_model: bedrock/eu.anthropic.claude-haiku-5-5
     provider: bedrock
     license_class: closed
@@ -174,6 +177,7 @@ models:
   # Deployment name is chosen when the Azure deployment is created; never use "Global"
   # deployment types.
   - id: openai-eu
+    display_name: GPT-5.4 mini EU
     gateway_model: azure/bomagent-gpt-eu-datazone
     provider: azure_openai
     license_class: closed
@@ -193,8 +197,114 @@ models:
       data zone; never Global). Checked in the Foundry portal 2026-11-25. Prices: list USD
       0.83/4.95 per 1M tokens for GPT-5.4 mini Data Zone, used as an EUR approximation.
 
+  - id: gpt-6-2-astra-eu
+    display_name: GPT-6.2 Astra EU
+    gateway_model: azure/bomagent-gpt-6-2-astra
+    provider: azure_openai
+    license_class: closed
+    residency: eu-geo
+    region: swedencentral
+    capabilities: [chat, structured_output, tools]
+    tier: strong
+    cost_in_eur: 8.8
+    cost_out_eur: 44.0
+    price_source_url: https://azure.microsoft.com/en-us/pricing/details/azure-openai/
+    price_checked_on: 2026-11-25
+    enabled: false
+    verified: false
+    notes: >-
+      gpt-6.2-astra short context, Data Zone Standard (EUR data zone; never Global) on the Azure
+      OpenAI resource bomagent-gpt-eu-pilot (Sweden Central). Waiting for EU Data Zone quota
+      (the subscription had 0 TPM on 2026-11-25). Prices: list USD per 1M tokens for the
+      Data Zone SKU, used as an EUR approximation. Enable after the deployment exists.
+
+  - id: gpt-6-2-sol-eu
+    display_name: GPT-6.2 Sol EU
+    gateway_model: azure/bomagent-gpt-6-2-sol
+    provider: azure_openai
+    license_class: closed
+    residency: eu-geo
+    region: swedencentral
+    capabilities: [chat, structured_output, tools]
+    tier: strong
+    cost_in_eur: 2.2
+    cost_out_eur: 11.0
+    price_source_url: https://azure.microsoft.com/en-us/pricing/details/azure-openai/
+    price_checked_on: 2026-11-25
+    enabled: false
+    verified: false
+    notes: >-
+      gpt-6.2-sol short context, Data Zone Standard (EUR data zone; never Global) on the Azure
+      OpenAI resource bomagent-gpt-eu-pilot (Sweden Central). Waiting for EU Data Zone quota
+      (the subscription had 0 TPM on 2026-11-25). Prices: list USD per 1M tokens for the
+      Data Zone SKU, used as an EUR approximation. Enable after the deployment exists.
+
+  - id: gpt-6-1-terra-eu
+    display_name: GPT-6.1 Terra EU
+    gateway_model: azure/bomagent-gpt-6-1-terra
+    provider: azure_openai
+    license_class: closed
+    residency: eu-geo
+    region: swedencentral
+    capabilities: [chat, structured_output, tools]
+    tier: balanced
+    cost_in_eur: 1.1
+    cost_out_eur: 5.5
+    price_source_url: https://azure.microsoft.com/en-us/pricing/details/azure-openai/
+    price_checked_on: 2026-11-25
+    enabled: false
+    verified: false
+    notes: >-
+      gpt-6.1-terra short context, Data Zone Standard (EUR data zone; never Global) on the Azure
+      OpenAI resource bomagent-gpt-eu-pilot (Sweden Central). Waiting for EU Data Zone quota
+      (the subscription had 0 TPM on 2026-11-25). Prices: list USD per 1M tokens for the
+      Data Zone SKU, used as an EUR approximation. Enable after the deployment exists.
+
+  - id: gpt-6-luna-eu
+    display_name: GPT-6 Luna EU
+    gateway_model: azure/bomagent-gpt-6-luna
+    provider: azure_openai
+    license_class: closed
+    residency: eu-geo
+    region: swedencentral
+    capabilities: [chat, structured_output, tools]
+    tier: fast
+    cost_in_eur: 0.11
+    cost_out_eur: 0.55
+    price_source_url: https://azure.microsoft.com/en-us/pricing/details/azure-openai/
+    price_checked_on: 2026-11-25
+    enabled: false
+    verified: false
+    notes: >-
+      gpt-6-luna short context, Data Zone Standard (EUR data zone; never Global) on the Azure
+      OpenAI resource bomagent-gpt-eu-pilot (Sweden Central). Waiting for EU Data Zone quota
+      (the subscription had 0 TPM on 2026-11-25). Prices: list USD per 1M tokens for the
+      Data Zone SKU, used as an EUR approximation. Enable after the deployment exists.
+
+  - id: gpt-5-4-eu
+    display_name: GPT-5.4 EU
+    gateway_model: azure/bomagent-gpt-5-4
+    provider: azure_openai
+    license_class: closed
+    residency: eu-geo
+    region: swedencentral
+    capabilities: [chat, structured_output, tools]
+    tier: strong
+    cost_in_eur: 2.75
+    cost_out_eur: 16.5
+    price_source_url: https://azure.microsoft.com/en-us/pricing/details/azure-openai/
+    price_checked_on: 2026-11-25
+    enabled: false
+    verified: false
+    notes: >-
+      gpt-5.4 short context, Data Zone Standard (EUR data zone; never Global) on the Azure
+      OpenAI resource bomagent-gpt-eu-pilot (Sweden Central). Waiting for EU Data Zone quota
+      (the subscription had 0 TPM on 2026-11-25). Prices: list USD per 1M tokens for the
+      Data Zone SKU, used as an EUR approximation. Enable after the deployment exists.
+
   # ---------------------------------------------------------------- open-weight
   - id: mistral-large-eu
+    display_name: Mistral Large EU
     gateway_model: mistral/mistral-large-4-0
     provider: mistral
     license_class: open-weight
@@ -216,6 +326,7 @@ models:
       need a fixed model, so the -latest alias is no longer used. Prices above are Large 3 list
       prices - recheck for Large 4; thinking tokens are billed as output tokens.
   - id: open-weight-bedrock-eu
+    display_name: Llama EU
     gateway_model: bedrock/eu.meta.llama-open-weight-model-id
     provider: bedrock
     license_class: open-weight
@@ -237,6 +348,7 @@ models:
   # (not eu-west-1, not via geo profiles) and self-hosting (vLLM) in an EU region. Azure AI Foundry
   # EU availability of Qwen was not verifiable from the docs - add an entry only after checking it.
   - id: qwen3-235b-bedrock-eu
+    display_name: Qwen3 235B EU
     gateway_model: bedrock/qwen.qwen3-235b-a22b-2507-v1:0
     provider: bedrock
     license_class: open-weight
@@ -255,6 +367,7 @@ models:
       nothing leaves the region). Check the LiteLLM Bedrock route for qwen.* ids and model access in
       the account before enabling; costs are unset (check the Bedrock price list).
   - id: gpt-oss-120b-bedrock-eu
+    display_name: GPT-OSS 120B EU
     gateway_model: bedrock/openai.gpt-oss-120b-1:0
     provider: bedrock
     license_class: open-weight
@@ -272,6 +385,7 @@ models:
       (bedrock-runtime In-Region in eu-central-1, eu-north-1, eu-south-1, eu-west-1; no EU geo
       profile, so nothing leaves the region). Costs unset. gpt-oss-20b on Bedrock was not checked.
   - id: ministral-8b-mistral-eu
+    display_name: Ministral 8B EU
     gateway_model: mistral/ministral-8b-2512
     provider: mistral
     license_class: open-weight
@@ -290,6 +404,7 @@ models:
       ministral-8b-latest). Prices: list USD 0.1/0.1 plus the 10% EU surcharge as an EUR
       approximation; the public pricing page shows no per-token table, recheck in the console.
   - id: mistral-small-mistral-eu
+    display_name: Mistral Small EU
     gateway_model: mistral/mistral-small-2603
     provider: mistral
     license_class: open-weight
@@ -308,6 +423,7 @@ models:
       Prices: list USD 0.1/0.3 plus the 10% EU surcharge as an EUR approximation; recheck in the
       console. Codestral is not open-weight and open-mistral-nemo is retired, so neither is listed.
   - id: mistral-medium-eu
+    display_name: Mistral Medium EU
     gateway_model: mistral/mistral-medium-2604
     provider: mistral
     license_class: closed
@@ -326,6 +442,7 @@ models:
       mistral-medium-latest, mistral-medium-3-5). Prices: list USD 0.4/2.0 plus the 10% EU
       surcharge as an EUR approximation; recheck in the console.
   - id: qwen3-vllm-self-hosted
+    display_name: Qwen3 32B (self-hosted) EU
     gateway_model: hosted_vllm/Qwen/Qwen3-32B
     provider: vllm
     license_class: open-weight
@@ -343,6 +460,7 @@ models:
       Pick the model size to fit the GPU; weights are downloaded from the model hub at deploy time,
       never at request time.
   - id: vllm-self-hosted
+    display_name: Open-weight (self-hosted) EU
     gateway_model: hosted_vllm/open-weight-model
     provider: vllm
     license_class: open-weight

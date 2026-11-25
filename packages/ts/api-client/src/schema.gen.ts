@@ -1508,6 +1508,11 @@ export interface components {
         };
         /** ModelOption */
         ModelOption: {
+            /**
+             * Display Name
+             * @description Human-readable name, e.g. "Mistral Large EU".
+             */
+            display_name: string;
             /** Id */
             id: string;
             /**
