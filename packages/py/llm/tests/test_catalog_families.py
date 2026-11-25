@@ -148,3 +148,16 @@ def test_label_falls_back_to_the_id():
         id="x", gateway_model="x", provider="fake", license_class="closed", residency="local"
     )
     assert spec.label == "x"
+
+
+def test_coming_soon_lists_planned_models_that_cannot_run_yet():
+    from bomagent_llm.catalog import ModelNotAllowedError, load_catalog
+
+    catalog = load_catalog()
+    soon = {m.id for m in catalog.coming_soon("chat")}
+    assert {"claude-sonnet-eu", "gpt-6-2-astra-eu"} <= soon
+    assert not soon & {m.id for m in catalog.enabled()}
+    import pytest
+
+    with pytest.raises(ModelNotAllowedError):
+        catalog.get("claude-sonnet-eu")

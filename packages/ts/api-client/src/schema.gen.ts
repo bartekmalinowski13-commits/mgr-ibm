@@ -1509,6 +1509,12 @@ export interface components {
         /** ModelOption */
         ModelOption: {
             /**
+             * Available
+             * @description False for planned models shown as coming soon; not runnable.
+             * @default true
+             */
+            available: boolean;
+            /**
              * Display Name
              * @description Human-readable name, e.g. "Mistral Large EU".
              */

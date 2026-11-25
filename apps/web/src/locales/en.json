@@ -226,6 +226,7 @@
     "model": "Model",
     "closed": "closed",
     "openWeight": "open weights",
+    "comingSoon": "coming soon",
     "device": "Device name",
     "appliedPart": "Applied part",
     "appliedParts": {

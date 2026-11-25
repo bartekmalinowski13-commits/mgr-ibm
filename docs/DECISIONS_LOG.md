@@ -137,3 +137,9 @@ Assumptions made without consultation (the human was unavailable). Format: date 
 - **Assumption:** the model picker shows a `display_name` from the catalogue ("Mistral Large EU")
   instead of the raw id; runs still store and export the id, so thesis data is unchanged.
 - **Open point:** Azure prices are USD list prices used as an EUR approximation (as for `openai-eu`).
+
+## 2026-11-25 – Planned models shown as "coming soon"
+- **Assumption:** catalogue entries with `coming_soon: true` (Claude Opus/Sonnet/Haiku, the GPT
+  family, Qwen3 235B, GPT-OSS 120B, Llama) are listed by `/v1/models` with `available: false`
+  and shown greyed out ("wkrótce" / "coming soon") in the picker. They stay unrunnable:
+  `create_run` still accepts only enabled + verified models.

@@ -143,6 +143,7 @@ models:
     cost_out_eur: 18.5
     enabled: false
     verified: false
+    coming_soon: true
     notes: id and EU profile checked against https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-anthropic-claude-opus-5-5.html (2026-11-12); the eu. profile routes only to EU member-state regions (eu-central-1, eu-north-1, eu-south-1, eu-south-2, eu-west-1, eu-west-3 from a Frankfurt source) - re-verify with GetInferenceProfile from eu-central-1 and enable model access in the account
   - id: claude-sonnet-eu
     display_name: Claude Sonnet EU
@@ -157,6 +158,7 @@ models:
     cost_out_eur: 9.25
     enabled: false
     verified: false
+    coming_soon: true
     notes: id and EU profile checked against https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-anthropic-claude-sonnet-5-5.html (2026-11-12); the eu. profile routes only to EU member-state regions (eu-central-1, eu-north-1, eu-south-1, eu-south-2, eu-west-1, eu-west-3 from a Frankfurt source) - re-verify with GetInferenceProfile from eu-central-1 and enable model access in the account
   - id: claude-haiku-eu
     display_name: Claude Haiku EU
@@ -171,6 +173,7 @@ models:
     cost_out_eur: 0.5
     enabled: false
     verified: false
+    coming_soon: true
     notes: id and EU profile checked against https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-anthropic-claude-haiku-5-5.html (2026-11-12); the eu. profile routes only to EU member-state regions (eu-central-1, eu-north-1, eu-south-1, eu-south-2, eu-west-1, eu-west-3 from a Frankfurt source) - re-verify with GetInferenceProfile from eu-central-1 and enable model access in the account
 
   # ---------------------------------------------------------------- closed, OpenAI via Azure OpenAI (EU Data Zone Standard)
@@ -212,6 +215,7 @@ models:
     price_checked_on: 2026-11-25
     enabled: false
     verified: false
+    coming_soon: true
     notes: >-
       gpt-6.2-astra short context, Data Zone Standard (EUR data zone; never Global) on the Azure
       OpenAI resource bomagent-gpt-eu-pilot (Sweden Central). Waiting for EU Data Zone quota
@@ -233,6 +237,7 @@ models:
     price_checked_on: 2026-11-25
     enabled: false
     verified: false
+    coming_soon: true
     notes: >-
       gpt-6.2-sol short context, Data Zone Standard (EUR data zone; never Global) on the Azure
       OpenAI resource bomagent-gpt-eu-pilot (Sweden Central). Waiting for EU Data Zone quota
@@ -254,6 +259,7 @@ models:
     price_checked_on: 2026-11-25
     enabled: false
     verified: false
+    coming_soon: true
     notes: >-
       gpt-6.1-terra short context, Data Zone Standard (EUR data zone; never Global) on the Azure
       OpenAI resource bomagent-gpt-eu-pilot (Sweden Central). Waiting for EU Data Zone quota
@@ -275,6 +281,7 @@ models:
     price_checked_on: 2026-11-25
     enabled: false
     verified: false
+    coming_soon: true
     notes: >-
       gpt-6-luna short context, Data Zone Standard (EUR data zone; never Global) on the Azure
       OpenAI resource bomagent-gpt-eu-pilot (Sweden Central). Waiting for EU Data Zone quota
@@ -296,6 +303,7 @@ models:
     price_checked_on: 2026-11-25
     enabled: false
     verified: false
+    coming_soon: true
     notes: >-
       gpt-5.4 short context, Data Zone Standard (EUR data zone; never Global) on the Azure
       OpenAI resource bomagent-gpt-eu-pilot (Sweden Central). Waiting for EU Data Zone quota
@@ -338,6 +346,7 @@ models:
     cost_out_eur: 0.0
     enabled: false
     verified: false
+    coming_soon: true
     notes: >-
       placeholder. Checked 2026-11-12: Llama 3.3 70B on Bedrock has only a us. geo profile and
       US in-region availability (no EU), so it cannot be confirmed for the EU; prefer
@@ -360,6 +369,7 @@ models:
     cost_out_eur: 0.0
     enabled: false
     verified: false
+    coming_soon: true
     notes: >-
       Qwen3 235B A22B 2507 (Apache-2.0 weights) served in-region by Bedrock in eu-central-1, see
       https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-qwen-qwen3-235b-a22b-2507.html
@@ -379,6 +389,7 @@ models:
     cost_out_eur: 0.0
     enabled: false
     verified: false
+    coming_soon: true
     notes: >-
       OpenAI gpt-oss-120b (Apache-2.0 weights), Bedrock in-region, id openai.gpt-oss-120b-1:0 per
       https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-openai-gpt-oss-120b.html

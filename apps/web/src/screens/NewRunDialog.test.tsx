@@ -11,7 +11,12 @@ vi.mock("../lib/api", async (orig) => ({
 }));
 vi.mock("../lib/queries", () => ({
   useProjects: () => ({ data: { items: [{ id: "p1", name: "ECG" }] } }),
-  useModels: () => ({ data: [{ id: "m1", license_class: "closed" }] }),
+  useModels: () => ({
+    data: [
+      { id: "soon", display_name: "Claude Sonnet EU", license_class: "closed", available: false },
+      { id: "m1", display_name: "GPT EU", license_class: "closed", available: true },
+    ],
+  }),
 }));
 const navigate = vi.fn();
 vi.mock("@tanstack/react-router", () => ({
@@ -105,5 +110,16 @@ describe("NewRunDialog idempotency (I-2)", () => {
     expect(post).toHaveBeenCalledTimes(1);
     resolve(ok("run-a"));
     await waitFor(() => expect(navigate).toHaveBeenCalled());
+  });
+});
+
+describe("NewRunDialog model picker", () => {
+  it("shows coming-soon models greyed out and never selects them", () => {
+    renderDialog();
+    const soon = screen.getByRole("option", { name: /Claude Sonnet EU.*(wkrótce|coming soon)/i });
+    expect((soon as HTMLOptionElement).disabled).toBe(true);
+    const ready = screen.getByRole("option", { name: /GPT EU/ }) as HTMLOptionElement;
+    expect(ready.disabled).toBe(false);
+    expect(ready.selected).toBe(true);
   });
 });

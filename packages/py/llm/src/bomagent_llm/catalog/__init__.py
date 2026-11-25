@@ -43,6 +43,8 @@ class ModelSpec(BaseModel):
     price_checked_on: date | None = None  # when that list was last checked
     enabled: bool = False
     verified: bool = False
+    #: planned model the picker shows greyed out as "coming soon"; it still cannot run
+    coming_soon: bool = False
     notes: str = ""
 
     @property
@@ -81,6 +83,16 @@ class Catalog(BaseModel):
             m
             for m in self.models
             if m.enabled and m.verified and (capability is None or capability in m.capabilities)
+        ]
+
+    def coming_soon(self, capability: str | None = None) -> list[ModelSpec]:
+        """Planned EU models that are not switched on yet (shown, never runnable)."""
+        return [
+            m
+            for m in self.models
+            if m.coming_soon
+            and not (m.enabled and m.verified)
+            and (capability is None or capability in m.capabilities)
         ]
 
 
