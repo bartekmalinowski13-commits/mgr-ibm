@@ -95,7 +95,11 @@ export function Shell() {
           <span className="min-w-0 flex-1">
             <span className="sr-only">{t("nav.switchOrg")}: </span>
             <span className="block truncate font-semibold">{org?.name ?? t("common.loading")}</span>
-            <span className="block truncate text-[13.5px] text-muted">{t("sheet.region")}</span>
+            <span className="block truncate text-[13.5px] text-muted">
+              {[t("sheet.region"), ...(org?.roles.map((r) => t(`settings.roles.${r}`)) ?? [])].join(
+                " · ",
+              )}
+            </span>
           </span>
           <ChevronsUpDown size={16} aria-hidden className="text-muted" />
         </MenuTrigger>
