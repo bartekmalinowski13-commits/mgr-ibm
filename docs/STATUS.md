@@ -336,3 +336,7 @@ domain) and the assumptions awaiting acceptance (`docs/DECISIONS_LOG.md`, last c
   #89 (API), #90 (experiment accounting and resume), #92 (ops) + #95 (runbook spec), #93 (ingest).
 - Open for the owner: #91 (SSO membership/update, auth.py/sso.py), #94 (gateway dual-stack,
   deploy order, ADR-0019).
+
+## 2026-11-25 - Claude Haiku 4.5 on the pilot
+- `claude-haiku-4-5-eu` (Bedrock, `eu.` profile from eu-central-1) enabled and verified on the pilot gateway. Claude 5.5 models stay off: the AWS account is not yet allowed them.
+- The pilot now offers 6 chat models: Mistral Large/Medium/Small/Ministral 8B, GPT (Azure Data Zone EU) and Claude Haiku 4.5.

@@ -127,3 +127,6 @@ Assumptions made without consultation (the human was unavailable). Format: date 
   EU endpoint (`mistral-medium-2604`, `mistral-small-2603`, `ministral-8b-2512`).
 - **Open point:** costs are list prices from memory plus the 10% EU surcharge; the public pricing
   page shows no per-token table. Recheck in the Mistral console before using cost in the thesis.
+
+## 2026-11-25: Claude Haiku 4.5 is the Claude model on the pilot for now
+The new AWS account answers Claude Haiku 4.5 through the `eu.` profile, but Bedrock refuses the 5.5 models ("not available for this account"), and the 4.5-era Sonnet is legacy-gated. Haiku 4.5 (`claude-haiku-4-5-eu`) is enabled so the pilot offers a Claude model; the 5.5 entries stay disabled until AWS allows them. The price (list USD 1/5 per MTok + 10% for the regional profile) was not read from the console - recheck it.
