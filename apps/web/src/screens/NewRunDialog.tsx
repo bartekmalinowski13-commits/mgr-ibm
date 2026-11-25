@@ -76,7 +76,7 @@ export function NewRunDialog({ preset, onClose }: { preset: NewRunPreset; onClos
   const keys = useIntentKeys();
   /** Runs this dialog already started, per variant, with the request that started them. */
   const created = useRef(new Map<"A" | "B", { payload: string; run: Schemas["Run"] }>());
-  const model = modelId || models.data?.[0]?.id || "";
+  const model = modelId || models.data?.find((m) => m.available)?.id || "";
   const list = projects.data?.items ?? [];
 
   const submit = async (e: FormEvent) => {
@@ -216,9 +216,10 @@ export function NewRunDialog({ preset, onClose }: { preset: NewRunPreset; onClos
             {(id) => (
               <Select id={id} value={model} onChange={(e) => setModelId(e.target.value)}>
                 {(models.data ?? []).map((m) => (
-                  <option key={m.id} value={m.id}>
+                  <option key={m.id} value={m.id} disabled={!m.available}>
                     {m.display_name} ·{" "}
                     {m.license_class === "closed" ? t("newRun.closed") : t("newRun.openWeight")}
+                    {m.available ? "" : ` · ${t("newRun.comingSoon")}`}
                   </option>
                 ))}
               </Select>

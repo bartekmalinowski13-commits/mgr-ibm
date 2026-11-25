@@ -286,7 +286,10 @@ async def test_models_lists_only_allowed_chat_models(env):
     assert all(m["display_name"] for m in models)
     assert {"fake-closed", "fake-open-weight"} <= ids
     assert "fake-embedding" not in ids  # not a chat model
-    assert "claude-sonnet-eu" not in ids  # unverified in the EU region
+    available = {m["id"] for m in models if m["available"]}
+    assert "claude-sonnet-eu" not in available  # unverified in the EU region
+    soon = {m["id"]: m for m in models if not m["available"]}
+    assert "claude-sonnet-eu" in soon  # shown greyed out as "coming soon"
 
 
 async def test_nul_in_url_is_a_400(env):

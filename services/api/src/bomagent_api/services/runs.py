@@ -47,7 +47,7 @@ from bomagent_common.tenancy import TenantContext
 from bomagent_eval.metrics import evaluate
 from bomagent_eval.reference import load_reference_csv
 from bomagent_kb import KnowledgeBase
-from bomagent_llm.catalog import Catalog, ModelNotAllowedError
+from bomagent_llm.catalog import Catalog, ModelNotAllowedError, ModelSpec
 
 TERMINAL = {"completed", "failed", "budget_exceeded"}
 DEFAULT_RUNTIME = {"A": "langgraph_a", "B": "langgraph_b"}
@@ -105,19 +105,24 @@ def resolve_runtime(variant: str, runtime: str | None) -> str:
 
 def list_models(catalog: Catalog, allow_local: bool) -> list[ModelOption]:
     """The catalogue entries a run may use (enabled, verified, EU; local fakes only in
-    local/test) - the same rule ``create_run`` enforces."""
-    return [
-        ModelOption(
+    local/test) - the same rule ``create_run`` enforces - followed by planned models the
+    picker shows greyed out as coming soon (``available=False``)."""
+
+    def option(m: ModelSpec, available: bool) -> ModelOption:
+        return ModelOption(
             id=m.id,
             display_name=m.label,
             provider=m.provider,
             license_class=m.license_class.value,
             residency=m.residency,
             tier=m.tier,
+            available=available,
         )
-        for m in catalog.enabled("chat")
-        if allow_local or m.residency != "local"
+
+    ready = [
+        option(m, True) for m in catalog.enabled("chat") if allow_local or m.residency != "local"
     ]
+    return ready + [option(m, False) for m in catalog.coming_soon("chat")]
 
 
 async def start_run(

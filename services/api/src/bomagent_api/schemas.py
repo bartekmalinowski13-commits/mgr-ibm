@@ -247,6 +247,9 @@ class ModelOption(_M):
     license_class: Literal["closed", "open-weight"]
     residency: str
     tier: str | None
+    available: bool = Field(
+        default=True, description="False for planned models shown as coming soon; not runnable."
+    )
 
 
 class RunStep(_M):
