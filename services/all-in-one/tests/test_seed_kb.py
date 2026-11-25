@@ -91,3 +91,30 @@ async def test_a_document_left_pending_is_indexed_on_the_next_seed(platform_engi
     report = await seed_global_corpus(platform_engine, kb, [sheet], extractor=_extract)
 
     assert (report.indexed, report.unchanged) == (1, 0)
+
+
+def _seed_env(monkeypatch, db_urls, environment: str) -> None:
+    for name in ("BOMAGENT_LLM_GATEWAY_URL", "BOMAGENT_LLM_GATEWAY_KEY"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("BOMAGENT_ENVIRONMENT", environment)
+    monkeypatch.setenv("BOMAGENT_AUTH_MODE", "local")
+    monkeypatch.setenv("BOMAGENT_ALLOW_FAKE_LLM", "true")
+    monkeypatch.setenv("BOMAGENT_PLATFORM_DATABASE_URL", db_urls.platform)
+
+
+def test_seed_kb_command_seeds_with_the_configured_embeddings(monkeypatch, db_urls, capsys):
+    from bomagent_allinone.seed_kb import run
+
+    _seed_env(monkeypatch, db_urls, "test")
+    run()
+    out = capsys.readouterr().out
+    assert out.startswith("global corpus: ")
+    assert "indexed" in out
+
+
+def test_seed_kb_command_refuses_fake_embeddings_outside_local_and_test(monkeypatch, db_urls):
+    from bomagent_allinone.seed_kb import run
+
+    _seed_env(monkeypatch, db_urls, "dev")
+    with pytest.raises(SystemExit, match="fake embeddings"):
+        run()
