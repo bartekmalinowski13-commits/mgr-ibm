@@ -61,6 +61,7 @@ PILOT_ENABLED = {
     "ministral-8b-mistral-eu",
     "mistral-embed-eu",
     "openai-eu",
+    "claude-haiku-4-5-eu",
 }
 
 

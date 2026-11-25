@@ -170,6 +170,22 @@ models:
     verified: false
     notes: id and EU profile checked against https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-anthropic-claude-haiku-5-5.html (2026-11-12); the eu. profile routes only to EU member-state regions (eu-central-1, eu-north-1, eu-south-1, eu-south-2, eu-west-1, eu-west-3 from a Frankfurt source) - re-verify with GetInferenceProfile from eu-central-1 and enable model access in the account
 
+  - id: claude-haiku-4-5-eu
+    gateway_model: bedrock/eu.anthropic.claude-haiku-4-5-20251001-v1:0
+    provider: bedrock
+    license_class: closed
+    residency: eu-geo
+    region: eu-central-1
+    capabilities: [chat, structured_output, tools]
+    tier: fast
+    cost_in_eur: 1.1
+    cost_out_eur: 5.5
+    price_source_url: https://aws.amazon.com/bedrock/pricing/
+    price_checked_on: 2026-11-25
+    enabled: true
+    verified: true
+    notes: Claude Haiku 4.5 through the eu. cross-region profile from eu-central-1 (EU member-state regions only); answered on the pilot gateway 2026-11-25 while the account is not yet allowed the 5.5 models. Price = list USD 1/5 per MTok + 10% regional-profile premium, kept in the EUR fields like the other entries - recheck in the AWS console
+
   # ---------------------------------------------------------------- closed, OpenAI via Azure OpenAI (EU Data Zone Standard)
   # Deployment name is chosen when the Azure deployment is created; never use "Global"
   # deployment types.
