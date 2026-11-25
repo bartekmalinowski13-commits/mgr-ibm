@@ -180,12 +180,18 @@ models:
     residency: eu-geo
     region: swedencentral
     capabilities: [chat, structured_output, tools]
-    tier: strong
-    cost_in_eur: 0.0
-    cost_out_eur: 0.0
-    enabled: false
-    verified: false
-    notes: set the deployment (model + version) in Azure, Data Zone Standard EU
+    tier: balanced
+    cost_in_eur: 0.83
+    cost_out_eur: 4.95
+    price_source_url: https://azure.microsoft.com/en-us/pricing/details/azure-openai/
+    price_checked_on: 2026-11-25
+    enabled: true
+    verified: true
+    notes: >-
+      Azure OpenAI resource bomagent-gpt-eu-pilot (Sweden Central), deployment
+      bomagent-gpt-eu-datazone = gpt-5.4-mini version 2026-03-17, type Data Zone Standard (EUR
+      data zone; never Global). Checked in the Foundry portal 2026-11-25. Prices: list USD
+      0.83/4.95 per 1M tokens for GPT-5.4 mini Data Zone, used as an EUR approximation.
 
   # ---------------------------------------------------------------- open-weight
   - id: mistral-large-eu

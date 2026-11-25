@@ -60,6 +60,7 @@ PILOT_ENABLED = {
     "mistral-small-mistral-eu",
     "ministral-8b-mistral-eu",
     "mistral-embed-eu",
+    "openai-eu",
 }
 
 
