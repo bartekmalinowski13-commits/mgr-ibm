@@ -266,35 +266,59 @@ models:
       (bedrock-runtime In-Region in eu-central-1, eu-north-1, eu-south-1, eu-west-1; no EU geo
       profile, so nothing leaves the region). Costs unset. gpt-oss-20b on Bedrock was not checked.
   - id: ministral-8b-mistral-eu
-    gateway_model: mistral/ministral-8b-latest
+    gateway_model: mistral/ministral-8b-2512
     provider: mistral
     license_class: open-weight
     residency: eu-region
     capabilities: [chat, structured_output, tools]
     tier: fast
-    cost_in_eur: 0.0
-    cost_out_eur: 0.0
-    enabled: false
-    verified: false
+    cost_in_eur: 0.11
+    cost_out_eur: 0.11
+    price_source_url: https://mistral.ai/pricing
+    price_checked_on: 2026-11-25
+    enabled: true
+    verified: true
     notes: >-
-      Ministral open-weight (Apache-2.0 for Ministral 3) served by La Plateforme, EU regional endpoint api.eu.mistral.ai only.
-      The -latest alias is a guess: the model overview (https://docs.mistral.ai/getting-started/models/models_overview/)
-      lists Ministral 3 3B/8B/14B without API ids - take the exact id from GET /v1/models.
+      Ministral 3 8B (Apache-2.0) on La Plateforme, EU regional endpoint api.eu.mistral.ai only.
+      Pinned 2026-11-25 to ministral-8b-2512 (GET /v1/models on the EU endpoint: alias
+      ministral-8b-latest). Prices: list USD 0.1/0.1 plus the 10% EU surcharge as an EUR
+      approximation; the public pricing page shows no per-token table, recheck in the console.
   - id: mistral-small-mistral-eu
-    gateway_model: mistral/mistral-small-latest
+    gateway_model: mistral/mistral-small-2603
     provider: mistral
     license_class: open-weight
     residency: eu-region
     capabilities: [chat, structured_output, tools]
     tier: balanced
-    cost_in_eur: 0.0
-    cost_out_eur: 0.0
-    enabled: false
-    verified: false
+    cost_in_eur: 0.11
+    cost_out_eur: 0.33
+    price_source_url: https://mistral.ai/pricing
+    price_checked_on: 2026-11-25
+    enabled: true
+    verified: true
     notes: >-
-      Mistral Small (Small 4 is Apache-2.0 per the model overview) on La Plateforme; confirm the exact
-      id and the EU data-processing setting in the workspace. Codestral is not open-weight and open-mistral-nemo
-      is retired, so neither is listed.
+      Mistral Small 4 (Apache-2.0) on La Plateforme, EU regional endpoint only. Pinned 2026-11-25
+      to mistral-small-2603 (GET /v1/models on the EU endpoint: alias mistral-small-latest).
+      Prices: list USD 0.1/0.3 plus the 10% EU surcharge as an EUR approximation; recheck in the
+      console. Codestral is not open-weight and open-mistral-nemo is retired, so neither is listed.
+  - id: mistral-medium-eu
+    gateway_model: mistral/mistral-medium-2604
+    provider: mistral
+    license_class: closed
+    residency: eu-region
+    capabilities: [chat, structured_output, tools]
+    tier: strong
+    cost_in_eur: 0.44
+    cost_out_eur: 2.2
+    price_source_url: https://mistral.ai/pricing
+    price_checked_on: 2026-11-25
+    enabled: true
+    verified: true
+    notes: >-
+      Mistral Medium 3.5 (closed weights) on La Plateforme, EU regional endpoint only. Pinned
+      2026-11-25 to mistral-medium-2604 (GET /v1/models on the EU endpoint: aliases
+      mistral-medium-latest, mistral-medium-3-5). Prices: list USD 0.4/2.0 plus the 10% EU
+      surcharge as an EUR approximation; recheck in the console.
   - id: qwen3-vllm-self-hosted
     gateway_model: hosted_vllm/Qwen/Qwen3-32B
     provider: vllm
