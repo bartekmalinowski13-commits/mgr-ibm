@@ -10,9 +10,10 @@ _Updated by Claude Code after every milestone (see `docs/prompts/CLAUDE_CODE_MAS
   `mistral-small-mistral-eu` (Small 4, `mistral-small-2603`), `ministral-8b-mistral-eu`
   (`ministral-8b-2512`), next to Mistral Large. Same EU endpoint and key; IDs pinned from
   `GET /v1/models` on `api.eu.mistral.ai`. Costs are approximate (`docs/DECISIONS_LOG.md`).
-- Claude (Bedrock eu-central-1) and GPT (Azure, Data Zone EU) are still off: the Azure resource
-  `bomagent-gpt-eu-pilot` exists in Sweden Central, but the trial subscription has zero Data Zone
-  quota; no AWS account yet.
+- GPT on: `openai-eu` = Azure resource `bomagent-gpt-eu-pilot` (Sweden Central), deployment
+  `bomagent-gpt-eu-datazone` (gpt-5.4-mini, Data Zone Standard EU). Gateway secrets
+  `AZURE_API_KEY`, `AZURE_API_BASE` set by the owner.
+- Claude (Bedrock eu-central-1) is still off: the AWS account is being created.
 
 ## 2026-11-25 - global KB corpus: sample datasheets (`seed-kb`)
 
