@@ -15,6 +15,10 @@ export default defineConfig({
     baseURL: "http://127.0.0.1:5173",
     locale: "pl-PL",
     screenshot: "only-on-failure",
+    // a pre-installed browser of another Playwright build (e.g. a cloud sandbox)
+    launchOptions: process.env.PW_CHROMIUM_PATH
+      ? { executablePath: process.env.PW_CHROMIUM_PATH }
+      : undefined,
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: {

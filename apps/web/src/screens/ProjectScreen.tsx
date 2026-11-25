@@ -111,7 +111,7 @@ export function ProjectScreen() {
   return (
     <div className="flex flex-col gap-8">
       {project.data?.is_sample ? (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-card border border-line bg-surface p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-control border border-line bg-sheet p-4">
           <p className="max-w-[70ch] text-muted">{t("samples.projectNote")}</p>
           {isAdmin ? (
             <Button type="button" variant="danger" size="sm" onClick={() => void removeProject()}>
@@ -157,8 +157,8 @@ export function ProjectScreen() {
           }}
           onDragLeave={() => setDragging(false)}
           onDrop={onDrop}
-          className={`flex flex-col items-center gap-2 rounded-card border-2 border-dashed p-8 text-center ${
-            dragging ? "border-llm bg-llm/5" : "border-line bg-surface"
+          className={`flex flex-col items-center gap-2 rounded-control border-2 border-dashed p-8 text-center ${
+            dragging ? "border-llm bg-llm/5" : "border-line bg-sheet"
           }`}
         >
           <UploadCloud size={28} aria-hidden className="text-muted" />
@@ -187,7 +187,7 @@ export function ProjectScreen() {
         {files.isPending ? (
           <Skeleton rows={2} />
         ) : files.data?.length ? (
-          <ul className="divide-y divide-line rounded-card border border-line bg-surface">
+          <ul className="divide-y divide-line rounded-control border border-line bg-sheet">
             {files.data.map((f) => (
               <li key={f.id} className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-3">
                 <span className="min-w-0 flex-1 truncate font-mono text-sm">{f.name}</span>
@@ -209,7 +209,7 @@ export function ProjectScreen() {
                     type="button"
                     onClick={() => void removeFile(f.id, f.name)}
                     aria-label={t("projects.deleteFile", { name: f.name })}
-                    className="rounded-control p-1.5 text-muted hover:bg-paper hover:text-error focus-visible:outline-2 focus-visible:outline-focus"
+                    className="rounded-control p-1.5 text-muted hover:bg-vellum/60 hover:text-error focus-visible:outline-2 focus-visible:outline-ink"
                   >
                     <Trash2 size={16} aria-hidden />
                   </button>

@@ -32,3 +32,11 @@ export function slugify(name: string): string {
     .replace(/^-+|-+$/g, "")
     .slice(0, 63);
 }
+
+/** Durations as on the run sheet: "18 s", "1 min 02 s", "1 h 05 min". */
+export function formatDuration(seconds: number): string {
+  const s = Math.max(0, Math.round(seconds));
+  if (s < 60) return `${s} s`;
+  if (s < 3600) return `${Math.floor(s / 60)} min ${String(s % 60).padStart(2, "0")} s`;
+  return `${Math.floor(s / 3600)} h ${String(Math.floor((s % 3600) / 60)).padStart(2, "0")} min`;
+}

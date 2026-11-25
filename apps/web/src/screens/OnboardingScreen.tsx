@@ -54,7 +54,7 @@ export function OnboardingScreen() {
 
   return (
     <AuthLayout title={t("onboarding.title")} lead={t("onboarding.lead")}>
-      <form onSubmit={create} className="rounded-panel border border-line bg-surface p-6">
+      <form onSubmit={create} className="rounded-control border border-line bg-sheet p-6">
         <Field label={t("onboarding.name")} required>
           {(id) => (
             <Input
@@ -91,7 +91,7 @@ export function OnboardingScreen() {
         </div>
       </form>
 
-      <form onSubmit={join} className="mt-6 rounded-panel border border-dashed border-line p-6">
+      <form onSubmit={join} className="mt-6 rounded-control border border-dashed border-line p-6">
         <h2 className="font-display text-xl font-bold">{t("onboarding.inviteTitle")}</h2>
         <p className="mt-1 text-muted">{t("onboarding.inviteLead")}</p>
         <div className="mt-4 flex flex-col gap-3 sm:flex-row">

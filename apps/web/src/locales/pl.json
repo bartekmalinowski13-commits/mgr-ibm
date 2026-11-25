@@ -106,7 +106,10 @@
     "newOrg": "Załóż nową organizację",
     "signOut": "Wyloguj",
     "language": "English",
-    "kb": "Baza wiedzy"
+    "kb": "Baza wiedzy",
+    "organisation": "Organizacja",
+    "bom": "Zestawienia BOM",
+    "compare": "Porównania A/B"
   },
   "plan": {
     "pill": "Plan {{plan}}",
@@ -119,7 +122,7 @@
     "budget": "LLM w tym miesiącu: {{used}} z {{limit}}"
   },
   "start": {
-    "greeting": "Cześć, {{name}}",
+    "greeting": "Cześć, {{name}}.",
     "newRunTitle": "Nowy przebieg BOM",
     "newRunLead": "Zacznij od pustego projektu albo od szablonu urządzenia – szablon wypełni wymagania (część aplikacyjna, zasilanie).",
     "blank": "Pusty projekt",
@@ -134,21 +137,47 @@
     },
     "templates": {
       "ecg": {
-        "title": "EKG noszony",
+        "title": "Holter EKG, 3 kanały",
         "hint": "Część BF, bateria"
       },
       "pulseox": {
-        "title": "Pulsoksymetr",
+        "title": "Pulsoksymetr na palec",
         "hint": "Część BF, USB"
       },
       "eeg": {
-        "title": "Wzmacniacz EEG",
+        "title": "Wzmacniacz EEG, 8 kanałów",
         "hint": "Część CF, bateria"
       },
       "infusion": {
         "title": "Pompa infuzyjna",
         "hint": "Część CF, sieć"
       }
+    },
+    "lead": {
+      "review_one": "Zestawienie z przebiegu <b>#{{id}}</b> jest gotowe.",
+      "review_few": "{{count}} zestawienia są gotowe, najnowsze z przebiegu <b>#{{id}}</b>.",
+      "review_many": "{{count}} zestawień jest gotowych, najnowsze z przebiegu <b>#{{id}}</b>.",
+      "review_other": "{{count}} zestawienia są gotowe, najnowsze z przebiegu <b>#{{id}}</b>.",
+      "running_one": "Przebieg <b>#{{id}}</b> jest w toku.",
+      "running_few": "{{count}} przebiegi są w toku.",
+      "running_many": "{{count}} przebiegów jest w toku.",
+      "running_other": "{{count}} przebiegi są w toku.",
+      "empty": "Nie masz jeszcze żadnego przebiegu. Uruchom pierwszy, a tu pojawią się uwagi do przejrzenia."
+    },
+    "reviewNotes": "Przejrzyj uwagi",
+    "templatesTitle": "Zacznij od przykładowego urządzenia",
+    "templatesHint": "albo załóż projekt i wgraj pliki",
+    "budgetValue": "{{percent}}% z {{limit}}",
+    "recent": {
+      "title": "Ostatnie przebiegi",
+      "number": "Nr",
+      "project": "Projekt",
+      "variant": "Wariant",
+      "state": "Stan",
+      "cost": "Koszt",
+      "time": "Czas",
+      "empty": "Nie ma jeszcze przebiegów.",
+      "emptyAction": "Nowy przebieg"
     }
   },
   "projects": {
@@ -266,7 +295,74 @@
     "findings_few": "{{count}} uwagi walidacji",
     "findings_many": "{{count}} uwag walidacji",
     "findings_other": "{{count}} uwagi walidacji",
-    "statusColumn": "Status"
+    "statusColumn": "Status",
+    "openBom": "Otwórz zestawienie BOM",
+    "heading": "#{{id}}",
+    "blockName": "Przebieg #{{id}}",
+    "stop": "Zatrzymaj przebieg",
+    "leadBoth": "Oba warianty dostały ten sam projekt, tę samą bazę wiedzy i ten sam model. Różni je tylko to, kto wykonuje każdy krok.",
+    "leadOne": "Model {{model}}. Każdy krok zapisuje, kto podjął decyzję: agent, reguła, plik czy człowiek.",
+    "counters": "Liczniki przebiegu",
+    "eventsTitle": "Zdarzenia na żywo",
+    "eventsEmpty": "Pierwsze zdarzenie pojawi się po zakończeniu kroku.",
+    "stages": {
+      "read": "Odczyt CAD",
+      "normalize": "Normalizacja",
+      "select": "Dobór MPN",
+      "validate": "Walidacja",
+      "assemble": "Składanie BOM"
+    },
+    "executors": {
+      "parser": "parser",
+      "agent": "agent",
+      "rules": "reguły",
+      "rulesAgent": "reguły + agent",
+      "rulesRepair": "reguły + naprawa",
+      "generator": "generator"
+    },
+    "via": {
+      "done": "zrobione",
+      "current": "trwa",
+      "todo": "czeka",
+      "running": "trwa"
+    },
+    "phrase": {
+      "normalize": "normalizuje pozycje",
+      "select": "dobiera części",
+      "validate": "waliduje",
+      "assemble": "składa BOM",
+      "done": "skończył",
+      "queued": "czeka w kolejce",
+      "failed": "się nie udał",
+      "stopped": "stanął",
+      "finishing": "kończy przebieg"
+    },
+    "headline": {
+      "one": "Wariant {{variant}} {{phrase}}.",
+      "lead": "{{lead}} {{leadPhrase}}, {{lag}} wciąż {{lagPhrase}}.",
+      "same": "{{a}} i {{b}} {{phrase}}.",
+      "bothDone": "Oba warianty skończyły. Zestawienia czekają na porównanie.",
+      "completed": "Zestawienie gotowe do przeglądu.",
+      "failed": "Przebieg się nie udał.",
+      "cancelled": "Przebieg został zatrzymany.",
+      "budget": "Przebieg przekroczył budżet.",
+      "queued": "Przebieg czeka w kolejce."
+    },
+    "events": {
+      "extract_group": "Agent ekstrakcji: zgrupowano elementy w pozycje",
+      "normalize_group": "Reguły normalizacji: zgrupowano elementy w pozycje",
+      "select_mpn": "Dobór MPN: reguły + agent ({{count}} wyw. LLM)",
+      "select_mpn_a": "Agent doboru: dobrano MPN ({{count}} wyw. LLM)",
+      "validate": "Walidator: sprawdzono zestawienie regułami",
+      "validate_a": "Agent walidacji: sprawdzono zestawienie",
+      "repair": "Agent naprawy: poprawiono pozycje z uwagami",
+      "compose": "Agent składania: złożono BOM",
+      "assemble": "Generator: złożono BOM",
+      "other": "Zakończono krok {{node}}",
+      "end_ok": "Wariant {{variant}}: przebieg zakończony, zestawienie zapisane",
+      "end_stopped": "Wariant {{variant}}: przebieg przerwany"
+    },
+    "stepTook": "krok trwał"
   },
   "bom": {
     "title": "Zestawienie BOM",
@@ -274,13 +370,13 @@
     "origin": "Kto zdecydował",
     "columns": {
       "line": "Poz.",
-      "refdes": "Oznaczenia",
+      "refdes": "Oznaczenie",
       "qty": "Ilość",
       "value": "Wartość",
       "footprint": "Obudowa",
       "manufacturer": "Producent",
       "mpn": "MPN",
-      "notes": "Uwagi"
+      "notes": "Walidacja"
     },
     "provenance": {
       "agent": "Agent LLM",
@@ -299,7 +395,23 @@
     "csvCopied_one": "Skopiowano CSV ({{count}} linia)",
     "csvCopied_few": "Skopiowano CSV ({{count}} linie)",
     "csvCopied_many": "Skopiowano CSV ({{count}} linii)",
-    "csvCopied_other": "Skopiowano CSV ({{count}} linii)"
+    "csvCopied_other": "Skopiowano CSV ({{count}} linii)",
+    "filters": {
+      "label": "Filtr pozycji",
+      "all": "Wszystkie",
+      "findings": "Z uwagami",
+      "agent": "Decyzje LLM"
+    },
+    "legend": {
+      "parser": "z pliku",
+      "rule": "reguła",
+      "agent": "agent LLM",
+      "user": "człowiek"
+    },
+    "validation": {
+      "ok": "zgodne",
+      "review": "sprawdź"
+    }
   },
   "panel": {
     "title": "Pozycja {{line}}",
@@ -307,7 +419,7 @@
     "rationale": "Uzasadnienie",
     "citations": "Źródła z bazy wiedzy",
     "page": "str. {{page}}",
-    "findings": "Uwagi walidacji",
+    "findings": "Wynik reguł",
     "noFindings": "Reguły nie zgłosiły uwag do tej pozycji.",
     "edit": "Popraw pozycję",
     "editLead": "Poprawka tworzy nową wersję zestawienia i trafia do wiedzy Twojej organizacji (nigdy do innych).",
@@ -319,7 +431,20 @@
     "agent": "{{agent}} · model {{model}}",
     "parser": "Odczytane z pliku ({{parser}})",
     "user": "Zmienione przez {{user}}",
-    "savedLive": "Zapisano. Wersja BOM {{version}}."
+    "savedLive": "Zapisano. Wersja BOM {{version}}.",
+    "why": "Dlaczego ta część",
+    "noMpn": "Bez MPN",
+    "datasheet": "Karta katalogowa",
+    "datasheetPage": "Karta katalogowa, s. {{page}}",
+    "tenantSource": "wiedza organizacji",
+    "changeMpn": "Zmień MPN",
+    "map": {
+      "label": "Mapa płytki: {{refdes}} w strefie {{zone}}, warstwa {{layer}}",
+      "zone": "Strefa {{zone}}, warstwa {{layer}}",
+      "size": "{{pkg}}, {{w}} × {{h}} mm",
+      "none": "Brak danych o położeniu na płytce (wymaga pliku .kicad_pcb)",
+      "noneShort": "brak położenia"
+    }
   },
   "runs": {
     "title": "Przebiegi",
@@ -455,7 +580,59 @@
     "differences_many": "{{count}} różnic między wariantami",
     "differences_other": "{{count}} różnicy między wariantami",
     "same": "Oba warianty zdecydowały tak samo dla każdego oznaczenia.",
-    "missing": "Brak w tym wariancie"
+    "missing": "Brak w tym wariancie",
+    "blockName": "Porównanie",
+    "projects": "Projekty",
+    "export": "Eksportuj do pracy (CSV)",
+    "exported": "Wyeksportowano porównanie do CSV",
+    "silk": "BOM-AGENT · {{project}} · Wariant {{a}} ↔ {{b}}",
+    "verdict": {
+      "cheaper": "{{right}} kosztuje {{x}} razy mniej niż {{left}}.",
+      "pricier": "{{right}} kosztuje {{x}} razy więcej niż {{left}}.",
+      "fewerFindings": "{{right}} ma mniej uwag walidacji niż {{left}}.",
+      "moreFindings": "{{right}} ma więcej uwag walidacji niż {{left}}.",
+      "same": "Oba warianty doszły do tego samego zestawienia.",
+      "differ": "Warianty różnią się w części pozycji."
+    },
+    "lead": "Wariant {{a}}: pozycje {{linesA}}, uwagi walidacji {{findingsA}}, koszt {{costA}}. Wariant {{b}}: pozycje {{linesB}}, uwagi walidacji {{findingsB}}, koszt {{costB}}.",
+    "differencesLead": "{{n}} z {{total}} pozycji.",
+    "colRefdes": "Ozn.",
+    "colChoice": "Dobór wariantów i co się stało",
+    "colResult": "Wynik",
+    "colBars": "Porównanie słupkowe",
+    "colValues": "Wartości",
+    "reason": {
+      "mpn": "Warianty dobrały różne MPN.",
+      "onlyA": "Tylko {{la}} ma tę pozycję.",
+      "onlyB": "Tylko {{lb}} ma tę pozycję.",
+      "value": "Ten sam MPN, różna wartość: {{la}} {{a}}, {{lb}} {{b}}.",
+      "manufacturer": "Ten sam MPN, różny producent: {{la}} {{a}}, {{lb}} {{b}}."
+    },
+    "result": {
+      "differ": "różne",
+      "onlyA": "tylko {{a}}",
+      "onlyB": "tylko {{b}}",
+      "mpnSame": "zgodne MPN"
+    },
+    "csv": {
+      "metric": "Metryka",
+      "designator": "Oznaczenie",
+      "field": "Pole"
+    },
+    "differencesCell": "Różnice",
+    "calls": "Wywołania LLM",
+    "tokens": "Tokeny",
+    "cost": "Koszt",
+    "name": {
+      "A": "wariant tylko LLM",
+      "AStart": "Wariant tylko LLM",
+      "B": "hybryda",
+      "BStart": "Hybryda",
+      "other": "wariant {{v}}",
+      "otherStart": "Wariant {{v}}",
+      "run": "przebieg {{v}}",
+      "runStart": "Przebieg {{v}}"
+    }
   },
   "reference": {
     "title": "Porównanie z BOM referencyjnym",
@@ -616,5 +793,50 @@
     "429": "Zbyt wiele żądań w krótkim czasie. Odczekaj chwilę i spróbuj ponownie.",
     "5xx": "Serwer jest chwilowo niedostępny. Spróbuj ponownie za chwilę.",
     "generic": "Żądanie nie powiodło się (HTTP {{status}}). Spróbuj ponownie; jeśli błąd się powtarza, skontaktuj się z administratorem."
+  },
+  "sheet": {
+    "titleBlock": "Tabliczka rysunkowa",
+    "number": "Arkusz {{n}} z {{m}}",
+    "breadcrumb": "Ścieżka",
+    "region": "Region EU"
+  },
+  "variants": {
+    "A": "A: tylko LLM",
+    "B": "B: hybryda"
+  },
+  "titleBlock": {
+    "project": "Projekt",
+    "variant": "Wariant",
+    "lines": "Pozycje",
+    "findings": "Uwagi",
+    "reference": "Zgodność z ref.",
+    "export": "Eksport",
+    "revision": "Rewizja",
+    "model": "Model",
+    "input": "Wejście",
+    "kb": "Baza wiedzy",
+    "start": "Start",
+    "plan": "Plan",
+    "budget": "Limit LLM",
+    "region": "Region",
+    "projects": "Projekty",
+    "members": "Członkowie",
+    "set": "Zbiór",
+    "runs": "Przebiegi",
+    "costAB": "Koszt A / B",
+    "timeAB": "Czas A / B",
+    "runtime": "Silnik agentów",
+    "defaultModel": "Model domyślny"
+  },
+  "bomScreen": {
+    "title": "BOM, wersja {{version}}",
+    "blockName": "BOM w. {{version}}",
+    "compareReference": "Porównaj z referencją",
+    "linesValue": "{{lines}} z {{parts}} el.",
+    "findingsValue_one": "{{count}} otwarta",
+    "findingsValue_few": "{{count}} otwarte",
+    "findingsValue_many": "{{count}} otwartych",
+    "findingsValue_other": "{{count}} otwartej",
+    "pick": "Wybierz pozycję, aby zobaczyć, kto i dlaczego ją dobrał, gdzie leży na płytce i co powiedziały reguły."
   }
 }

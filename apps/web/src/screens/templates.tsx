@@ -12,67 +12,71 @@ export const TEMPLATES: Record<
   infusion: { appliedPart: "CF", power: "mains", defib: false },
 };
 
-/** Small line drawings: a trace or part from each device, on a board-like grid. */
+/**
+ * Line drawings of the template devices (ADR-0019): 1.4 px ink stroke, no fill, rounded
+ * joins, exactly one solid element per drawing.
+ */
 export function TemplateArt({ template }: { template: Template }) {
-  const grid = (
-    <g stroke="currentColor" strokeOpacity="0.08">
-      {[20, 40, 60, 80, 100, 120, 140, 160, 180].map((x) => (
-        <line key={`x${x}`} x1={x} y1="0" x2={x} y2="96" />
-      ))}
-      {[24, 48, 72].map((y) => (
-        <line key={`y${y}`} x1="0" y1={y} x2="200" y2={y} />
-      ))}
-    </g>
-  );
-  const stroke = {
+  const line = {
     fill: "none",
-    strokeWidth: 2.5,
+    stroke: "currentColor",
+    strokeWidth: 1.4,
     strokeLinecap: "round",
     strokeLinejoin: "round",
   } as const;
   return (
-    <svg viewBox="0 0 200 96" aria-hidden className="h-24 w-full text-ink">
-      {grid}
-      {template === "ecg" ? (
-        <path
-          {...stroke}
-          className="stroke-llm"
-          d="M0 60 H52 l6-8 6 8 H86 l5 10 7-52 7 60 5-18 H134 q8-14 16 0 H200"
-        />
-      ) : null}
-      {template === "pulseox" ? (
-        <>
-          <path {...stroke} className="stroke-ink" d="M60 70 V38 a20 20 0 0 1 40 0 V70" />
-          <circle cx="80" cy="44" r="6" className="fill-error/80" />
-          <path {...stroke} className="stroke-llm" d="M116 56 q10-24 20 0 t20 0 t20 0" />
-        </>
-      ) : null}
-      {template === "eeg" ? (
-        <>
-          <path
-            {...stroke}
-            className="stroke-llm"
-            d="M0 30 q10-10 20 0 t20 0 t20 0 t20 0 t20 0 t20 0 t20 0 t20 0 t20 0 t20 0"
-          />
-          <path
-            {...stroke}
-            className="stroke-rule"
-            d="M0 52 q8 8 16 0 t16 0 t16 0 t16 0 t16 0 t16 0 t16 0 t16 0 t16 0 t16 0 t16 0 t16 0 t16 0"
-          />
-          <path
-            {...stroke}
-            className="stroke-ink/60"
-            d="M0 74 q12-6 24 0 t24 0 t24 0 t24 0 t24 0 t24 0 t24 0 t24 0 t24 0"
-          />
-        </>
-      ) : null}
-      {template === "infusion" ? (
-        <>
-          <rect x="70" y="14" width="34" height="52" rx="6" {...stroke} className="stroke-ink" />
-          <path {...stroke} className="stroke-ink" d="M87 66 V80 H150" />
-          <path className="fill-llm" d="M150 70 q6 9 0 14 q-6-5 0-14z" />
-        </>
-      ) : null}
+    <svg viewBox="0 0 120 80" aria-hidden className="h-20 w-[120px] text-ink">
+      <g {...line}>
+        {template === "ecg" ? (
+          <>
+            <rect x="38" y="6" width="44" height="38" rx="7" />
+            <rect x="44" y="12" width="26" height="16" rx="2" />
+            <path d="M46 21 h5 l2-4 3 8 2-4 h12" />
+            <path d="M50 44 C50 58 36 54 26 66" />
+            <path d="M60 44 V67" />
+            <path d="M70 44 C70 58 84 54 94 66" />
+            <circle cx="24" cy="69" r="3" />
+            <circle cx="60" cy="70" r="3" />
+            <circle cx="96" cy="69" r="3" />
+            <path d="M46 36 h14" />
+          </>
+        ) : null}
+        {template === "pulseox" ? (
+          <>
+            <rect x="14" y="20" width="80" height="18" rx="9" />
+            <rect x="14" y="43" width="80" height="16" rx="8" />
+            <rect x="50" y="25" width="24" height="7" rx="2" />
+            <path d="M6 40.5 H100" strokeDasharray="3 3" />
+            <path d="M94 29 L108 22 M94 51 L108 58" />
+          </>
+        ) : null}
+        {template === "eeg" ? (
+          <>
+            <rect x="8" y="28" width="104" height="42" rx="3" />
+            {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => (
+              <circle key={i} cx={22 + i * 11.5} cy="40" r="3.6" />
+            ))}
+            <rect x="16" y="54" width="32" height="8" rx="1.5" />
+            <path d="M32 28 V10 M27 10 H37" />
+            <circle cx="96" cy="58" r="6" />
+          </>
+        ) : null}
+        {template === "infusion" ? (
+          <>
+            <rect x="28" y="6" width="50" height="10" rx="2" />
+            <path d="M28 11 H14 M78 11 H100 M100 6 V16 M46 6 V16 M58 6 V16" />
+            <rect x="22" y="24" width="76" height="50" rx="5" />
+            <rect x="30" y="32" width="36" height="18" rx="2" />
+            <path d="M35 39 h14 M35 44 h8" />
+            <circle cx="82" cy="42" r="8" />
+            <path d="M32 62 h10 M48 62 h10" />
+          </>
+        ) : null}
+      </g>
+      {template === "ecg" ? <circle cx="75" cy="19" r="3" fill="currentColor" /> : null}
+      {template === "pulseox" ? <circle cx="32" cy="51" r="3.4" fill="currentColor" /> : null}
+      {template === "eeg" ? <circle cx="96" cy="58" r="3.2" fill="currentColor" /> : null}
+      {template === "infusion" ? <circle cx="82" cy="42" r="3.6" fill="currentColor" /> : null}
     </svg>
   );
 }

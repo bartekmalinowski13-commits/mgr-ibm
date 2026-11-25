@@ -6,11 +6,26 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   size?: "sm" | "md";
 }
 
+/** Shared look of buttons and button-like links (ADR-0019: 4 px radius, ink, no shadow). */
+export function buttonClass(
+  variant: NonNullable<ButtonProps["variant"]> = "primary",
+  size: NonNullable<ButtonProps["size"]> = "md",
+): string {
+  return cn(
+    "inline-flex items-center justify-center gap-2 rounded-control font-semibold transition-colors",
+    "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink",
+    "disabled:cursor-not-allowed",
+    size === "sm" ? "h-8 px-3 text-[14px]" : "h-10 px-4 text-[15px]",
+    VARIANTS[variant],
+  );
+}
+
 const VARIANTS = {
-  primary: "bg-ink text-surface hover:bg-ink-hover disabled:bg-ink/40",
-  secondary: "bg-surface text-ink border border-line hover:border-ink/40",
-  ghost: "text-ink hover:bg-paper",
-  danger: "bg-surface text-error border border-error/40 hover:bg-error/5",
+  primary: "bg-ink text-sheet hover:bg-ink-hover disabled:bg-ink/40",
+  secondary:
+    "border border-ink bg-sheet text-ink hover:bg-vellum disabled:border-line disabled:text-muted",
+  ghost: "text-ink hover:bg-vellum",
+  danger: "border border-error bg-sheet text-error hover:bg-error-bg",
 } as const;
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
@@ -21,14 +36,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
     <button
       ref={ref}
       type={type}
-      className={cn(
-        "inline-flex items-center justify-center gap-2 rounded-control font-medium transition-colors",
-        "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus",
-        "disabled:cursor-not-allowed",
-        size === "sm" ? "h-8 px-3 text-sm" : "h-10 px-4 text-[15px]",
-        VARIANTS[variant],
-        className,
-      )}
+      className={cn(buttonClass(variant, size), className)}
       {...props}
     />
   );

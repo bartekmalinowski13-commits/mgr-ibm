@@ -35,7 +35,7 @@ export function RunTable({
 }) {
   const { t, i18n } = useTranslation();
   return (
-    <div className="overflow-x-auto rounded-card border border-line bg-surface">
+    <div className="overflow-x-auto rounded-control border border-line bg-sheet">
       <table className="w-full min-w-[640px] text-left">
         <thead className="border-b border-line text-sm text-muted">
           <tr>
@@ -48,7 +48,7 @@ export function RunTable({
         </thead>
         <tbody>
           {runs.map((r) => (
-            <tr key={r.id} className="border-b border-line last:border-0 hover:bg-paper/50">
+            <tr key={r.id} className="border-b border-line last:border-0 hover:bg-vellum/50">
               <td className="px-4 py-3">
                 <Link
                   to="/runs/$runId"
@@ -75,7 +75,7 @@ export function RunTable({
 export function LoadError({ error, onRetry }: { error: unknown; onRetry?: () => void }) {
   const { t } = useTranslation();
   return (
-    <div role="alert" className="rounded-card border border-error/30 bg-error/5 p-4">
+    <div role="alert" className="rounded-control border border-error/30 bg-error/5 p-4">
       <p>{problemMessage(error) || t("common.unknownError")}</p>
       {onRetry ? (
         <button
@@ -101,7 +101,7 @@ export function Skeleton({ rows = 3 }: { rows?: number }) {
     >
       {Array.from({ length: rows }, (_, i) => (
         // biome-ignore lint/suspicious/noArrayIndexKey: placeholders
-        <div key={i} className="h-12 rounded-card bg-line/50 motion-safe:animate-pulse" />
+        <div key={i} className="h-12 rounded-control bg-line/50 motion-safe:animate-pulse" />
       ))}
     </div>
   );

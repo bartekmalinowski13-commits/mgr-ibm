@@ -48,7 +48,7 @@ export function LoginScreen() {
       <AuthLayout title={t("login.title")} lead={t("login.lead")}>
         <form
           onSubmit={continueLogin}
-          className="flex flex-col gap-4 rounded-panel border border-line bg-surface p-6"
+          className="flex flex-col gap-4 rounded-control border border-line bg-sheet p-6"
         >
           <label className="flex flex-col gap-1.5 font-medium">
             {t("login.email")}
@@ -92,7 +92,7 @@ export function LoginScreen() {
     <AuthLayout title={t("login.title")} lead={t("login.lead")}>
       <form
         onSubmit={submit}
-        className="flex flex-col gap-4 rounded-panel border border-line bg-surface p-6"
+        className="flex flex-col gap-4 rounded-control border border-line bg-sheet p-6"
       >
         <label className="flex flex-col gap-1.5 font-medium">
           {t("login.email")}

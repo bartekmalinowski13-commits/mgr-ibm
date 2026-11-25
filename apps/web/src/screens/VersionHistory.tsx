@@ -49,10 +49,10 @@ export function VersionHistory({ runId, current }: { runId: string; current: num
 
   return (
     <section aria-labelledby="history-title" className="flex flex-col gap-3">
-      <h3 id="history-title" className="font-display text-xl font-bold">
+      <h2 id="history-title" className="font-display text-[22px]">
         {t("history.title")}
-      </h3>
-      <ol className="divide-y divide-line rounded-card border border-line bg-surface">
+      </h2>
+      <ol className="divide-y divide-line rounded-control border border-line bg-sheet">
         {list.map((v) => (
           <li key={v.version} className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-2.5">
             <span className="font-medium">{t("run.version", { version: v.version })}</span>
@@ -65,12 +65,12 @@ export function VersionHistory({ runId, current }: { runId: string; current: num
         ))}
       </ol>
       {list.length > 1 ? (
-        <div className="flex flex-col gap-3 rounded-card border border-line bg-surface p-4">
+        <div className="flex flex-col gap-3 rounded-control border border-line bg-sheet p-4">
           <div className="flex flex-wrap items-center gap-3">
             <label className="flex items-center gap-2 text-sm">
               {t("history.from")}
               <select
-                className="h-9 rounded-control border border-line bg-surface px-2"
+                className="h-9 rounded-control border border-line bg-sheet px-2"
                 value={from}
                 onChange={(e) => setPicked({ ...picked, from: Number(e.target.value) })}
               >
@@ -80,7 +80,7 @@ export function VersionHistory({ runId, current }: { runId: string; current: num
             <label className="flex items-center gap-2 text-sm">
               {t("history.to")}
               <select
-                className="h-9 rounded-control border border-line bg-surface px-2"
+                className="h-9 rounded-control border border-line bg-sheet px-2"
                 value={to}
                 onChange={(e) => setPicked({ ...picked, to: Number(e.target.value) })}
               >

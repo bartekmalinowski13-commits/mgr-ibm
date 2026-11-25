@@ -1,37 +1,72 @@
 @import "tailwindcss";
-@import "@fontsource-variable/bricolage-grotesque/wght.css";
-@import "@fontsource/ibm-plex-sans/400.css";
-@import "@fontsource/ibm-plex-sans/500.css";
-@import "@fontsource/ibm-plex-sans/600.css";
-@import "@fontsource/ibm-plex-mono/400.css";
+@import "@fontsource-variable/archivo/wdth.css";
+@import "@fontsource/martian-mono/latin-400.css";
+@import "@fontsource/martian-mono/latin-ext-400.css";
 @source "../../../packages/ts/ui/src";
 
-/* Tokens (docs/design/UX_GUIDELINES.md §3, plan: docs/plans/M5-frontend.md) */
+/* Tokens: "fabrication drawing" (ADR-0019, docs/design/UX_GUIDELINES.md §3) */
 @theme {
-  --color-paper: #eceff2;
-  --color-surface: #ffffff;
-  --color-ink: #18212b;
-  --color-ink-hover: #2c3846;
-  --color-muted: #56616d;
-  --color-line: #d3d9df;
-  --color-focus: #2f6fdb;
-  --color-llm: #5b3fd6; /* provenance: agent (LLM) decision */
-  --color-rule: #13704a; /* provenance: deterministic rule (solder-mask green) */
-  --color-parser: #7a8691; /* provenance: read from the design file */
-  --color-user: #18212b; /* provenance: a person decided */
-  --color-ok: #13704a;
-  --color-warn: #a35a00;
-  --color-error: #b42318;
+  --color-vellum: #e6e9e4; /* app background (tracing paper) */
+  --color-sheet: #f4f6f2; /* sheet, panels, tables */
+  --color-ink: #1a1d1b; /* text, sheet frame, primary button, focus */
+  --color-ink-hover: #343a36;
+  --color-muted: #59605b; /* secondary text, 5.9:1 on sheet */
+  --color-line: #b7bfb9; /* construction lines, outer frame */
+  --color-line-soft: #d4dad5; /* row separators */
+  --color-mask: #0e4733; /* board panel (solder mask) */
+  --color-silk: #eef2ea; /* silkscreen text on the board */
+  --color-gold: #c9a43b; /* mounting holes, board-map selection; never text on light */
+  --color-llm: #4b3bdb; /* provenance: LLM agent, variant A */
+  --color-llm-bg: #e7e4fb;
+  --color-llm-light: #b9b2ff; /* variant A bars on the board */
+  --color-rule: #17694a; /* provenance: deterministic rule, variant B */
+  --color-rule-bg: #dcede3;
+  --color-parser: #6e756f; /* provenance: read from the design file (glyph only) */
+  --color-user: #1a1d1b; /* provenance: a person decided */
+  --color-ok: #17694a;
+  --color-warn: #94580a;
+  --color-error: #b4321f;
+  --color-error-bg: #f6e1dc;
 
-  --font-display: "Bricolage Grotesque Variable", system-ui, sans-serif;
-  --font-sans: "IBM Plex Sans", system-ui, sans-serif;
-  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+  --font-sans: "Archivo Variable", "Archivo", system-ui, sans-serif;
+  --font-mono: "Martian Mono", ui-monospace, monospace;
 
-  /* radius follows hierarchy: panels > cards > controls */
-  --radius-panel: 18px;
-  --radius-card: 12px;
-  --radius-control: 8px;
-  --shadow-dialog: 0 24px 64px -24px rgb(24 33 43 / 0.35);
+  /* radius follows hierarchy: sheet 0, board panel 18, controls 4, chips 2 */
+  --radius-mask: 18px;
+  --radius-control: 4px;
+  --radius-chip: 2px;
+  --shadow-dialog: 0 24px 64px -24px rgb(26 29 27 / 0.35);
+}
+
+/* Archivo 125/800: greeting, screen titles, panel headings, title-block name */
+@utility font-display {
+  font-family: var(--font-sans);
+  font-stretch: 125%;
+  font-weight: 800;
+  letter-spacing: -0.015em;
+  line-height: 1.02;
+}
+
+/* Archivo 86: dense table columns (value, manufacturer) */
+@utility font-narrow {
+  font-stretch: 86%;
+}
+
+/* Martian Mono for technical data: MPN, designators, packages, times, costs */
+@utility font-data {
+  font-family: var(--font-mono);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+}
+
+/* 135° hatching (the "empty project" cell) */
+@utility hatch {
+  background-image: repeating-linear-gradient(
+    135deg,
+    transparent 0 7px,
+    var(--color-line) 7px 8px
+  );
 }
 
 @keyframes fade {
@@ -40,12 +75,36 @@
   }
 }
 
+/* The only animation of the app: the centre of the current via (off under reduced motion) */
+@keyframes via-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(0.55);
+    opacity: 0.55;
+  }
+}
+
 html {
-  background: var(--color-paper);
+  background: var(--color-vellum);
   color: var(--color-ink);
   font-family: var(--font-sans);
   font-size: 15px;
+  line-height: 1.5;
   -webkit-font-smoothing: antialiased;
+}
+
+body {
+  background: var(--color-vellum);
+}
+
+/* Visible focus: 2 px ink + 2 px offset (gold on the board panel, see MaskPanel) */
+:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--color-ink);
+  outline-offset: 2px;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -53,6 +112,7 @@ html {
   *::before,
   *::after {
     animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
     transition-duration: 1ms !important;
     scroll-behavior: auto !important;
   }

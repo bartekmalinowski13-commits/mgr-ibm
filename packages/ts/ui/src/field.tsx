@@ -9,9 +9,9 @@ import {
 import { cn } from "./cn";
 
 const CONTROL =
-  "w-full rounded-control border border-line bg-surface px-3 text-[15px] text-ink " +
+  "w-full rounded-control border border-line bg-sheet px-3 text-[15px] text-ink " +
   "placeholder:text-muted/70 focus-visible:border-ink focus-visible:outline-2 " +
-  "focus-visible:outline-offset-0 focus-visible:outline-focus aria-[invalid=true]:border-error";
+  "focus-visible:outline-offset-0 focus-visible:outline-ink aria-[invalid=true]:border-error";
 
 /** Label on the left, control on the right (modal pattern from UX_GUIDELINES §2). */
 export function Field({

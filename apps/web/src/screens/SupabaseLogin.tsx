@@ -15,7 +15,7 @@ import {
 } from "../lib/supabase";
 import { AuthLayout } from "./AuthLayout";
 
-const link = "text-sm underline focus-visible:outline-2 focus-visible:outline-focus";
+const link = "text-sm underline focus-visible:outline-2 focus-visible:outline-ink";
 
 // Single-colour glyphs (currentColor): neutral, so they follow the theme and the contrast rules
 const ICONS: Record<SocialProvider, string> = {
@@ -108,7 +108,7 @@ export function SupabaseLogin({ cfg }: { cfg: SupabaseConfig }) {
     <AuthLayout title={t("login.title")} lead={t("login.lead")}>
       <form
         onSubmit={submit}
-        className="flex flex-col gap-4 rounded-panel border border-line bg-surface p-6"
+        className="flex flex-col gap-4 rounded-control border border-line bg-sheet p-6"
       >
         {providers.length > 0 ? (
           <>

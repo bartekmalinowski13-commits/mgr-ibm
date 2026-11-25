@@ -66,7 +66,7 @@ export function KbScreen() {
             type="button"
             aria-selected={scope === id}
             onClick={() => setScope(id)}
-            className={`-mb-px border-b-2 px-3 py-2 font-medium focus-visible:outline-2 focus-visible:outline-focus ${
+            className={`-mb-px border-b-2 px-3 py-2 font-medium focus-visible:outline-2 focus-visible:outline-ink ${
               scope === id ? "border-ink text-ink" : "border-transparent text-muted hover:text-ink"
             }`}
           >
@@ -78,7 +78,7 @@ export function KbScreen() {
         {scope === "tenant" && canWrite ? (
           <form
             onSubmit={upload}
-            className="grid gap-3 rounded-card border border-line bg-surface p-4 md:grid-cols-[1fr_200px_200px_auto] md:items-end"
+            className="grid gap-3 rounded-control border border-line bg-sheet p-4 md:grid-cols-[1fr_200px_200px_auto] md:items-end"
           >
             <label className="flex flex-col gap-1.5 font-medium">
               {t("kb.file")}
@@ -87,7 +87,7 @@ export function KbScreen() {
                 type="file"
                 required
                 accept=".pdf,.md,.txt"
-                className="rounded-control border border-line px-3 py-2 text-[15px] file:mr-3 file:rounded-control file:border-0 file:bg-paper file:px-3 file:py-1"
+                className="rounded-control border border-line px-3 py-2 text-[15px] file:mr-3 file:rounded-control file:border-0 file:bg-vellum file:px-3 file:py-1"
               />
             </label>
             <label className="flex flex-col gap-1.5 font-medium">
@@ -122,7 +122,7 @@ export function KbScreen() {
         ) : docs.data.items.length === 0 ? (
           <p className="text-muted">{scope === "tenant" ? t("kb.empty") : t("kb.globalEmpty")}</p>
         ) : (
-          <ul className="divide-y divide-line rounded-card border border-line bg-surface">
+          <ul className="divide-y divide-line rounded-control border border-line bg-sheet">
             {docs.data.items.map((d) => (
               <li key={d.id} className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-3">
                 <div className="min-w-0 flex-1">

@@ -10,7 +10,7 @@ export function MenuContent({ children }: { children: ReactNode }) {
       <M.Content
         align="start"
         sideOffset={6}
-        className="z-50 min-w-[232px] rounded-card border border-line bg-surface p-1.5 shadow-dialog"
+        className="z-50 min-w-[232px] rounded-control border border-line bg-sheet p-1.5 shadow-dialog"
       >
         {children}
       </M.Content>
@@ -22,7 +22,7 @@ export function MenuItem({ children, onSelect }: { children: ReactNode; onSelect
   return (
     <M.Item
       onSelect={onSelect}
-      className="flex cursor-pointer items-center gap-2 rounded-control px-2.5 py-2 text-[15px] text-ink outline-none data-[highlighted]:bg-paper"
+      className="flex cursor-pointer items-center gap-2 rounded-control px-2.5 py-2 text-[15px] text-ink outline-none data-[highlighted]:bg-vellum"
     >
       {children}
     </M.Item>

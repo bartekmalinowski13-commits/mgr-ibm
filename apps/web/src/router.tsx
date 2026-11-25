@@ -55,6 +55,12 @@ const onboarding = createRoute({
   path: "/onboarding",
   component: lazyRouteComponent(() => import("./screens/OnboardingScreen"), "OnboardingScreen"),
 });
+// ADR-0019 component preview (no sign-in, no data)
+const design = createRoute({
+  getParentRoute: () => root,
+  path: "/design",
+  component: lazyRouteComponent(() => import("./screens/DesignPreview"), "DesignPreview"),
+});
 const app = createRoute({ getParentRoute: () => root, id: "app", component: Shell });
 const index = createRoute({
   getParentRoute: () => app,
@@ -97,6 +103,12 @@ export const runRoute = createRoute({
   // a new run (e.g. after Rerun) starts with fresh live/selection state, not the previous run's
   remountDeps: ({ params }) => params.runId,
 });
+export const bomRoute = createRoute({
+  getParentRoute: () => app,
+  path: "/runs/$runId/bom",
+  component: lazyRouteComponent(() => import("./screens/BomScreen"), "BomScreen"),
+  remountDeps: ({ params }) => params.runId,
+});
 const kb = createRoute({
   getParentRoute: () => app,
   path: "/kb",
@@ -120,6 +132,7 @@ export const router = createRouter({
     reset,
     confirmed,
     onboarding,
+    design,
     app.addChildren([
       index,
       start,
@@ -128,6 +141,7 @@ export const router = createRouter({
       compareRoute,
       runs,
       runRoute,
+      bomRoute,
       kb,
       audit,
       settings,

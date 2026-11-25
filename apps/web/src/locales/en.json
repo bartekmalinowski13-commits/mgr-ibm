@@ -106,7 +106,10 @@
     "newOrg": "Create a new organisation",
     "signOut": "Sign out",
     "language": "Polski",
-    "kb": "Knowledge base"
+    "kb": "Knowledge base",
+    "organisation": "Organisation",
+    "bom": "BOMs",
+    "compare": "A/B comparisons"
   },
   "plan": {
     "pill": "{{plan}} plan",
@@ -119,7 +122,7 @@
     "budget": "LLM this month: {{used}} of {{limit}}"
   },
   "start": {
-    "greeting": "Hi, {{name}}",
+    "greeting": "Hi, {{name}}.",
     "newRunTitle": "New BOM run",
     "newRunLead": "Start from a blank project or a device template – the template fills in the requirements (applied part, power).",
     "blank": "Blank project",
@@ -134,21 +137,43 @@
     },
     "templates": {
       "ecg": {
-        "title": "Wearable ECG",
+        "title": "Holter ECG, 3 channels",
         "hint": "BF part, battery"
       },
       "pulseox": {
-        "title": "Pulse oximeter",
+        "title": "Finger pulse oximeter",
         "hint": "BF part, USB"
       },
       "eeg": {
-        "title": "EEG amplifier",
+        "title": "EEG amplifier, 8 channels",
         "hint": "CF part, battery"
       },
       "infusion": {
         "title": "Infusion pump",
         "hint": "CF part, mains"
       }
+    },
+    "lead": {
+      "review_one": "The BOM of run <b>#{{id}}</b> is ready.",
+      "review_other": "{{count}} BOMs are ready, the newest from run <b>#{{id}}</b>.",
+      "running_one": "Run <b>#{{id}}</b> is in progress.",
+      "running_other": "{{count}} runs are in progress.",
+      "empty": "You have no runs yet. Start the first one and the notes to review will show up here."
+    },
+    "reviewNotes": "Review notes",
+    "templatesTitle": "Start from an example device",
+    "templatesHint": "or create a project and upload files",
+    "budgetValue": "{{percent}}% of {{limit}}",
+    "recent": {
+      "title": "Recent runs",
+      "number": "No.",
+      "project": "Project",
+      "variant": "Variant",
+      "state": "Status",
+      "cost": "Cost",
+      "time": "Time",
+      "empty": "There are no runs yet.",
+      "emptyAction": "New run"
     }
   },
   "projects": {
@@ -258,7 +283,74 @@
     "rerunStarted": "New run started with the same settings",
     "findings_one": "{{count}} validation finding",
     "findings_other": "{{count}} validation findings",
-    "statusColumn": "Status"
+    "statusColumn": "Status",
+    "openBom": "Open the BOM",
+    "heading": "#{{id}}",
+    "blockName": "Run #{{id}}",
+    "stop": "Stop the run",
+    "leadBoth": "Both variants got the same project, the same knowledge base and the same model. The only difference is who performs each step.",
+    "leadOne": "Model {{model}}. Every step records who decided: an agent, a rule, the file or a person.",
+    "counters": "Run counters",
+    "eventsTitle": "Live events",
+    "eventsEmpty": "The first event appears when a step finishes.",
+    "stages": {
+      "read": "Read CAD",
+      "normalize": "Normalise",
+      "select": "Choose MPN",
+      "validate": "Validate",
+      "assemble": "Assemble BOM"
+    },
+    "executors": {
+      "parser": "parser",
+      "agent": "agent",
+      "rules": "rules",
+      "rulesAgent": "rules + agent",
+      "rulesRepair": "rules + repair",
+      "generator": "generator"
+    },
+    "via": {
+      "done": "done",
+      "current": "in progress",
+      "todo": "waiting",
+      "running": "running"
+    },
+    "phrase": {
+      "normalize": "is normalising lines",
+      "select": "is choosing parts",
+      "validate": "is validating",
+      "assemble": "is assembling the BOM",
+      "done": "has finished",
+      "queued": "is queued",
+      "failed": "has failed",
+      "stopped": "has stopped",
+      "finishing": "is finishing"
+    },
+    "headline": {
+      "one": "Variant {{variant}} {{phrase}}.",
+      "lead": "{{lead}} {{leadPhrase}}, {{lag}} still {{lagPhrase}}.",
+      "same": "{{a}} and {{b}} {{phrase}}.",
+      "bothDone": "Both variants have finished. The BOMs are ready to compare.",
+      "completed": "The BOM is ready for review.",
+      "failed": "The run failed.",
+      "cancelled": "The run was stopped.",
+      "budget": "The run exceeded its budget.",
+      "queued": "The run is queued."
+    },
+    "events": {
+      "extract_group": "Extraction agent: grouped parts into lines",
+      "normalize_group": "Normalisation rules: grouped parts into lines",
+      "select_mpn": "MPN choice: rules + agent ({{count}} LLM calls)",
+      "select_mpn_a": "Selection agent: chose MPNs ({{count}} LLM calls)",
+      "validate": "Validator: checked the BOM with rules",
+      "validate_a": "Validation agent: checked the BOM",
+      "repair": "Repair agent: fixed lines with findings",
+      "compose": "Composer agent: assembled the BOM",
+      "assemble": "Generator: assembled the BOM",
+      "other": "Finished step {{node}}",
+      "end_ok": "Variant {{variant}}: run finished, BOM saved",
+      "end_stopped": "Variant {{variant}}: run stopped"
+    },
+    "stepTook": "step took"
   },
   "bom": {
     "title": "Bill of materials",
@@ -266,13 +358,13 @@
     "origin": "Who decided",
     "columns": {
       "line": "Line",
-      "refdes": "Designators",
+      "refdes": "Designator",
       "qty": "Qty",
       "value": "Value",
       "footprint": "Footprint",
       "manufacturer": "Manufacturer",
       "mpn": "MPN",
-      "notes": "Findings"
+      "notes": "Validation"
     },
     "provenance": {
       "agent": "LLM agent",
@@ -289,7 +381,23 @@
     "count": "{{shown}} of {{total}} lines",
     "csvFailed": "Could not copy to the clipboard",
     "csvCopied_one": "Copied CSV ({{count}} line)",
-    "csvCopied_other": "Copied CSV ({{count}} lines)"
+    "csvCopied_other": "Copied CSV ({{count}} lines)",
+    "filters": {
+      "label": "Line filter",
+      "all": "All",
+      "findings": "With findings",
+      "agent": "LLM decisions"
+    },
+    "legend": {
+      "parser": "from file",
+      "rule": "rule",
+      "agent": "LLM agent",
+      "user": "person"
+    },
+    "validation": {
+      "ok": "passes",
+      "review": "review"
+    }
   },
   "panel": {
     "title": "Line {{line}}",
@@ -297,7 +405,7 @@
     "rationale": "Rationale",
     "citations": "Knowledge base sources",
     "page": "p. {{page}}",
-    "findings": "Validation findings",
+    "findings": "Rule results",
     "noFindings": "The rules reported nothing for this line.",
     "edit": "Correct this line",
     "editLead": "A correction creates a new BOM version and becomes knowledge of your organisation (never of others).",
@@ -309,7 +417,20 @@
     "agent": "{{agent}} · model {{model}}",
     "parser": "Read from the file ({{parser}})",
     "user": "Changed by {{user}}",
-    "savedLive": "Saved. BOM version {{version}}."
+    "savedLive": "Saved. BOM version {{version}}.",
+    "why": "Why this part",
+    "noMpn": "No MPN",
+    "datasheet": "Datasheet",
+    "datasheetPage": "Datasheet, p. {{page}}",
+    "tenantSource": "organisation knowledge",
+    "changeMpn": "Change MPN",
+    "map": {
+      "label": "Board map: {{refdes}} in zone {{zone}}, layer {{layer}}",
+      "zone": "Zone {{zone}}, layer {{layer}}",
+      "size": "{{pkg}}, {{w}} × {{h}} mm",
+      "none": "No board placement data (needs the .kicad_pcb file)",
+      "noneShort": "no placement"
+    }
   },
   "runs": {
     "title": "Runs",
@@ -441,7 +562,59 @@
     "differences_one": "{{count}} difference between the variants",
     "differences_other": "{{count}} differences between the variants",
     "same": "Both variants decided the same for every designator.",
-    "missing": "Missing in this variant"
+    "missing": "Missing in this variant",
+    "blockName": "Comparison",
+    "projects": "Projects",
+    "export": "Export for thesis (CSV)",
+    "exported": "Comparison exported to CSV",
+    "silk": "BOM-AGENT · {{project}} · Variant {{a}} ↔ {{b}}",
+    "verdict": {
+      "cheaper": "{{right}} costs {{x}} times less than {{left}}.",
+      "pricier": "{{right}} costs {{x}} times more than {{left}}.",
+      "fewerFindings": "{{right}} has fewer validation findings than {{left}}.",
+      "moreFindings": "{{right}} has more validation findings than {{left}}.",
+      "same": "Both variants reached the same bill of materials.",
+      "differ": "The variants differ on some lines."
+    },
+    "lead": "Variant {{a}}: {{linesA}} lines, {{findingsA}} findings, cost {{costA}}. Variant {{b}}: {{linesB}} lines, {{findingsB}} findings, cost {{costB}}.",
+    "differencesLead": "{{n}} of {{total}} lines.",
+    "colRefdes": "Ref.",
+    "colChoice": "What each variant chose and what happened",
+    "colResult": "Result",
+    "colBars": "Bar comparison",
+    "colValues": "Values",
+    "reason": {
+      "mpn": "The variants chose different MPNs.",
+      "onlyA": "Only {{la}} has this line.",
+      "onlyB": "Only {{lb}} has this line.",
+      "value": "Same MPN, different value: {{la}} {{a}}, {{lb}} {{b}}.",
+      "manufacturer": "Same MPN, different manufacturer: {{la}} {{a}}, {{lb}} {{b}}."
+    },
+    "result": {
+      "differ": "different",
+      "onlyA": "only {{a}}",
+      "onlyB": "only {{b}}",
+      "mpnSame": "MPN matches"
+    },
+    "csv": {
+      "metric": "Metric",
+      "designator": "Designator",
+      "field": "Field"
+    },
+    "differencesCell": "Differences",
+    "calls": "LLM calls",
+    "tokens": "Tokens",
+    "cost": "Cost",
+    "name": {
+      "A": "the LLM-only variant",
+      "AStart": "The LLM-only variant",
+      "B": "the hybrid",
+      "BStart": "The hybrid",
+      "other": "variant {{v}}",
+      "otherStart": "Variant {{v}}",
+      "run": "run {{v}}",
+      "runStart": "Run {{v}}"
+    }
   },
   "reference": {
     "title": "Compare with a reference BOM",
@@ -596,5 +769,48 @@
     "429": "Too many requests in a short time. Wait a moment and try again.",
     "5xx": "The server is temporarily unavailable. Try again in a moment.",
     "generic": "The request failed (HTTP {{status}}). Try again; if it keeps failing, contact your administrator."
+  },
+  "sheet": {
+    "titleBlock": "Title block",
+    "number": "Sheet {{n}} of {{m}}",
+    "breadcrumb": "Breadcrumb",
+    "region": "EU region"
+  },
+  "variants": {
+    "A": "A: LLM only",
+    "B": "B: hybrid"
+  },
+  "titleBlock": {
+    "project": "Project",
+    "variant": "Variant",
+    "lines": "Lines",
+    "findings": "Findings",
+    "reference": "Match with ref.",
+    "export": "Export",
+    "revision": "Revision",
+    "model": "Model",
+    "input": "Input",
+    "kb": "Knowledge base",
+    "start": "Start",
+    "plan": "Plan",
+    "budget": "LLM budget",
+    "region": "Region",
+    "projects": "Projects",
+    "members": "Members",
+    "set": "Set",
+    "runs": "Runs",
+    "costAB": "Cost A / B",
+    "timeAB": "Time A / B",
+    "runtime": "Agent runtime",
+    "defaultModel": "Default model"
+  },
+  "bomScreen": {
+    "title": "BOM, version {{version}}",
+    "blockName": "BOM v{{version}}",
+    "compareReference": "Compare with reference",
+    "linesValue": "{{lines}} of {{parts}} parts",
+    "findingsValue_one": "{{count}} open",
+    "findingsValue_other": "{{count}} open",
+    "pick": "Pick a line to see who chose it and why, where it sits on the board and what the rules said."
   }
 }

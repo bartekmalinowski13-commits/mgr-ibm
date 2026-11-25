@@ -26,23 +26,21 @@ export function DialogContent({
       <D.Content
         className={cn(
           "fixed left-1/2 top-[8vh] w-[min(720px,calc(100vw-32px))] -translate-x-1/2",
-          "max-h-[84vh] overflow-y-auto rounded-panel bg-surface p-6 shadow-dialog",
+          "max-h-[84vh] overflow-y-auto rounded-control bg-sheet p-6 shadow-dialog",
           "focus-visible:outline-none",
           className,
         )}
       >
         <div className="mb-5 flex items-start justify-between gap-4">
           <div>
-            <D.Title className="font-display text-2xl font-extrabold leading-tight text-ink">
-              {title}
-            </D.Title>
+            <D.Title className="font-display text-[22px] text-ink">{title}</D.Title>
             {description ? (
               <D.Description className="mt-1 text-[15px] text-muted">{description}</D.Description>
             ) : null}
           </div>
           <D.Close
             aria-label={closeLabel}
-            className="rounded-control p-1.5 text-muted hover:bg-paper hover:text-ink focus-visible:outline-2 focus-visible:outline-focus"
+            className="rounded-control p-1.5 text-muted hover:bg-vellum/60 hover:text-ink focus-visible:outline-2 focus-visible:outline-ink"
           >
             <X size={18} aria-hidden />
           </D.Close>
@@ -75,7 +73,7 @@ export function SheetContent({
       <D.Content
         aria-describedby={undefined}
         className={cn(
-          "fixed inset-y-0 left-0 z-50 w-[min(280px,calc(100vw-48px))] overflow-y-auto bg-surface shadow-dialog",
+          "fixed inset-y-0 left-0 z-50 w-[min(280px,calc(100vw-48px))] overflow-y-auto bg-sheet shadow-dialog",
           "focus-visible:outline-none",
           className,
         )}
@@ -83,7 +81,7 @@ export function SheetContent({
         <D.Title className="sr-only">{title}</D.Title>
         <D.Close
           aria-label={closeLabel}
-          className="absolute right-2 top-2 z-10 rounded-control p-1.5 text-muted hover:bg-paper hover:text-ink focus-visible:outline-2 focus-visible:outline-focus"
+          className="absolute right-2 top-2 z-10 rounded-control p-1.5 text-muted hover:bg-vellum/60 hover:text-ink focus-visible:outline-2 focus-visible:outline-ink"
         >
           <X size={18} aria-hidden />
         </D.Close>
