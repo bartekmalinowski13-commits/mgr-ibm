@@ -33,6 +33,28 @@ from bomagent_cad import FileRef, parse_files  # noqa: E402
 OUT = ROOT / "services" / "api" / "src" / "bomagent_api" / "samples" / "data"
 KICAD = ROOT / "evals" / "fixtures" / "kicad"
 KICAD_COPIES = {"ecg-frontend": "ecg-frontend", "eeg-2ch": "eeg-2ch", "pulse-oximeter": "pulse-ox"}
+# synthetic datasheets for the global knowledge-base corpus of a demo/pilot deployment
+DATASHEETS_SRC = ROOT / "evals" / "fixtures" / "datasheets"
+DATASHEETS_OUT = OUT.parent / "datasheets"
+DATASHEET_MANUFACTURERS = {
+    "adi-ad8232": "Analog Devices",
+    "jst-ph": "JST",
+    "liteon-ltst-c191": "Lite-On",
+    "maxim-max30102": "Analog Devices",
+    "microchip-mcp1700": "Microchip",
+    "molex-kk254": "Molex",
+    "murata-blm18pg": "Murata",
+    "murata-grm188": "Murata",
+    "nexperia-pesd5v0s1ba": "Nexperia",
+    "samsung-cl10": "Samsung Electro-Mechanics",
+    "ti-ads1292r": "Texas Instruments",
+    "ti-ina333": "Texas Instruments",
+    "ti-lp5907": "Texas Instruments",
+    "ti-opa2333": "Texas Instruments",
+    "ti-opa333": "Texas Instruments",
+    "yageo-rc0402": "Yageo",
+    "yageo-rc0603": "Yageo",
+}
 
 
 def copy_kicad(slug: str, src_name: str) -> None:
@@ -68,10 +90,21 @@ def build_exports() -> None:
                 )
 
 
+def copy_datasheets() -> None:
+    """The datasheets the samples need, without the prompt-injection test document."""
+    DATASHEETS_OUT.mkdir(parents=True, exist_ok=True)
+    rows = ["file,manufacturer"]
+    for stem, manufacturer in sorted(DATASHEET_MANUFACTURERS.items()):
+        shutil.copyfile(DATASHEETS_SRC / f"{stem}.md", DATASHEETS_OUT / f"{stem}.md")
+        rows.append(f"{stem}.md,{manufacturer}")
+    (DATASHEETS_OUT / "index.csv").write_text("\n".join(rows) + "\n", encoding="utf-8")
+
+
 def main() -> None:
     for slug, src_name in KICAD_COPIES.items():
         copy_kicad(slug, src_name)
     build_exports()
+    copy_datasheets()
     for path in sorted(OUT.rglob("*")):
         if path.is_file():
             print(path.relative_to(ROOT))

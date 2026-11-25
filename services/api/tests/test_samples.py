@@ -417,3 +417,34 @@ async def test_seeding_is_metered_and_the_endpoint_is_rate_limited(env, app_engi
     codes = [(await env.client.post("/v1/samples", headers=owner)).status_code for _ in range(8)]
     assert codes[0] == 200
     assert 429 in codes
+
+
+# ---------------------------------------------------------------- global KB datasheets
+
+
+def test_sample_datasheets_are_synthetic_and_listed_once() -> None:
+    from bomagent_api.samples.catalog import DATASHEETS_DIR, sample_datasheets
+
+    sheets = sample_datasheets()
+    names = [s.path.name for s in sheets]
+    assert len(names) == len(set(names)) == 17
+    assert sorted(names) == sorted(p.name for p in DATASHEETS_DIR.glob("*.md"))
+    assert "malicious-injection.md" not in names  # the injection test stays in evals only
+    for sheet in sheets:
+        assert sheet.manufacturer
+        assert "SYNTHETIC" in sheet.path.read_text(encoding="utf-8").splitlines()[1]
+
+
+def test_sample_datasheets_cover_every_part_family_of_the_samples() -> None:
+    """Every MPN in a sample's reference BOM has its family in the corpus, except the NTC
+    thermistor of the thermometer, left out on purpose (samples/data/README.md)."""
+    from bomagent_api.samples.catalog import sample_datasheets
+
+    corpus = " ".join(s.path.read_text(encoding="utf-8") for s in sample_datasheets())
+    missing = {
+        (sample.key, row["MPN"])
+        for sample in SAMPLES
+        for row in csv.DictReader((DATA_DIR / sample.key / "reference_bom.csv").open())
+        if row["MPN"] and row["MPN"][:6] not in corpus
+    }
+    assert missing == {("thermometer", "NCP15XH103F03RC")}

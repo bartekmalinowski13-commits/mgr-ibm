@@ -87,6 +87,17 @@ The release step runs the migrations, then the machine starts. Check:
 curl -s https://<APP>.fly.dev/readyz
 ```
 
+Once (and again after the sample datasheets change), load the synthetic sample datasheets into
+the global knowledge-base corpus, so every organisation's `[Sample]` projects and its own test
+designs have evidence for MPN selection without uploading anything. Idempotent; it needs the
+LLM gateway (embeddings):
+
+```bash
+fly ssh console -a <APP> -C "python -m bomagent_allinone seed-kb"
+```
+
+The documents appear under Knowledge base -> Global corpus in every organisation.
+
 ## 5. First sign-in
 
 1. Supabase -> Authentication -> URL Configuration: **Site URL** = `https://<APP>.fly.dev`
