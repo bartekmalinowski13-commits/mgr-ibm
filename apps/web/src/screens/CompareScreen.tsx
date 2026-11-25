@@ -197,8 +197,17 @@ export function CompareScreen() {
     findingsB: byKey("findings").b,
     differences: disagree.length,
   });
-  const va = runA.variant;
-  const vb = runB.variant;
+  // the user may put any run on either side (B left, A right, or A vs A with two models):
+  // every sentence names the sides by their real variant, never by position
+  const same = runA.variant === runB.variant;
+  const va = same ? `${runA.variant}1` : runA.variant;
+  const vb = same ? `${runB.variant}2` : runB.variant;
+  const name = (variant: string, label: string, start: boolean) =>
+    same
+      ? t(start ? "compare.name.runStart" : "compare.name.run", { v: label })
+      : t(`compare.name.${variant}${start ? "Start" : ""}`, {
+          defaultValue: t(start ? "compare.name.otherStart" : "compare.name.other", { v: variant }),
+        });
 
   const exportCsv = () => {
     const lines: (string | number)[][] = [
@@ -311,7 +320,11 @@ export function CompareScreen() {
                   id="verdict-title"
                   className="mt-3 max-w-[16ch] font-display text-[34px] leading-[1.02] text-silk sm:text-[52px]"
                 >
-                  {t(v.key, { x: v.params.x === undefined ? undefined : num(v.params.x) })}
+                  {t(v.key, {
+                    x: v.params.x === undefined ? undefined : num(v.params.x),
+                    right: name(runB.variant, vb, true),
+                    left: name(runA.variant, va, false),
+                  })}
                 </h2>
                 <p className="mt-4 max-w-[52ch] text-[16px] leading-relaxed text-silk">
                   {t("compare.lead", {
@@ -394,7 +407,14 @@ export function CompareScreen() {
                         </thead>
                         <tbody>
                           {disagree.map((d) => (
-                            <DiffRow key={d.refdes} d={d} />
+                            <DiffRow
+                              key={d.refdes}
+                              d={d}
+                              la={va}
+                              lb={vb}
+                              toneA={runA.variant}
+                              toneB={runB.variant}
+                            />
                           ))}
                         </tbody>
                       </table>
@@ -410,14 +430,29 @@ export function CompareScreen() {
   );
 }
 
-function DiffRow({ d }: { d: Diff }) {
+const TONE: Record<string, string> = { A: "text-llm", B: "text-rule" };
+
+function DiffRow({
+  d,
+  la,
+  lb,
+  toneA,
+  toneB,
+}: {
+  d: Diff;
+  /** labels of the left and right run (their variants) */
+  la: string;
+  lb: string;
+  toneA: string;
+  toneB: string;
+}) {
   const { t } = useTranslation();
   const reason = reasonOf(d);
   const badge =
     reason === "mpn"
       ? { status: "warn" as const, label: t("compare.result.differ") }
       : reason === "onlyA" || reason === "onlyB"
-        ? { status: "warn" as const, label: t(`compare.result.${reason}`) }
+        ? { status: "warn" as const, label: t(`compare.result.${reason}`, { a: la, b: lb }) }
         : { status: "ok" as const, label: t("compare.result.mpnSame") };
   const field = reason === "manufacturer" ? "manufacturer" : "value";
   return (
@@ -426,12 +461,18 @@ function DiffRow({ d }: { d: Diff }) {
         {d.refdes}
       </th>
       <td className="py-3 pr-3">
-        <span className="block font-data text-[14px] text-llm">A {d.a?.mpn || "—"}</span>
-        <span className="block font-data text-[14px] text-rule">B {d.b?.mpn || "—"}</span>
+        <span className={`block font-data text-[14px] ${TONE[toneA] ?? "text-ink"}`}>
+          {la} {d.a?.mpn || "—"}
+        </span>
+        <span className={`block font-data text-[14px] ${TONE[toneB] ?? "text-ink"}`}>
+          {lb} {d.b?.mpn || "—"}
+        </span>
         <span className="mt-1 block text-[14px] text-muted">
           {t(`compare.reason.${reason}`, {
             a: d.a?.[field] || "—",
             b: d.b?.[field] || "—",
+            la,
+            lb,
           })}
         </span>
       </td>

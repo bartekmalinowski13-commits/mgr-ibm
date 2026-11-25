@@ -49,9 +49,9 @@ export function VersionHistory({ runId, current }: { runId: string; current: num
 
   return (
     <section aria-labelledby="history-title" className="flex flex-col gap-3">
-      <h3 id="history-title" className="font-display text-xl font-bold">
+      <h2 id="history-title" className="font-display text-[22px]">
         {t("history.title")}
-      </h3>
+      </h2>
       <ol className="divide-y divide-line rounded-control border border-line bg-sheet">
         {list.map((v) => (
           <li key={v.version} className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-2.5">

@@ -45,7 +45,7 @@ test("new run from a template -> live progress -> BOM -> provenance -> correctio
   // ADR-0019: the run sheet shows the steps; the BOM is its own sheet
   const openBom = page.getByRole("link", { name: "Otwórz zestawienie BOM" });
   await expect(openBom).toBeVisible({ timeout: 90_000 });
-  await expect(page.getByText("Gotowy")).toBeVisible();
+  await expect(page.getByText("Gotowy", { exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Kroki przebiegu" })).toBeAttached();
   await expectAccessible(page);
 

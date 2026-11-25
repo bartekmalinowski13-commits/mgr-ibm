@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { formatDuration } from "./format";
-import { currentStage, executorKey, stageOf, stageStates } from "./stages";
+import { collapseTrace, currentStage, executorKey, stageOf, stageStates } from "./stages";
 
 describe("run stages", () => {
   it("maps graph nodes of both variants to stages", () => {
@@ -11,6 +11,31 @@ describe("run stages", () => {
     expect(stageOf("repair")).toBe("validate");
     expect(stageOf("compose")).toBe("assemble");
     expect(stageOf("assemble")).toBe("assemble");
+  });
+
+  it("leaves markers and unknown nodes out", () => {
+    expect(stageOf("run.resumed")).toBeUndefined();
+    expect(stageOf("claude_agent_sdk")).toBeUndefined();
+    const s = stageStates("running", [{ node: "claude_agent_sdk", duration_s: 90, llm_calls: 3 }]);
+    expect(s.every((x) => x.seconds === undefined)).toBe(true);
+  });
+
+  it("counts parallel fan-out of one node by its slowest call, not the sum", () => {
+    const fan = Array.from({ length: 20 }, () => ({
+      node: "select_mpn",
+      duration_s: 3,
+      llm_calls: 1,
+    }));
+    expect(collapseTrace(fan)).toEqual([{ node: "select_mpn", duration_s: 3, llm_calls: 20 }]);
+    const s = stageStates("completed", [
+      ...fan,
+      { node: "validate", duration_s: 2, llm_calls: 0 },
+      { node: "repair", duration_s: 4, llm_calls: 1 },
+      { node: "validate", duration_s: 2, llm_calls: 0 },
+    ]);
+    expect(s[2]?.seconds).toBe(3);
+    expect(s[2]?.llmCalls).toBe(20);
+    expect(s[3]?.seconds).toBe(8);
   });
 
   it("marks done, current and future stages of a running run", () => {

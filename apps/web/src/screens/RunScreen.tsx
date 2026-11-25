@@ -20,6 +20,7 @@ import { formatEur } from "../lib/provenance";
 import { useProjects, useRuns } from "../lib/queries";
 import { useSession } from "../lib/session";
 import {
+  collapseTrace,
   currentStage,
   executorKey,
   type Stage,
@@ -100,9 +101,19 @@ export function RunScreen() {
     const me = run.data;
     if (!me) return undefined;
     const at = Date.parse(me.created_at);
+    const gap = (r: Run) => Math.abs(Date.parse(r.created_at) - at);
+    // the closest run of the other variant, with the same model and knowledge-base snapshot:
+    // only then is "same project, same knowledge, same model" a true statement
     return (projectRuns.data?.items ?? [])
-      .filter((r) => r.id !== me.id && r.variant !== me.variant)
-      .find((r) => Math.abs(Date.parse(r.created_at) - at) < SIBLING_WINDOW_MS);
+      .filter(
+        (r) =>
+          r.id !== me.id &&
+          r.variant !== me.variant &&
+          r.model_id === me.model_id &&
+          (r.kb_snapshot_id ?? null) === (me.kb_snapshot_id ?? null) &&
+          gap(r) < SIBLING_WINDOW_MS,
+      )
+      .sort((x, y) => gap(x) - gap(y))[0];
   }, [run.data, projectRuns.data]);
   const main = useLiveRun(run.data);
   const other = useLiveRun(sibling);
@@ -131,8 +142,17 @@ export function RunScreen() {
   const cancel = async () => {
     if (!window.confirm(t("run.confirmCancel"))) return;
     try {
-      await call(api.POST("/v1/runs/{run_id}/cancel", { params: { path: { run_id: runId } } }));
-      await queryClient.invalidateQueries({ queryKey: ["run", orgId, runId] });
+      // "both and compare" is one intent: stopping it stops every run of the pair still going
+      const live = pairs.filter((p) => {
+        const st = p.live.status ?? p.run.status;
+        return st === "queued" || st === "running";
+      });
+      for (const p of live)
+        await call(
+          api.POST("/v1/runs/{run_id}/cancel", { params: { path: { run_id: p.run.id } } }),
+        );
+      for (const p of live)
+        await queryClient.invalidateQueries({ queryKey: ["run", orgId, p.run.id] });
       await queryClient.invalidateQueries({ queryKey: ["runs"] });
       toast(t("run.cancelled"));
     } catch (err) {
@@ -350,7 +370,9 @@ function headline(
         ? t("run.phrase.queued")
         : status === "running" && s
           ? t(`run.phrase.${s}`)
-          : t(`run.phrase.${status === "failed" ? "failed" : "stopped"}`);
+          : status === "running"
+            ? t("run.phrase.finishing")
+            : t(`run.phrase.${status === "failed" ? "failed" : "stopped"}`);
   if (runs.length === 1) {
     const [r] = runs;
     if (!r) return "";
@@ -440,12 +462,21 @@ function Counters({ rows }: { rows: { variant: string; usage: Record<string, unk
 
 interface EventRow {
   key: string;
-  at: number;
+  /** real time of the event (live SSE, run end); trace steps have none */
+  at?: number;
+  /** order inside the run (trace index) for rows without a time */
+  seq: number;
+  /** what the time column shows */
+  label: string;
   variant: string;
   text: string;
 }
 
-/** Finished steps, newest first: from the trace (start time + durations) and from live SSE. */
+/**
+ * Finished steps, newest first. Live events (SSE) and the run end carry their real time; steps
+ * known only from the trace show how long they took, because the trace has no timestamps and
+ * parallel steps make any summed clock wrong.
+ */
 function Events({
   pairs,
 }: {
@@ -458,22 +489,22 @@ function Events({
     second: "2-digit",
   });
   const rows: EventRow[] = [];
+  const text = (run: Run, node: string, calls: number) =>
+    t(`run.events.${node}`, {
+      defaultValue: t("run.events.other", { node }),
+      count: calls,
+      context: run.variant === "A" ? "a" : undefined,
+    });
   for (const { run, trace, seen, status } of pairs) {
-    let clock = Date.parse(run.started_at ?? run.created_at);
-    const nodes = new Set<string>();
-    trace.forEach((s, i) => {
-      clock += s.duration_s * 1000;
-      nodes.add(s.node);
+    const steps = collapseTrace(trace);
+    const nodes = new Set(steps.map((s) => s.node));
+    steps.forEach((s, i) => {
       rows.push({
         key: `${run.id}-${i}`,
-        at: clock,
+        seq: i,
+        label: formatDuration(s.duration_s),
         variant: run.variant,
-        text: t(`run.events.${s.node}`, {
-          defaultValue: t("run.events.other", { node: s.node }),
-          count: s.llm_calls,
-          variant: run.variant,
-          context: run.variant === "A" ? "a" : undefined,
-        }),
+        text: text(run, s.node, s.llm_calls),
       });
     });
     for (const e of seen)
@@ -481,25 +512,29 @@ function Events({
         rows.push({
           key: `${run.id}-live-${e.step}`,
           at: e.at,
+          seq: steps.length,
+          label: time.format(e.at),
           variant: run.variant,
-          text: t(`run.events.${e.step}`, {
-            defaultValue: t("run.events.other", { node: e.step }),
-            count: 0,
-            context: run.variant === "A" ? "a" : undefined,
-          }),
+          text: text(run, e.step, 0),
         });
     if (TERMINAL.has(status) && run.finished_at)
       rows.push({
         key: `${run.id}-end`,
         at: Date.parse(run.finished_at),
+        seq: Number.MAX_SAFE_INTEGER,
+        label: time.format(Date.parse(run.finished_at)),
         variant: run.variant,
-        text: t("run.events.end", {
+        text: t(`run.events.end_${status === "completed" ? "ok" : "stopped"}`, {
           variant: run.variant,
-          status: t(`run.status.${status}`, status),
         }),
       });
   }
-  rows.sort((a, b) => b.at - a.at);
+  // timed rows first (newest first), then trace steps from the latest back
+  rows.sort((a, b) =>
+    a.at !== undefined || b.at !== undefined
+      ? (b.at ?? Number.NEGATIVE_INFINITY) - (a.at ?? Number.NEGATIVE_INFINITY)
+      : b.seq - a.seq || a.variant.localeCompare(b.variant),
+  );
   return (
     <section
       aria-labelledby="events-title"
@@ -513,10 +548,11 @@ function Events({
           {rows.map((r) => (
             <li
               key={r.key}
-              className="grid grid-cols-[auto_auto_1fr] gap-x-3 border-b border-line-soft py-3 text-[15px]"
+              className="grid grid-cols-[92px_auto_1fr] gap-x-3 border-b border-line-soft py-3 text-[15px]"
             >
               <span className="font-data text-[12.5px] leading-6 text-muted">
-                {time.format(r.at)}
+                {r.at === undefined ? <span className="sr-only">{t("run.stepTook")} </span> : null}
+                {r.label}
               </span>
               <ProvenanceGlyph
                 kind={r.variant === "A" ? "agent" : "rule"}

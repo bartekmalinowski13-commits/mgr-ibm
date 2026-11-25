@@ -25,6 +25,11 @@ import { useToast } from "../lib/toast";
 import { BoardMap } from "./BoardMap";
 import { findingsFor } from "./BomTable";
 
+const matchesXl = () =>
+  typeof window !== "undefined" &&
+  typeof window.matchMedia === "function" &&
+  window.matchMedia("(min-width: 1280px)").matches;
+
 const EDITABLE = ["mpn", "manufacturer", "value", "footprint"] as const;
 type Editable = (typeof EDITABLE)[number];
 
@@ -79,13 +84,29 @@ export function ItemPanel({
   useEffect(() => {
     if (editing) mpnRef.current?.focus();
   }, [editing]);
-  // Focus moves into the panel on open and returns to the row that opened it on close.
+  // Focus moves into the panel whenever a line is opened and returns, on close, to the row
+  // that opened the line shown last.
+  const opener = useRef<HTMLElement | null>(null);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: runs for every newly opened line
   useEffect(() => {
-    const opener = document.activeElement as HTMLElement | null;
+    const active = document.activeElement as HTMLElement | null;
+    if (active && !panelRef.current?.contains(active)) opener.current = active;
     titleRef.current?.focus();
-    return () => {
-      if (opener?.isConnected) opener.focus();
-    };
+  }, [item.line]);
+  useEffect(
+    () => () => {
+      if (opener.current?.isConnected) opener.current.focus();
+    },
+    [],
+  );
+  // Below xl the panel covers the page: expose it as a modal dialog to assistive technology.
+  const [drawer, setDrawer] = useState(() => !matchesXl());
+  useEffect(() => {
+    if (typeof window.matchMedia !== "function") return;
+    const mq = window.matchMedia("(min-width: 1280px)");
+    const on = () => setDrawer(!mq.matches);
+    mq.addEventListener?.("change", on);
+    return () => mq.removeEventListener?.("change", on);
   }, []);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
@@ -142,11 +163,15 @@ export function ItemPanel({
   const whyKind = (why?.kind ?? "parser") as Provenance;
   const others = provenance.filter(([field]) => field !== "mpn" || !why);
 
+  // a side column at xl, a modal drawer (dialog) over the page below it
+  const Tag = drawer ? "div" : "aside";
   return (
-    <aside
-      ref={panelRef}
+    <Tag
+      ref={panelRef as never}
       onKeyDown={trapTab}
       aria-label={`${t("panel.title", { line: item.line })}: ${item.refdes.join(", ")}`}
+      role={drawer ? "dialog" : undefined}
+      aria-modal={drawer ? true : undefined}
       className={
         "fixed inset-x-0 bottom-0 z-30 max-h-[85vh] w-full overflow-y-auto border-t border-ink bg-sheet px-5 pb-6 pt-5 shadow-dialog " +
         "md:inset-x-auto md:right-0 md:top-0 md:h-screen md:max-h-none md:w-[400px] md:border-l md:border-t-0 " +
@@ -305,6 +330,6 @@ export function ItemPanel({
           </Button>
         </div>
       )}
-    </aside>
+    </Tag>
   );
 }

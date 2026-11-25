@@ -33,10 +33,10 @@ describe("ItemPanel focus management (UX-06)", () => {
     const row = screen.getByTestId("row");
     row.focus();
     fireEvent.click(row);
-    const panel = screen.getByRole("complementary");
+    const panel = screen.getByRole("dialog");
     expect(panel.contains(document.activeElement)).toBe(true);
     fireEvent.keyDown(window, { key: "Escape" });
-    expect(screen.queryByRole("complementary")).toBeNull();
+    expect(screen.queryByRole("dialog")).toBeNull();
     expect(document.activeElement).toBe(row);
   });
 
@@ -52,7 +52,7 @@ describe("ItemPanel focus management (UX-06)", () => {
   it("wraps Tab inside the panel while it is a drawer", () => {
     render(<Harness />);
     fireEvent.click(screen.getByTestId("row"));
-    const panel = screen.getByRole("complementary");
+    const panel = screen.getByRole("dialog");
     const items = [
       ...panel.querySelectorAll<HTMLElement>("button, input, textarea, [tabindex]"),
     ].filter((el) => el.tabIndex >= 0 && !(el as HTMLButtonElement).disabled);

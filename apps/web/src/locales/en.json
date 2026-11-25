@@ -154,9 +154,9 @@
       }
     },
     "lead": {
-      "review_one": "Run <b>#{{id}}</b> is waiting for your review.",
-      "review_other": "{{count}} runs are waiting for review, the newest is <b>#{{id}}</b>.",
-      "running_one": "Run <b>#{{id}}</b> is validating the BOM right now.",
+      "review_one": "The BOM of run <b>#{{id}}</b> is ready.",
+      "review_other": "{{count}} BOMs are ready, the newest from run <b>#{{id}}</b>.",
+      "running_one": "Run <b>#{{id}}</b> is in progress.",
       "running_other": "{{count}} runs are in progress.",
       "empty": "You have no runs yet. Start the first one and the notes to review will show up here."
     },
@@ -322,7 +322,8 @@
       "done": "has finished",
       "queued": "is queued",
       "failed": "has failed",
-      "stopped": "has stopped"
+      "stopped": "has stopped",
+      "finishing": "is finishing"
     },
     "headline": {
       "one": "Variant {{variant}} {{phrase}}.",
@@ -346,8 +347,10 @@
       "compose": "Composer agent: assembled the BOM",
       "assemble": "Generator: assembled the BOM",
       "other": "Finished step {{node}}",
-      "end": "Variant {{variant}}: {{status}}"
-    }
+      "end_ok": "Variant {{variant}}: run finished, BOM saved",
+      "end_stopped": "Variant {{variant}}: run stopped"
+    },
+    "stepTook": "step took"
   },
   "bom": {
     "title": "Bill of materials",
@@ -425,7 +428,7 @@
       "label": "Board map: {{refdes}} in zone {{zone}}, layer {{layer}}",
       "zone": "Zone {{zone}}, layer {{layer}}",
       "size": "{{pkg}}, {{w}} × {{h}} mm",
-      "none": "No board placement data",
+      "none": "No board placement data (needs the .kicad_pcb file)",
       "noneShort": "no placement"
     }
   },
@@ -566,10 +569,10 @@
     "exported": "Comparison exported to CSV",
     "silk": "BOM-AGENT · {{project}} · Variant {{a}} ↔ {{b}}",
     "verdict": {
-      "cheaper": "The hybrid costs {{x}} times less.",
-      "pricier": "The hybrid costs {{x}} times more.",
-      "fewerFindings": "The hybrid has fewer validation findings.",
-      "moreFindings": "The hybrid has more validation findings.",
+      "cheaper": "{{right}} costs {{x}} times less than {{left}}.",
+      "pricier": "{{right}} costs {{x}} times more than {{left}}.",
+      "fewerFindings": "{{right}} has fewer validation findings than {{left}}.",
+      "moreFindings": "{{right}} has more validation findings than {{left}}.",
       "same": "Both variants reached the same bill of materials.",
       "differ": "The variants differ on some lines."
     },
@@ -582,15 +585,15 @@
     "colValues": "Values",
     "reason": {
       "mpn": "The variants chose different MPNs.",
-      "onlyA": "Only variant A has this line.",
-      "onlyB": "Only variant B has this line.",
-      "value": "Same MPN, different value: A {{a}}, B {{b}}.",
-      "manufacturer": "Same MPN, different manufacturer: A {{a}}, B {{b}}."
+      "onlyA": "Only {{la}} has this line.",
+      "onlyB": "Only {{lb}} has this line.",
+      "value": "Same MPN, different value: {{la}} {{a}}, {{lb}} {{b}}.",
+      "manufacturer": "Same MPN, different manufacturer: {{la}} {{a}}, {{lb}} {{b}}."
     },
     "result": {
       "differ": "different",
-      "onlyA": "only A",
-      "onlyB": "only B",
+      "onlyA": "only {{a}}",
+      "onlyB": "only {{b}}",
       "mpnSame": "MPN matches"
     },
     "csv": {
@@ -601,7 +604,17 @@
     "differencesCell": "Differences",
     "calls": "LLM calls",
     "tokens": "Tokens",
-    "cost": "Cost"
+    "cost": "Cost",
+    "name": {
+      "A": "the LLM-only variant",
+      "AStart": "The LLM-only variant",
+      "B": "the hybrid",
+      "BStart": "The hybrid",
+      "other": "variant {{v}}",
+      "otherStart": "Variant {{v}}",
+      "run": "run {{v}}",
+      "runStart": "Run {{v}}"
+    }
   },
   "reference": {
     "title": "Compare with a reference BOM",
@@ -788,7 +801,8 @@
     "runs": "Runs",
     "costAB": "Cost A / B",
     "timeAB": "Time A / B",
-    "runtime": "Agent runtime"
+    "runtime": "Agent runtime",
+    "defaultModel": "Default model"
   },
   "bomScreen": {
     "title": "BOM, version {{version}}",

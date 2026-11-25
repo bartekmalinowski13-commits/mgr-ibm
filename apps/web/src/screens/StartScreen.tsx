@@ -72,12 +72,12 @@ export function StartScreen() {
         <TitleBlock
           label={t("sheet.titleBlock")}
           name={orgName}
-          sheetLabel={t("sheet.number", { n: 1, m: 1 })}
+          sheetLabel={t("sheet.number", { n: 1, m: 4 })}
           cells={[
             { label: t("titleBlock.plan"), value: plan },
             { label: t("titleBlock.budget"), value: budget },
             { label: t("titleBlock.region"), value: "EU" },
-            { label: t("titleBlock.model"), value: modelsList[0]?.id ?? "—" },
+            { label: t("titleBlock.defaultModel"), value: modelsList[0]?.id ?? "—" },
             {
               label: t("titleBlock.projects"),
               value: projects.data ? String(projects.data.items.length) : "—",

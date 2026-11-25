@@ -237,14 +237,17 @@ export function Shell() {
                   !page.header && "sr-only",
                 )}
               >
-                <nav
-                  aria-label={t("sheet.breadcrumb")}
-                  className="flex w-full min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-[15px] text-muted sm:text-[17px] lg:w-auto lg:flex-1"
-                >
-                  <div ref={slotRef.crumbs} className="contents" />
+                <div className="flex w-full min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-[15px] text-muted sm:text-[17px] lg:w-auto lg:flex-1">
+                  {/* only the parent crumbs are navigation; the title and chips stay outside */}
+                  <nav
+                    aria-label={t("sheet.breadcrumb")}
+                    className="contents [&:not(:has(a))]:hidden"
+                  >
+                    <div ref={slotRef.crumbs} className="contents" />
+                  </nav>
                   <h1 className="min-w-0 font-semibold text-ink">{title}</h1>
                   <div ref={slotRef.chips} className="contents" />
-                </nav>
+                </div>
                 <div
                   ref={slotRef.actions}
                   className="flex flex-wrap items-center gap-3 empty:hidden"

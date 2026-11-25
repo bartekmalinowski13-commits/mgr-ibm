@@ -154,11 +154,11 @@
       }
     },
     "lead": {
-      "review_one": "Przebieg <b>#{{id}}</b> czeka na Twój przegląd.",
-      "review_few": "{{count}} przebiegi czekają na przegląd, najnowszy to <b>#{{id}}</b>.",
-      "review_many": "{{count}} przebiegów czeka na przegląd, najnowszy to <b>#{{id}}</b>.",
-      "review_other": "{{count}} przebiegi czekają na przegląd, najnowszy to <b>#{{id}}</b>.",
-      "running_one": "Przebieg <b>#{{id}}</b> właśnie waliduje zestawienie.",
+      "review_one": "Zestawienie z przebiegu <b>#{{id}}</b> jest gotowe.",
+      "review_few": "{{count}} zestawienia są gotowe, najnowsze z przebiegu <b>#{{id}}</b>.",
+      "review_many": "{{count}} zestawień jest gotowych, najnowsze z przebiegu <b>#{{id}}</b>.",
+      "review_other": "{{count}} zestawienia są gotowe, najnowsze z przebiegu <b>#{{id}}</b>.",
+      "running_one": "Przebieg <b>#{{id}}</b> jest w toku.",
       "running_few": "{{count}} przebiegi są w toku.",
       "running_many": "{{count}} przebiegów jest w toku.",
       "running_other": "{{count}} przebiegi są w toku.",
@@ -334,7 +334,8 @@
       "done": "skończył",
       "queued": "czeka w kolejce",
       "failed": "się nie udał",
-      "stopped": "stanął"
+      "stopped": "stanął",
+      "finishing": "kończy przebieg"
     },
     "headline": {
       "one": "Wariant {{variant}} {{phrase}}.",
@@ -358,8 +359,10 @@
       "compose": "Agent składania: złożono BOM",
       "assemble": "Generator: złożono BOM",
       "other": "Zakończono krok {{node}}",
-      "end": "Wariant {{variant}}: {{status}}"
-    }
+      "end_ok": "Wariant {{variant}}: przebieg zakończony, zestawienie zapisane",
+      "end_stopped": "Wariant {{variant}}: przebieg przerwany"
+    },
+    "stepTook": "krok trwał"
   },
   "bom": {
     "title": "Zestawienie BOM",
@@ -439,7 +442,7 @@
       "label": "Mapa płytki: {{refdes}} w strefie {{zone}}, warstwa {{layer}}",
       "zone": "Strefa {{zone}}, warstwa {{layer}}",
       "size": "{{pkg}}, {{w}} × {{h}} mm",
-      "none": "Brak danych o położeniu na płytce",
+      "none": "Brak danych o położeniu na płytce (wymaga pliku .kicad_pcb)",
       "noneShort": "brak położenia"
     }
   },
@@ -584,10 +587,10 @@
     "exported": "Wyeksportowano porównanie do CSV",
     "silk": "BOM-AGENT · {{project}} · Wariant {{a}} ↔ {{b}}",
     "verdict": {
-      "cheaper": "Hybryda kosztuje {{x}} razy mniej.",
-      "pricier": "Hybryda kosztuje {{x}} razy więcej.",
-      "fewerFindings": "Hybryda ma mniej uwag walidacji.",
-      "moreFindings": "Hybryda ma więcej uwag walidacji.",
+      "cheaper": "{{right}} kosztuje {{x}} razy mniej niż {{left}}.",
+      "pricier": "{{right}} kosztuje {{x}} razy więcej niż {{left}}.",
+      "fewerFindings": "{{right}} ma mniej uwag walidacji niż {{left}}.",
+      "moreFindings": "{{right}} ma więcej uwag walidacji niż {{left}}.",
       "same": "Oba warianty doszły do tego samego zestawienia.",
       "differ": "Warianty różnią się w części pozycji."
     },
@@ -600,15 +603,15 @@
     "colValues": "Wartości",
     "reason": {
       "mpn": "Warianty dobrały różne MPN.",
-      "onlyA": "Tylko wariant A ma tę pozycję.",
-      "onlyB": "Tylko wariant B ma tę pozycję.",
-      "value": "Ten sam MPN, różna wartość: A {{a}}, B {{b}}.",
-      "manufacturer": "Ten sam MPN, różny producent: A {{a}}, B {{b}}."
+      "onlyA": "Tylko {{la}} ma tę pozycję.",
+      "onlyB": "Tylko {{lb}} ma tę pozycję.",
+      "value": "Ten sam MPN, różna wartość: {{la}} {{a}}, {{lb}} {{b}}.",
+      "manufacturer": "Ten sam MPN, różny producent: {{la}} {{a}}, {{lb}} {{b}}."
     },
     "result": {
       "differ": "różne",
-      "onlyA": "tylko A",
-      "onlyB": "tylko B",
+      "onlyA": "tylko {{a}}",
+      "onlyB": "tylko {{b}}",
       "mpnSame": "zgodne MPN"
     },
     "csv": {
@@ -619,7 +622,17 @@
     "differencesCell": "Różnice",
     "calls": "Wywołania LLM",
     "tokens": "Tokeny",
-    "cost": "Koszt"
+    "cost": "Koszt",
+    "name": {
+      "A": "wariant tylko LLM",
+      "AStart": "Wariant tylko LLM",
+      "B": "hybryda",
+      "BStart": "Hybryda",
+      "other": "wariant {{v}}",
+      "otherStart": "Wariant {{v}}",
+      "run": "przebieg {{v}}",
+      "runStart": "Przebieg {{v}}"
+    }
   },
   "reference": {
     "title": "Porównanie z BOM referencyjnym",
@@ -812,7 +825,8 @@
     "runs": "Przebiegi",
     "costAB": "Koszt A / B",
     "timeAB": "Czas A / B",
-    "runtime": "Silnik agentów"
+    "runtime": "Silnik agentów",
+    "defaultModel": "Model domyślny"
   },
   "bomScreen": {
     "title": "BOM, wersja {{version}}",

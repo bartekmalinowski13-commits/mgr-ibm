@@ -16,6 +16,14 @@ export function BoardMap({ item, items }: { item: BomItem; items: BomItem[] }) {
   const H = board.y1 - board.y0;
   const pad = Math.max(W, H) * 0.06;
   const pkg = item.package ?? item.footprint?.split(":").pop() ?? "";
+  // no part of this BOM has a board position: draw nothing rather than an invented board
+  if (!here && placed.length === 0)
+    return (
+      <p className="border border-dashed border-line px-4 py-3 text-[14px] text-muted">
+        {t("panel.map.none")}
+        {pkg ? ` · ${pkg}` : ""}
+      </p>
+    );
   return (
     <figure className="flex flex-col gap-2">
       <MaskPanel as="div" className="px-6 py-5">
@@ -33,21 +41,6 @@ export function BoardMap({ item, items }: { item: BomItem; items: BomItem[] }) {
           }
           className="block h-auto w-full"
         >
-          {/* a few copper traces for orientation, drawn in the board's own coordinates */}
-          <g
-            stroke="currentColor"
-            strokeOpacity="0.35"
-            strokeWidth={W / 220}
-            fill="none"
-            className="text-silk"
-          >
-            <path
-              d={`M${board.x0 + W * 0.08} ${board.y0 + H * 0.3} H${board.x0 + W * 0.42} l${W * 0.04} ${H * 0.07} H${board.x0 + W * 0.7}`}
-            />
-            <path
-              d={`M${board.x0 + W * 0.25} ${board.y0 + H * 0.75} H${board.x0 + W * 0.55} l${W * 0.05} -${H * 0.08} H${board.x0 + W * 0.92}`}
-            />
-          </g>
           {placed
             .filter((x) => x.item.line !== item.line)
             .map(({ item: other, p }) =>
