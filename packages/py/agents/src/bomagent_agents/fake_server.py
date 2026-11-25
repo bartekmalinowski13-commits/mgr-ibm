@@ -58,7 +58,7 @@ def create_app(cassette_dir: str | None = None) -> FastAPI:
             schema_name=str(schema.get("name", "")),
             json_schema=schema.get("schema") or {},
             temperature=float(body.get("temperature", 0.0)),
-            max_tokens=int(body.get("max_tokens", 4096)),
+            max_tokens=int(body.get("max_completion_tokens", body.get("max_tokens", 4096))),
         )
         result = await chat.complete(request)
         return {

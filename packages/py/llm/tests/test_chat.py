@@ -277,7 +277,9 @@ async def test_reasoning_models_get_room_for_their_thinking_tokens():
     )
     thinking = load_catalog().get("fake-closed").model_copy(update={"reasoning_tokens": 4096})
     await chat.complete(dataclasses.replace(_request(), model=thinking, max_tokens=1024))
-    assert seen["max_tokens"] == 1024 + 4096
+    # max_completion_tokens: GPT-5 family on Azure rejects max_tokens; Mistral accepts both
+    assert seen["max_completion_tokens"] == 1024 + 4096
+    assert "max_tokens" not in seen
     assert seen["timeout"] == call_timeout_s(1024 + 4096)
 
 
