@@ -4,6 +4,18 @@
 
 _Updated by Claude Code after every milestone (see `docs/prompts/CLAUDE_CODE_MASTER_PROMPT.md` §5)._
 
+## 2026-11-25 - value notation no longer counts as a difference
+
+- Comparison A/B (`apps/web`, `diffBoms`): values are compared by meaning, not spelling
+  (`100n` = `100 nF`, `4k7` = `4.7 kΩ`, `220R@100MHz` = `220 Ω @ 100 MHz`; `apps/web/src/lib/values.ts`).
+  Before, variant A (canonical values) and variant B (schematic notation) showed one "difference"
+  per passive part even when both chose the same MPN.
+- Reference evaluation (`bomagent_bom.values.values_equivalent`): a value with a condition after
+  `@` is compared part by part, so a ferrite bead written `220R@100MHz` in the reference matches
+  `220 Ω @ 100 MHz`. `normalize_value` (also used for grouping) is unchanged.
+- Pilot check on Fly (Mistral Large, EU): the full flow (KB upload, KiCad upload, runs A+B, BOM,
+  reference evaluation, compare, CSV export, audit integrity) passed on a new test design.
+
 ## 2026-11-24 - new visual direction "fabrication drawing" (ADR-0019)
 
 - `docs/adr/0019-visual-direction-fabrication-drawing.md` + `docs/design/UX_GUIDELINES.md` §2–3 rewritten; mock-ups in `docs/design/direction-v1/`, Playwright screenshots of the implementation in `docs/design/direction-v1/implemented/`.

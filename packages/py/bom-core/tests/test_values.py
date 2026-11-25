@@ -161,3 +161,10 @@ def test_bare_mega_on_capacitor_or_inductor_is_rejected_not_megafarad(text, kind
     with pytest.raises(ValueParseError):
         parse_value(text, kind)
     assert normalize_value(text, kind) is None
+
+
+def test_ferrite_notations_are_equivalent():
+    """A reference written in RKM form must match an agent's spelled-out value."""
+    assert values_equivalent("220R@100MHz", "220 Ω @ 100 MHz", "ferrite_bead")
+    assert not values_equivalent("220R@100MHz", "600 Ω @ 100 MHz", "ferrite_bead")
+    assert not values_equivalent("220R@100MHz", "220R@1GHz", "ferrite_bead")

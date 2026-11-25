@@ -134,4 +134,35 @@ describe("CompareScreen content", () => {
     expect(d?.b).toBeUndefined();
     expect(d?.changed.length).toBe(3);
   });
+
+  it("diffBoms treats notations of the same value as equal", () => {
+    const item = (refdes: string, value: string) => ({ refdes: [refdes], value, mpn: "X" });
+    const a = {
+      items: [
+        item("C1", "100 nF"),
+        item("R1", "4.7 kΩ"),
+        item("R2", "10 MΩ"),
+        item("FB1", "220 Ω @ 100 MHz"),
+        item("U1", "AD8232"),
+        item("C2", "10 nF"),
+      ],
+      findings: [],
+    };
+    const b = {
+      items: [
+        item("C1", "100n"),
+        item("R1", "4k7"),
+        item("R2", "10M"),
+        item("FB1", "220R@100MHz"),
+        item("U1", "ad8232"),
+        item("C2", "100n"),
+      ],
+      findings: [],
+    };
+    // biome-ignore lint/suspicious/noExplicitAny: minimal fixtures
+    const diffs = diffBoms(a as any, b as any);
+    const changed = Object.fromEntries(diffs.map((d) => [d.refdes, d.changed]));
+    for (const r of ["C1", "R1", "R2", "FB1", "U1"]) expect(changed[r]).toEqual([]);
+    expect(changed.C2).toEqual(["value"]);
+  });
 });
